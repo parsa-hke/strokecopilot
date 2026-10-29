@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "strokecopilot"
+version = "0.0.1"
+description = "Stroke Decision Copilot: perfusion/haemorrhage vision models, retrieval-grounded reasoner, claim verifier (MAAI 901/902, UOWD)."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.5",
+    "jsonschema>=4.18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/strokecopilot"]
+
+# Ship the contract schemas and fixtures inside the wheel so `pip install git+...` on Colab
+# can validate without a repo checkout. The repo-root copies stay the single source of truth.
+[tool.hatch.build.targets.wheel.force-include]
+"schemas" = "strokecopilot/schemas"
+"fixtures" = "strokecopilot/fixtures"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

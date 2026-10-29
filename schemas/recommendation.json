@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recommendation.json",
+  "title": "Stroke Copilot reasoner recommendation",
+  "description": "Structured output of the reasoner (plan §6.4). Every rationale claim declares a source; the verifier re-traces each claim independently and records disagreement with the declared source.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "model",
+    "prompt_version",
+    "thrombolysis",
+    "thrombectomy",
+    "rationale",
+    "uncertainties"
+  ],
+  "properties": {
+    "case_id": {"type": "string", "minLength": 1},
+    "model": {
+      "description": "Exact model identifier, e.g. gpt-4o-2024-08-06.",
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt_version": {
+      "description": "Prompt file stem, e.g. reasoner_v1.",
+      "type": "string",
+      "pattern": "^reasoner_v[0-9]+$"
+    },
+    "thrombolysis": {"$ref": "#/$defs/decision"},
+    "thrombectomy": {"$ref": "#/$defs/decision"},
+    "rationale": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/claim"}
+    },
+    "uncertainties": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recommend", "rule_ids", "blocking_factors"],
+      "properties": {
+        "recommend": {"type": "boolean"},
+        "rule_ids": {
+          "description": "Corpus passage IDs the decision rests on, e.g. AHA2019-3.5.1.",
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "blocking_factors": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim", "source"],
+      "properties": {
+        "claim": {"type": "string", "minLength": 1},
+        "source": {
+          "oneOf": [
+            {"$ref": "#/$defs/vision_source"},
+            {"$ref": "#/$defs/note_source"},
+            {"$ref": "#/$defs/passage_source"}
+          ]
+        }
+      }
+    },
+    "vision_source": {
+      "description": "A field of vision_output.json, as a dotted path.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "field"],
+      "properties": {
+        "type": {"const": "vision"},
+        "field": {
+          "enum": [
+            "haemorrhage.present",
+            "haemorrhage.confidence",
+            "core_ml",
+            "penumbra_ml",
+            "mismatch_ratio",
+            "mismatch_volume_ml",
+            "occlusion_site",
+            "confidence.core",
+            "confidence.penumbra",
+            "warnings"
+          ]
+        }
+      }
+    },
+    "note_source": {
+      "description": "The triage note; quote is the supporting span, verbatim.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "quote"],
+      "properties": {
+        "type": {"const": "note"},
+        "quote": {"type": "string", "minLength": 1}
+      }
+    },
+    "passage_source": {
+      "description": "A corpus passage by stable ID, e.g. DEFUSE3-inclusion-2.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": {"const": "passage"},
+        "id": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": "0.1",
+  "case_id": "fixture-fx03",
+  "model_version": "fixture-handwritten",
+  "haemorrhage": {
+    "present": true,
+    "confidence": 0.96
+  },
+  "core_ml": 5.2,
+  "penumbra_ml": 13.9,
+  "mismatch_ratio": 2.67,
+  "mismatch_volume_ml": 8.7,
+  "occlusion_site": "unknown",
+  "confidence": {
+    "core": 0.62,
+    "penumbra": 0.66
+  },
+  "warnings": [
+    "CTA not acquired"
+  ]
+}

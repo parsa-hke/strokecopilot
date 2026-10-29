@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vision_output.json",
+  "title": "Stroke Copilot vision output",
+  "description": "The only object the vision side hands to the NLP side (plan §6). v0.1, draft until Phase 0 closes. Volumes are in mL rounded to one decimal; null means not computed and must be read as unknown, never as zero. Rounding and derived-field rules that JSON Schema cannot express are enforced by strokecopilot.contract.schema.VisionOutput.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "model_version",
+    "haemorrhage",
+    "core_ml",
+    "penumbra_ml",
+    "mismatch_ratio",
+    "mismatch_volume_ml",
+    "occlusion_site",
+    "confidence",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Contract version.",
+      "const": "0.1"
+    },
+    "case_id": {
+      "description": "ISLES'24 subject ID (fixtures use fixture-fxNN).",
+      "type": "string",
+      "minLength": 1
+    },
+    "model_version": {
+      "description": "Git tag or commit of the vision models that produced this object.",
+      "type": "string",
+      "minLength": 1
+    },
+    "haemorrhage": {
+      "description": "Vision B output on plain CT.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "confidence"],
+      "properties": {
+        "present": {
+          "description": "Any intracranial haemorrhage on plain CT.",
+          "type": "boolean"
+        },
+        "confidence": {
+          "description": "Calibrated probability that intracranial haemorrhage is present.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "core_ml": {
+      "description": "Infarct core volume, mL, one decimal. null if not computed.",
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "penumbra_ml": {
+      "description": "Total hypoperfused volume (Tmax > 6 s), mL, one decimal. Includes the core; salvageable tissue is mismatch_volume_ml. null if not computed.",
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "mismatch_ratio": {
+      "description": "penumbra_ml / core_ml, two decimals. null if core_ml < 1 mL or either volume is null.",
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "mismatch_volume_ml": {
+      "description": "penumbra_ml - core_ml, mL, one decimal. null if either volume is null.",
+      "type": ["number", "null"]
+    },
+    "occlusion_site": {
+      "description": "Vessel occlusion site from the CTA occlusion mask.",
+      "enum": ["ICA", "M1", "M2", "basilar", "none", "unknown"]
+    },
+    "confidence": {
+      "description": "Vision A model confidence.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core", "penumbra"],
+      "properties": {
+        "core": {"type": "number", "minimum": 0, "maximum": 1},
+        "penumbra": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "warnings": {
+      "description": "Pipeline warnings, e.g. \"motion artefact\", \"incomplete perfusion coverage\".",
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

@@ -1,11 +1,53 @@
-data/
-runs/
+# Data and run outputs live on Drive (plan §4.2). Anchored to the repo root so that
+# src/strokecopilot/data/ is not ignored.
+/data/*
+!/data/README.md
+/runs/
+/artifacts/
 *.tar
+*.tar.gz
+*.zip
+*.nii
 *.nii.gz
 *.npz
+*.npy
+*.dcm
+*.h5
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Secrets (plan §4.4)
 .env
+.env.*
 secrets*
+kaggle.json
+*.pem
+*.key
+
+# Python
 __pycache__/
+*.py[cod]
 *.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Notebooks
 .ipynb_checkpoints/
+
+# Gradio
+.gradio/
+flagged/
+
+# OS / editors
 .DS_Store
+.vscode/
+.idea/

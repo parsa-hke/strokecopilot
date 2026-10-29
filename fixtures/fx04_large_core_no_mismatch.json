@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.1",
+  "case_id": "fixture-fx04",
+  "model_version": "fixture-handwritten",
+  "haemorrhage": {
+    "present": false,
+    "confidence": 0.07
+  },
+  "core_ml": 110.0,
+  "penumbra_ml": 120.0,
+  "mismatch_ratio": 1.09,
+  "mismatch_volume_ml": 10.0,
+  "occlusion_site": "M1",
+  "confidence": {
+    "core": 0.9,
+    "penumbra": 0.87
+  },
+  "warnings": []
+}

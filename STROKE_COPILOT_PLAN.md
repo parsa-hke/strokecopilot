@@ -309,7 +309,7 @@ This is the only thing the vision side hands to the NLP side. Frozen at end of P
 | `haemorrhage.present` | bool | any intracranial haemorrhage on plain CT | Vision B |
 | `haemorrhage.confidence` | float 0–1 | calibrated probability | Vision B |
 | `core_ml` | float \| null | infarct core volume, mL, one decimal | Vision A |
-| `penumbra_ml` | float \| null | penumbra volume, mL, one decimal | Vision A |
+| `penumbra_ml` | float \| null | total hypoperfused volume (Tmax > 6 s), mL, one decimal — **includes the core**; salvageable tissue is `mismatch_volume_ml` | Vision A |
 | `mismatch_ratio` | float \| null | `penumbra_ml / core_ml`; null if core < 1 mL | Vision A |
 | `mismatch_volume_ml` | float \| null | `penumbra_ml - core_ml` | Vision A |
 | `occlusion_site` | enum | `ICA`, `M1`, `M2`, `basilar`, `none`, `unknown` | Vision A |
@@ -370,10 +370,10 @@ Goal: decisions recorded, contract frozen, data downloading, repo scaffolded.
 - [ ] Start ISLES'24 download to `raw/` from a Colab session; verify md5; record sizes
 - [ ] Start RSNA preprocessed download to `raw/`
 - [ ] Read Zenodo licence and RSNA terms; fill `docs/` note and the Notion "Data-use terms" page
-- [ ] Scaffold repo per §3: package skeleton, `pyproject.toml`, `CLAUDE.md`, `CHANGELOG.md`, `README.md`, `.gitignore`
-- [ ] Write `schemas/vision_output.json` (§6.1) and `contract/schema.py` (pydantic mirror)
-- [ ] Write the five fixtures and their notes (§6.3)
-- [ ] `tests/test_contract.py`: fixtures validate; mismatch ratio and volume computed correctly; null handling
+- [x] Scaffold repo per §3: package skeleton, `pyproject.toml`, `CLAUDE.md`, `CHANGELOG.md`, `README.md`, `.gitignore`
+- [x] Write `schemas/vision_output.json` (§6.1) and `contract/schema.py` (pydantic mirror)
+- [x] Write the five fixtures and their notes (§6.3)
+- [x] `tests/test_contract.py`: fixtures validate; mismatch ratio and volume computed correctly; null handling
 - [ ] Push to GitHub (private), add repo URL to Notion hub Links
 
 Acceptance: `pytest tests/test_contract.py` passes; the five fixtures validate; both downloads are complete or in progress with md5 checks queued.
@@ -488,7 +488,7 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 
 **Targets.** Final infarct mask from follow-up MRI (ISLES'24 ground truth). Note the conceptual gap: final infarct ≠ core at imaging time — it includes penumbra that was not saved. Report this limitation and handle it as follows:
 - *Core proxy:* model trained to predict final infarct, evaluated as the "core" estimate. Also report the clinical threshold baseline (rCBF < 30%).
-- *Penumbra:* Tmax > 6 s minus core — the clinical convention (DEFUSE-3 used RAPID with these thresholds). Document this as a rule, not a learned output, unless a learned version clearly beats it.
+- *Penumbra:* `penumbra_ml` is the total Tmax > 6 s volume, core included — the clinical convention (DEFUSE-3 used RAPID with these thresholds), so `mismatch_ratio` and `mismatch_volume_ml` (§6.1) match the DEFUSE-3 definitions directly. Salvageable tissue is `mismatch_volume_ml`. Document this as a rule, not a learned output, unless a learned version clearly beats it.
 
 **Model.** nnU-Net v2, 3D full-resolution configuration, reduced epochs to fit Colab sessions, resume from Drive. Do not build a custom U-Net in Phase 2. Consider a 2.5D variant only if 3D training is infeasible on Colab.
 
@@ -631,7 +631,7 @@ Appendices: contract schema, prompts, rulebook with passage IDs, fixture definit
 
 - **Ischaemic stroke** — artery blocked by a clot; tissue starves. **Haemorrhagic stroke** — bleeding into the brain. The first question on any stroke CT is which one, because the treatments are opposite.
 - **NCCT** — non-contrast CT, the fast first scan. **CTA** — CT angiography, shows the vessels and the occlusion. **CTP** — CT perfusion, dye tracked over time; yields CBF (blood flow), CBV (blood volume), MTT (mean transit time), Tmax (time to peak of the residue function — delay).
-- **Core** — tissue already infarcted; conventionally rCBF < 30% of the healthy side. **Penumbra** — hypoperfused but salvageable; conventionally Tmax > 6 s. **Mismatch** — penumbra relative to core; large mismatch means surgery can still help.
+- **Core** — tissue already infarcted; conventionally rCBF < 30% of the healthy side. **Penumbra** — hypoperfused but salvageable; conventionally Tmax > 6 s. In the contract, `penumbra_ml` is the full Tmax > 6 s volume including the core (§6.1). **Mismatch** — penumbra relative to core; large mismatch means surgery can still help.
 - **LVO** — large-vessel occlusion (ICA, M1, proximal M2, basilar). Thrombectomy target.
 - **NIHSS** — 0–42 stroke severity score. **mRS** — 0–6 disability scale; pre-stroke mRS matters for eligibility.
 - **LKW** — last known well; the clock starts here when onset is unwitnessed (wake-up strokes).
