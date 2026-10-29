@@ -1,0 +1,11 @@
+data/
+runs/
+*.tar
+*.nii.gz
+*.npz
+.env
+secrets*
+__pycache__/
+*.egg-info/
+.ipynb_checkpoints/
+.DS_Store
