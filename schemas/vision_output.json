@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "vision_output.json",
   "title": "Stroke Copilot vision output",
-  "description": "The only object the vision side hands to the NLP side (plan §6). v0.1, draft until Phase 0 closes. Volumes are in mL rounded to one decimal; null means not computed and must be read as unknown, never as zero. Rounding and derived-field rules that JSON Schema cannot express are enforced by strokecopilot.contract.schema.VisionOutput.",
+  "description": "The only object the vision side hands to the NLP side (plan §6). v0.1, frozen 31 October 2026. Volumes are in mL rounded to one decimal; null means not computed and must be read as unknown, never as zero. Rounding and derived-field rules that JSON Schema cannot express are enforced by strokecopilot.contract.schema.VisionOutput.",
   "type": "object",
   "additionalProperties": false,
   "required": [

@@ -31,7 +31,7 @@ Read §1–§3 once, §5–§6 before touching data, §8 for your component, §1
 
 Acute ischaemic stroke: a clot blocks an artery in the brain and tissue starts dying within minutes. There are two main treatments.
 
-- **Thrombolysis** (IV alteplase/tenecteplase): a clot-dissolving drug. Standard window is 4.5 hours from symptom onset, extendable to 9 hours in selected patients if imaging shows salvageable tissue. Absolutely contraindicated if there is an intracranial haemorrhage.
+- **Thrombolysis** (IV alteplase/tenecteplase): a clot-dissolving drug. Standard window is 4.5 hours from symptom onset, extendable to 9 hours in selected patients who cannot have thrombectomy, if imaging shows salvageable tissue. Absolutely contraindicated if there is an intracranial haemorrhage.
 - **Thrombectomy**: a catheter physically removes the clot. Indicated for large-vessel occlusions; the window can extend to 24 hours in selected patients (DAWN and DEFUSE-3 trials, 2026 AHA/ASA guideline), and eligibility now reaches large-core strokes.
 
 Eligibility therefore depends on three things at once:
@@ -91,8 +91,10 @@ These are recorded in the Notion Decisions log. Do not change them without a new
 | DEC-11 | The primary hallucination evaluation uses 100–200 synthetic scenarios; held-out cases are the realism check. Added: seeded errors, no-retrieval arm, ground-truth vs predicted vision arm (§9) | Decided |
 | DEC-12 | ISLES'24 uses the latest Zenodo record (17652035), not 16748089, because the data dictionary was only added after that version | Decided |
 | DEC-13 | Slim format v1 gains `ncct_native` and `cow` volumes (§5.4) | Decided |
-| DEC-14 | `mismatch_ratio` is rounded to two decimals, from the rounded volumes | Proposed — awaiting Parsa's confirmation before the freeze |
-| DEC-15 | `haemorrhage.confidence` means the calibrated probability that a haemorrhage is present | Proposed — awaiting Parsa's confirmation before the freeze |
+| DEC-14 | `mismatch_ratio` is rounded to two decimals, from the rounded volumes | Decided |
+| DEC-15 | `haemorrhage.confidence` means the calibrated probability that a haemorrhage is present | Decided |
+| DEC-16 | Vision B uses all labelled RSNA data, with no subset | Decided |
+| DEC-17 | Vision B preprocesses and trains in Kaggle notebooks, as an exception to DEC-3; only checkpoints and metrics move to Drive | Proposed — pending a timing test |
 
 ---
 
@@ -175,6 +177,7 @@ strokecopilot/
 │   ├── 00_template.ipynb          # install, mount, copy tarball, load one case
 │   ├── 01_prep_isles24.ipynb      # runs prep_isles24; produces slim tarball
 │   ├── 02_prep_rsna.ipynb
+│   ├── 02a_rsna_kaggle_timing.ipynb  # Phase 0: runs on Kaggle; times full RSNA for DEC-17 (self-contained)
 │   ├── 10_visionA_nnunet.ipynb
 │   ├── 11_visionA_thresholds.ipynb
 │   ├── 20_visionB_train.ipynb
@@ -263,17 +266,16 @@ Kaggle token, Hugging Face token, LLM API keys: Colab Secrets panel only. The pa
 ### 5.2 RSNA Intracranial Haemorrhage
 
 - Source: Kaggle competition dataset. Raw is ~180 GB of DICOM slices with per-slice labels (epidural, intraparenchymal, intraventricular, subarachnoid, subdural, any).
-- We do not download raw DICOM. Use a preprocessed PNG/NPZ version from Kaggle via the API, or subsample 10–20k slices with a balanced "any" label. Record exactly which in `docs/DATA.md`, including who made a third-party preprocessed version and its terms.
-- Terms: the AWS Open Data listing gives a non-commercial licence, including academic research, that bars sharing or redistributing any part of the data. Read the RSNA MIRA research use agreement, the RSNA Terms of Use and the Kaggle rules before choosing a source. Third-party preprocessed copies, and a slim tarball on a shared Drive, must both be checked against them. **The source is not chosen yet**, so the preprocessed-copy plan above is provisional.
-- Sample whole scans, not independent slices, because scan-level labels are needed. Slice spacing varies across the dataset (reported as typically 2.5–5 mm).
-- Record the slice thickness of the version used. ISLES'24 NCCT must be presented to Vision B at a comparable thickness (§8.2).
+- We use all labelled data (DEC-16) but do not move the raw DICOM to Colab or Drive. The competition data is attached to Kaggle notebooks, where preprocessing and training run (DEC-17, pending a timing test). Record the data version, chosen image size and any excluded scans in `docs/DATA.md`.
+- Terms differ by source. The RSNA challenge Terms of Use allow academic and non-commercial use, and allow sharing or redistribution if the attribution is met (link to the datasets and cite Flanders et al., *Radiol Artif Intell* 2020;2:3). The AWS Open Data listing, whose access runs through RSNA MIRA, says copies may not be shared or redistributed. Prefer the challenge copy on Kaggle, keep all derivatives on the private Drive, and include the attribution. The Kaggle rules still need reading.
+- Split by patient, and keep validation and test at the natural bleed rate; only training is balanced. Slices group into scans through DICOM metadata. RSNA's dataset description gives axial 5 mm slices, 512 × 512, with one site resampled to 5 mm; a later preprint reports spacing of about 2.5–5 mm, so measure it on the data used.
 - Windowing: stack three CT windows as channels — brain (centre 40, width 80), subdural (80/200), bone (600/2800). This is the standard trick and matters for small bleeds.
 - Scan-level labels: a scan is positive if any slice is positive. We need scan-level predictions for the contract.
 
 ### 5.3 Guideline corpus
 
 - 2026 AHA/ASA guideline for the early management of acute ischaemic stroke (*Stroke*, doi:10.1161/STR.0000000000000513, published 26 January 2026; it replaces the 2018 guideline and 2019 update), DAWN trial paper, DEFUSE-3 trial paper. Add others only via a Decisions row.
-- Chunked by criterion, not by page: each passage gets a stable ID like `AHA2026-4.7.1` or `DEFUSE3-inclusion-4`. The reasoner cites IDs; the verifier resolves them.
+- Chunked by criterion, not by page: each passage gets a stable ID like `AHA2026-4.7.2-rec2` (section and recommendation number) or `DEFUSE3-inclusion-4`. The reasoner cites IDs; the verifier resolves them.
 - Stored at `artifacts/corpus/passages.jsonl`; a human-readable summary with the same IDs lives in `docs/RULEBOOK.md`.
 
 ### 5.4 Slim format (v1)
@@ -318,9 +320,9 @@ Slim tarballs are immutable. A preprocessing change produces `_v2`, never an ove
 
 ## 6. The contract: `schemas/vision_output.json`
 
-This is the only thing the vision side hands to the NLP side. Frozen at end of Phase 0. Changes after that need a Decisions row and a version bump.
+This is the only thing the vision side hands to the NLP side. Frozen at v0.1 on 31 October 2026 (DEC-4). Changes need a Decisions row and a version bump.
 
-### 6.1 Fields (v0.1 — draft until Phase 0 closes)
+### 6.1 Fields (v0.1 — frozen)
 
 | Field | Type | Meaning | Producer |
 |---|---|---|---|
@@ -350,15 +352,15 @@ This is the only thing the vision side hands to the NLP side. Frozen at end of P
 
 Five hand-written outputs in `fixtures/`, each with a matching triage note in `fixtures/notes/`. They are the NLP side's test bed until Phase 3 and remain the regression set afterwards.
 
-Expected recommendations are drafted from secondary summaries of the 2026 guideline and must be confirmed against the corpus and reviewed by a clinician. Details are in `fixtures/README.md`.
+Expected recommendations were checked against the 2026 guideline's primary text on 30 October 2026 and still need clinician review. Details are in `fixtures/README.md`.
 
 | Fixture | Scenario | Expected recommendation (to be confirmed against the corpus) |
 |---|---|---|
-| fx01 | 2.5 h from onset, NIHSS 8, no bleed, small core, M2 occlusion, ASPECTS 9 | thrombolysis: yes; thrombectomy: consider |
-| fx02 | 9 h from LKW, NIHSS 16, no bleed, core 18 mL, penumbra 95 mL, M1, ASPECTS 8 | thrombolysis: borderline, end of the 4.5–9 h window, must cite; thrombectomy: yes (DEFUSE-3 mismatch) |
+| fx01 | 2.5 h from onset, NIHSS 8, no bleed, small core, M2 occlusion, ASPECTS 9 | thrombolysis: yes; thrombectomy: depends on M2 dominance, which is not reported: reasonable if dominant proximal, not recommended otherwise |
+| fx02 | 9 h from LKW, NIHSS 16, no bleed, core 18 mL, penumbra 95 mL, M1, ASPECTS 8 | thrombolysis: no (eligible for thrombectomy, so the extended-window recommendation does not apply); thrombectomy: yes (6–24 h, ASPECTS ≥ 6; also meets DEFUSE-3 mismatch) |
 | fx03 | 2 h, NIHSS 12, haemorrhage present, ASPECTS null | thrombolysis: no (absolute contraindication); thrombectomy: no |
-| fx04 | 6 h, age 71, NIHSS 18, mRS 0, core 110 mL, penumbra 120 mL, M1, ASPECTS 4 | thrombolysis: no (little salvageable tissue); thrombectomy: yes (large-core tier, must state mass effect is not reported). Fails DEFUSE-3, so it catches pre-2026 knowledge |
-| fx05 | wake-up stroke, LKW 10 h ago, sleep midpoint about 5 h 45 min before imaging, NIHSS 11, age 82, core 15 mL, M1, ASPECTS null | thrombolysis: borderline, sleep-midpoint rule, must cite; thrombectomy: DAWN criteria — borderline, must cite |
+| fx04 | 6 h, age 71, NIHSS 18, mRS 0, core 110 mL, penumbra 120 mL, M1, ASPECTS 4 | thrombolysis: no (outside 4.5 h, eligible for thrombectomy, little salvageable tissue); thrombectomy: yes (ASPECTS 3–5, must state mass effect is not reported). Fails DEFUSE-3, so it catches pre-2026 knowledge |
+| fx05 | wake-up stroke, LKW 10 h ago, sleep midpoint about 5 h 45 min before imaging, NIHSS 11, age 82, core 15 mL, M1, ASPECTS null | thrombolysis: no while thrombectomy is possible; the sleep-midpoint rule applies only if it is not, must cite; thrombectomy: yes on DAWN criteria, borderline because ASPECTS is unknown and DEFUSE-3 is narrowly missed, must cite |
 
 ### 6.4 Reasoner output: `schemas/recommendation.json`
 
@@ -367,7 +369,7 @@ Expected recommendations are drafted from secondary summaries of the 2026 guidel
   "case_id": "...",
   "model": "gpt-4o-2024-08-06",
   "prompt_version": "reasoner_v1",
-  "thrombolysis": {"recommend": false, "rule_ids": ["AHA2026-x.y.z"], "blocking_factors": ["last known well 10 h ago"]},
+  "thrombolysis": {"recommend": false, "rule_ids": ["AHA2026-4.6.3-rec2"], "blocking_factors": ["last known well 10 h ago", "eligible for thrombectomy"]},
   "thrombectomy": {"recommend": true, "rule_ids": ["DEFUSE3-inclusion-2"], "blocking_factors": []},
   "rationale": [
     {"claim": "Infarct core volume is 18.0 mL.", "sources": [{"type": "vision", "field": "core_ml"}], "derived": false},
@@ -394,18 +396,18 @@ Goal: decisions recorded, contract frozen, data downloading, repo scaffolded.
 - [ ] Get written confirmation from both professors for the switch (DEC-1 → Decided); agree deliverables (§12)
 - [ ] Create shared Drive folder with the layout in §4.2; share with team
 - [ ] Start ISLES'24 download (record 17652035) to `raw/` with `00_download_isles24.ipynb`; verify md5; record sizes
-- [ ] Start RSNA preprocessed download to `raw/`
+- [ ] Attach full RSNA to a Kaggle notebook; read the Kaggle rules; run `02a_rsna_kaggle_timing.ipynb`; settle DEC-17
 - [ ] Read Zenodo licence and RSNA terms; fill `docs/` note and the Notion "Data-use terms" page
-- [ ] Obtain the 2026 AHA/ASA guideline full text; verify every rule in §8.3 and the fixture expectations against it
+- [x] Obtain the 2026 AHA/ASA guideline full text; verify every rule in §8.3 and the fixture expectations against it
 - [ ] Ask a clinician to review the rulebook and fixture expectations once (via the professors if the team has no contact)
-- [ ] Confirm the two provisional contract choices (`mismatch_ratio` two decimals; `haemorrhage.confidence` = P(haemorrhage)), then freeze v0.1
+- [x] Freeze contract v0.1 (DEC-14 and DEC-15 are confirmed)
 - [x] Scaffold repo per §3: package skeleton, `pyproject.toml`, `CLAUDE.md`, `CHANGELOG.md`, `README.md`, `.gitignore`
 - [x] Write `schemas/vision_output.json` (§6.1) and `contract/schema.py` (pydantic mirror)
 - [x] Write the five fixtures and their notes (§6.3)
 - [x] `tests/test_contract.py`: fixtures validate; mismatch ratio and volume computed correctly; null handling
 - [ ] Push to GitHub (private), add repo URL to Notion hub Links
 
-Acceptance: `pytest tests/test_contract.py` passes; the five fixtures validate; both downloads are complete or in progress with md5 checks queued.
+Acceptance: `pytest tests/test_contract.py` passes; the five fixtures validate; the ISLES'24 download is complete or in progress with its md5 check queued; full RSNA is attached on Kaggle and timed.
 
 ### Phase 1 — Data (week 1; lead alone, then onboard)
 
@@ -417,7 +419,7 @@ Goal: slim tarballs on Drive; Colab template runs end to end on one case; team o
 - [ ] Read `clinical_data-description.xlsx`: confirm the fields in §5.1, and tag each column as allowed or forbidden for note generation (§8.3)
 - [ ] Check whether the Circle of Willis labels separate M1 from M2
 - [ ] `prep_isles24.py` + `01_prep_isles24.ipynb` → `slim/isles24_slim_v1.tar`
-- [ ] `prep_rsna.py` + `02_prep_rsna.ipynb` → `slim/rsna_slim_v1.tar` (windowed 3-channel slices, scan-level index); record slice thickness
+- [ ] `prep_rsna.py` + `02_prep_rsna.ipynb` on Kaggle: patient-level splits, scan-level index, windowed 3-channel slices if preprocessing beats on-the-fly reading; record slice thickness
 - [ ] `splits.py` + `splits/folds.json` generated with fixed seed; `tests/test_splits.py`
 - [ ] `isles24.py`: `load_case(id)` returns arrays + clinical row + spacing; `rsna.py` equivalents
 - [ ] `00_template.ipynb`: install, mount, copy tarball, load one case, show maps + mask + clinical row. Must run top to bottom in five minutes on a T4
@@ -538,7 +540,7 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 
 **Inputs.** 2D CT slices, three windows stacked as channels (§5.2). Train on RSNA ICH. The ISLES'24 NCCT is the deployment domain and is expected to be negative, since these patients went on to reperfusion therapy — use it for a false-positive check only. Run Vision B on `ncct_native`, reformatted to the training slice thickness, never on the 1.5 mm isotropic grid.
 
-**Model.** Pretrained ResNet-50 or EfficientNet-B3, binary "any haemorrhage". Slice-level training with standard augmentation (flips, small rotations, brightness). Class balance via sampling.
+**Model.** Pretrained ResNet-50 or EfficientNet-B3, binary "any haemorrhage". Slice-level training on all labelled RSNA data, with standard augmentation (flips, small rotations, brightness). Class balance via sampling in training only; calibrate and test at the natural bleed rate, on patients not used for training.
 
 **Aggregation.** Slice probabilities → scan score: max, and mean of top-k; pick by validation. Temperature scaling for calibration; report a reliability diagram.
 
@@ -562,15 +564,30 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 
 Providers: thin wrappers with identical signatures for each model; temperature 0; log the full prompt and response to the run folder.
 
-**Clinical rulebook summary (for orientation only — the corpus is the source of truth).** Compiled on 30 October 2026 from secondary summaries of the 2026 AHA/ASA guideline, because the primary text was not accessible. COR = class of recommendation. Verify every item against the primary documents during ingestion.
-- Thrombolysis, 0–4.5 h: COR 1, tenecteplase 0.25 mg/kg (max 25 mg) or alteplase 0.9 mg/kg; do not delay for perfusion imaging. Intracranial haemorrhage is an absolute contraindication. Other contraindications include recent anticoagulant use with elevated INR/DOAC timing and recent major surgery (carried over from the earlier plan; verify).
-- Thrombolysis, extended: COR 2a, 4.5–9 h from LKW, or waking with symptoms within 9 h of the midpoint of sleep, with salvageable penumbra on automated perfusion imaging. COR 2a, DWI-FLAIR mismatch on MRI for wake-up or unknown onset beyond 4.5 h. COR 2b reported for 4.5–24 h with LVO when not eligible for thrombectomy (one summary only). The guideline's numeric definition of salvageable penumbra is **not confirmed**; trials used mismatch ratio > 1.2 (CHABILIS-T II) or > 1.8 (TRACE-III) with core < 70 mL. Pick the rule only once the text is checked.
-- Thrombectomy, 0–6 h, ICA/M1: NIHSS ≥ 6, pre-stroke mRS 0–1, ASPECTS 3–10: COR 1. ASPECTS 0–2, age < 80, no significant mass effect: COR 2a. Pre-stroke mRS 2, ASPECTS ≥ 6: COR 2a.
-- Thrombectomy, 6–24 h, ICA/M1: age < 80, NIHSS ≥ 6, mRS 0–1, ASPECTS 3–5, no significant mass effect: COR 1. ASPECTS ≥ 6, NIHSS ≥ 6, mRS 0–1: COR 1 (one slide deck only).
-- Basilar, up to 24 h: mRS 0–1, NIHSS ≥ 10, PC-ASPECTS ≥ 6: COR 1. Not well established for NIHSS 6–9.
-- M2/M3: COR 2b reported (one slide deck only).
-- Trial criteria, from the trial papers. Whether the guideline still uses them to select patients is **not confirmed**: DEFUSE-3 (6–16 h): core < 70 mL, mismatch ratio ≥ 1.8, mismatch volume ≥ 15 mL. DAWN (6–24 h): clinical–core mismatch by age/NIHSS/core volume (e.g. age ≥ 80: NIHSS ≥ 10 and core < 21 mL; age < 80: NIHSS ≥ 10 and core < 31 mL, or NIHSS ≥ 20 and core 31–51 mL).
-- Inputs we cannot observe: ASPECTS from the real pipeline and significant mass effect. The reasoner must name them as uncertainties, never assume them.
+**Clinical rulebook summary (for orientation only — the corpus is the source of truth).** Checked on 30 October 2026 against the primary text of the 2026 AHA/ASA guideline (*Stroke* 2026;57:e316–e436), adults only. COR = class of recommendation; section numbers are the guideline's.
+- Thrombolysis, within 4.5 h (§4.6.1): COR 1, for disabling deficits, regardless of NIHSS, starting as fast as possible and without waiting for CTA or perfusion imaging. Mild non-disabling deficits: COR 3 no benefit. Tenecteplase 0.25 mg/kg (max 25 mg) or alteplase (§4.6.2).
+- Thrombolysis, extended (§4.6.3):
+  - **COR 2a, only if not eligible for thrombectomy:** salvageable penumbra on automated perfusion imaging, and either waking with symptoms within 9 h of the midpoint of sleep or 4.5–9 h from LKW.
+  - COR 2a: unknown onset, within 4.5 h of symptom recognition, DWI lesion under one-third of the MCA territory and no marked FLAIR change.
+  - COR 2b: LVO, salvageable penumbra, 4.5–24 h, and cannot receive thrombectomy.
+  - The recommendations give no numeric definition of salvageable penumbra. Table 3 lists the trial criteria; our rule uses them: 4.5–9 h from EXTEND (ratio > 1.2, penumbra − core > 10 mL, core < 70 mL), 4.5–24 h from TRACE-III (ratio > 1.8, mismatch > 15 mL, core < 70 mL). This choice is ours and needs clinician review.
+- Thrombolysis, absolute contraindications (Table 8): acute intracranial haemorrhage on CT, extensive clear hypodensity, moderate to severe head injury or neurosurgery within 14 days, spinal cord injury within 3 months, intra-axial neoplasm, infective endocarditis, severe coagulopathy (platelets < 100,000/mm³, INR > 1.7, aPTT > 40 s, PT > 15 s), aortic arch dissection, ARIA. DOAC within 48 h is a relative contraindication, not an absolute one.
+- Thrombolysis with thrombectomy (§4.7.1): if eligible for both, give both (COR 1), without delaying thrombectomy to watch for a response.
+- Thrombectomy, ICA/M1, NIHSS ≥ 6 (§4.7.2, Figure 3):
+
+  | Window | ASPECTS | Pre-stroke mRS | Other | COR |
+  |---|---|---|---|---|
+  | 0–6 h | 3–10 | 0–1 | | 1 |
+  | 0–6 h | 6–10 | 2 | | 2a |
+  | 0–6 h | 6–10 | 3–4 | | 2b |
+  | 0–6 h | 0–2 | 0–1 | age < 80, no significant mass effect | 2a |
+  | 6–24 h | 6–10 | 0–1 | | 1 |
+  | 6–24 h | 3–5 | 0–1 | age < 80, no significant mass effect | 1 |
+
+- Thrombectomy, M2 and beyond (§4.7.2): dominant proximal M2, 0–6 h, mRS 0–1, NIHSS ≥ 6, ASPECTS ≥ 6: COR 2a, benefits uncertain. Non-dominant or codominant proximal M2, distal MCA, ACA, PCA: COR 3 no benefit.
+- Thrombectomy, basilar, within 24 h (§4.7.3): mRS 0–1, NIHSS ≥ 10, PC-ASPECTS ≥ 6: COR 1. NIHSS 6–9: COR 2b.
+- Trial criteria (§4.7.2): the guideline's recommendations are written on ASPECTS, not perfusion mismatch. It cites DAWN and DEFUSE-3 as establishing late-window benefit and notes similar outcomes with NCCT selection, so these criteria are supporting evidence and our route to a decision when ASPECTS is unknown. Numeric criteria come from the trial papers and must be verified at ingestion: DEFUSE-3 (6–16 h): core < 70 mL, ratio ≥ 1.8, mismatch ≥ 15 mL. DAWN (6–24 h): age ≥ 80: NIHSS ≥ 10 and core < 21 mL; age < 80: NIHSS ≥ 10 and core < 31 mL, or NIHSS ≥ 20 and core 31–51 mL.
+- Inputs we cannot observe: ASPECTS from the real pipeline, significant mass effect, M2 dominance, and extensive hypodensity. The reasoner must name them as uncertainties, never assume them.
 
 ### 8.4 NLP B — verifier and evaluation
 
@@ -625,7 +642,7 @@ Ground truth for "correct recommendation" is derived mechanically from the groun
 |---|---|---|
 | Professors do not approve the switch | low–medium | Ask this week with the charter page; keep Bias Lens materials until confirmed |
 | ISLES'24 provided mask registration is poor on some cases | low | The paper says masks are already in NCCT space. Spot-check in Phase 1; exclude and record bad cases |
-| Rulebook misreads the guideline, or the primary text cannot be obtained | medium | Get the full text through the UOWD library; one clinician review; keep secondary-sourced rules marked until verified |
+| Rulebook misreads the guideline | medium | Checked against the primary text; one clinician review; re-check when `ingest.py` builds the corpus |
 | Real cases lack variety: all were reperfused, bleeds are not expected, no ASPECTS | certain | Synthetic scenarios are the primary evaluation; held-out cases are the realism check; state this in the report |
 | Treatment leaks into notes through time or outcome columns | medium | Column allow-list in `notes/generate.py`, tested |
 | nnU-Net too slow on Colab | medium | Reduced epochs, resume across sessions, 2.5D fallback; the threshold baseline is always available |
@@ -633,6 +650,7 @@ Ground truth for "correct recommendation" is derived mechanically from the groun
 | Guideline PDFs hard to parse | medium | Manual cleanup of the ~50 key passages is acceptable; record it |
 | Verifier itself hallucinates (LLM judge) | medium | Seeded-error recall; human adjudication sample; rule-based numeric checks that do not use an LLM; report verifier agreement |
 | LLM API cost | low | Temperature 0, cached prompts, small sample of real cases; one API model only |
+| Full RSNA training exceeds Kaggle limits | medium | Timing test in Phase 0; checkpoint and resume; smaller image size; teammates' own GPU quotas; fall back to a whole-scan subset via a Decisions row |
 | Team member drops or is unavailable | medium | Every component has a baseline another person can finish; contract isolates failures |
 | Scope creep (occlusion classifier, per-subtype bleeds, patient explainer) | high | Anything not in §7 needs a Decisions row; cut Phase 3 extras before touching Phase 4 |
 
@@ -684,7 +702,7 @@ Appendices: contract schema, prompts, rulebook with passage IDs, fixture definit
 - **NIHSS** — 0–42 stroke severity score. **mRS** — 0–6 disability scale; pre-stroke mRS matters for eligibility.
 - **LKW** — last known well; the clock starts here when onset is unwitnessed (wake-up strokes).
 - **ASPECTS** — 0–10 score of early ischaemic change on NCCT; the 2026 guideline's thrombectomy tiers are defined on it, including large-core strokes at 3–5. Null in our real pipeline (DEC-9).
-- **COR** — class of recommendation in AHA/ASA guidelines: 1 is strongest, then 2a, 2b.
+- **COR** — class of recommendation in AHA/ASA guidelines: 1 is strongest, then 2a, 2b; 3 means no benefit or harm.
 - **mTICI** — 0–3 grade of reperfusion after thrombectomy; every ISLES'24 case is 2c or 3.
 - **DWI/FLAIR** — MRI sequences; DWI shows acute infarct within minutes, FLAIR within hours. ISLES'24 follow-up masks are drawn on MRI.
 - **Dice** — overlap between predicted and true masks, 0–1.

@@ -244,7 +244,7 @@ def recommendation():
         "prompt_version": "reasoner_v1",
         "thrombolysis": {
             "recommend": False,
-            "rule_ids": ["AHA2026-x.y.z"],
+            "rule_ids": ["AHA2026-4.6.3-rec2"],
             "blocking_factors": ["last known well 9 h ago, beyond 4.5 h"],
         },
         "thrombectomy": {"recommend": True, "rule_ids": ["DEFUSE3-inclusion-2"], "blocking_factors": []},
