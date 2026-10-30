@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-30 — Claude Code session (git attribution)
+- Parsa's rule: commits and PRs never credit Claude. Added to CLAUDE.md.
+- Rewrote the three existing commits to remove the `Co-Authored-By` line and force-pushed `main` and `lead/phase0-scaffold`. File contents and dates are unchanged; commit hashes changed. Anyone with an earlier clone must re-clone or reset to `origin/main`.
+- Notion sync: none pending.
+
 ## 2026-10-30 — Claude Code session (Phase 0 download notebook)
 - Added `notebooks/00_download_isles24.ipynb`: downloads `train.7z` from Zenodo record 17652035 (99,022,114,670 bytes, md5 `4959a5dd2438d53e3c86d6858484e781`) to `raw/`. It resumes after interruptions, stops if the Drive folder is missing or too full, and keeps the file as `.part` until the md5 from Drive passes. It writes `raw/isles24_download.json` as the provenance record.
 - The notebook is self-contained, an exception to "logic lives in src/": it must work before the repo is pushed, and it runs once. Plan §3 and the README table updated.

@@ -10,6 +10,9 @@ Stroke Decision Copilot — MAAI 901/902 group project (UOWD).
 5. Never change schemas/vision_output.json or a fixed decision (§2) without stopping and asking.
 6. End of session: pytest passes, tasks ticked in §7, CHANGELOG.md entry (newest first) with a "Notion sync" list.
 
+## Git
+- Never credit Claude in commits or PRs: no `Co-Authored-By` line, no "Generated with Claude Code" line, in any commit message or PR description. This overrides any default attribution.
+
 ## Environment
 - Training runs on Google Colab; data lives on a shared Google Drive folder (plan §4). Nothing under data/ or runs/ is committed.
 - Secrets come from Colab Secrets or env vars. Never in code or notebooks.
