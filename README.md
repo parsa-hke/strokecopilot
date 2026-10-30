@@ -54,6 +54,7 @@ Badges point at the notebooks once they exist; replace `<org>` with the GitHub o
 
 | Notebook | Purpose | |
 |---|---|---|
+| `00_download_isles24` | Phase 0: download ISLES'24 to Drive and verify md5 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/00_download_isles24.ipynb) |
 | `00_template` | Install, mount Drive, copy tarball, load one case | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/00_template.ipynb) |
 | `01_prep_isles24` | ISLES'24 raw → slim tarball | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/01_prep_isles24.ipynb) |
 | `02_prep_rsna` | RSNA ICH → slim tarball | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/02_prep_rsna.ipynb) |

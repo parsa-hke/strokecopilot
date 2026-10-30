@@ -168,6 +168,7 @@ strokecopilot/
 │   ├── reasoner_v1.md
 │   └── claim_extractor_v1.md
 ├── notebooks/
+│   ├── 00_download_isles24.ipynb  # Phase 0: resumable download to raw/ + md5 (self-contained)
 │   ├── 00_template.ipynb          # install, mount, copy tarball, load one case
 │   ├── 01_prep_isles24.ipynb      # runs prep_isles24; produces slim tarball
 │   ├── 02_prep_rsna.ipynb
@@ -388,7 +389,7 @@ Goal: decisions recorded, contract frozen, data downloading, repo scaffolded.
 
 - [ ] Get written confirmation from both professors for the switch (DEC-1 → Decided); agree deliverables (§12)
 - [ ] Create shared Drive folder with the layout in §4.2; share with team
-- [ ] Start ISLES'24 download (record 17652035) to `raw/` from a Colab session; verify md5; record sizes
+- [ ] Start ISLES'24 download (record 17652035) to `raw/` with `00_download_isles24.ipynb`; verify md5; record sizes
 - [ ] Start RSNA preprocessed download to `raw/`
 - [ ] Read Zenodo licence and RSNA terms; fill `docs/` note and the Notion "Data-use terms" page
 - [ ] Obtain the 2026 AHA/ASA guideline full text; verify every rule in §8.3 and the fixture expectations against it
