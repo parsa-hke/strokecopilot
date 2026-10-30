@@ -94,7 +94,7 @@ These are recorded in the Notion Decisions log. Do not change them without a new
 | DEC-14 | `mismatch_ratio` is rounded to two decimals, from the rounded volumes | Decided |
 | DEC-15 | `haemorrhage.confidence` means the calibrated probability that a haemorrhage is present | Decided |
 | DEC-16 | Vision B uses all labelled RSNA data, with no subset | Decided |
-| DEC-17 | Vision B preprocesses and trains in Kaggle notebooks, as an exception to DEC-3; only checkpoints and metrics move to Drive | Proposed — pending a timing test |
+| DEC-17 | Vision B preprocesses once to 320 px JPEG tar shards on Kaggle, then trains there, as an exception to DEC-3; only checkpoints and metrics move to Drive | Decided |
 
 ---
 
@@ -216,7 +216,7 @@ Rules: logic lives in `src/`, notebooks are thin and call it. Nothing under `dat
 ```
 StrokeCopilot/
   raw/        ISLES'24 archive + md5, RSNA archive — untouched after download
-  slim/       isles24_slim_v1.tar, rsna_slim_v1.tar — immutable; new version = new file
+  slim/       isles24_slim_v1.tar — immutable; new version = new file (rsna_slim_v1 lives in private Kaggle datasets, DEC-17)
   runs/       EXP-<id>_<short-name>/  config.json, checkpoints/, metrics.json, logs/
   artifacts/  guidelines/ (PDFs), figures/ (exported for the report), corpus/ (passages.jsonl)
 ```
@@ -266,9 +266,9 @@ Kaggle token, Hugging Face token, LLM API keys: Colab Secrets panel only. The pa
 ### 5.2 RSNA Intracranial Haemorrhage
 
 - Source: Kaggle competition dataset. Raw is ~180 GB of DICOM slices with per-slice labels (epidural, intraparenchymal, intraventricular, subarachnoid, subdural, any).
-- We use all labelled data (DEC-16) but do not move the raw DICOM to Colab or Drive. The competition data is attached to Kaggle notebooks, where preprocessing and training run (DEC-17, pending a timing test). Record the data version, chosen image size and any excluded scans in `docs/DATA.md`.
+- We use all labelled data (DEC-16) but do not move the raw DICOM to Colab or Drive. The competition data is attached to Kaggle notebooks, where preprocessing and training run (DEC-17). Timing test, 31 Oct 2026: 752,803 labelled slices, 14.3% with a bleed, about 20–28 raw files per second, no failed reads. Raw reading is too slow to train on directly, so preprocessing runs once to 320 px three-window JPEGs in tar shards (`rsna_slim_v1`, estimated 17 GB; 256 px is the fallback). Copy shards to Kaggle's local disk each session. Record the data version, chosen image size and any excluded scans in `docs/DATA.md`.
 - Terms differ by source. The RSNA challenge Terms of Use allow academic and non-commercial use, and allow sharing or redistribution if the attribution is met (link to the datasets and cite Flanders et al., *Radiol Artif Intell* 2020;2:3). The AWS Open Data listing, whose access runs through RSNA MIRA, says copies may not be shared or redistributed. Prefer the challenge copy on Kaggle, keep all derivatives on the private Drive, and include the attribution. The Kaggle rules still need reading.
-- Split by patient, and keep validation and test at the natural bleed rate; only training is balanced. Slices group into scans through DICOM metadata. RSNA's dataset description gives axial 5 mm slices, 512 × 512, with one site resampled to 5 mm; a later preprint reports spacing of about 2.5–5 mm, so measure it on the data used.
+- Split by patient, and keep validation and test at the natural bleed rate; only training is balanced. Slices group into scans through DICOM metadata. RSNA's dataset description gives axial 5 mm slices, 512 × 512, with one site resampled to 5 mm; a later preprint reports spacing of about 2.5–5 mm. `SliceThickness` was absent in all 2,000 sampled files, so derive spacing from `ImagePositionPatient`.
 - Windowing: stack three CT windows as channels — brain (centre 40, width 80), subdural (80/200), bone (600/2800). This is the standard trick and matters for small bleeds.
 - Scan-level labels: a scan is positive if any slice is positive. We need scan-level predictions for the contract.
 
@@ -396,7 +396,7 @@ Goal: decisions recorded, contract frozen, data downloading, repo scaffolded.
 - [ ] Get written confirmation from both professors for the switch (DEC-1 → Decided); agree deliverables (§12)
 - [ ] Create shared Drive folder with the layout in §4.2; share with team
 - [ ] Start ISLES'24 download (record 17652035) to `raw/` with `00_download_isles24.ipynb`; verify md5; record sizes
-- [ ] Attach full RSNA to a Kaggle notebook; read the Kaggle rules; run `02a_rsna_kaggle_timing.ipynb`; settle DEC-17
+- [x] Attach full RSNA to a Kaggle notebook; run `02a_rsna_kaggle_timing.ipynb`; settle DEC-17
 - [ ] Read Zenodo licence and RSNA terms; fill `docs/` note and the Notion "Data-use terms" page
 - [x] Obtain the 2026 AHA/ASA guideline full text; verify every rule in §8.3 and the fixture expectations against it
 - [ ] Ask a clinician to review the rulebook and fixture expectations once (via the professors if the team has no contact)
@@ -419,7 +419,7 @@ Goal: slim tarballs on Drive; Colab template runs end to end on one case; team o
 - [ ] Read `clinical_data-description.xlsx`: confirm the fields in §5.1, and tag each column as allowed or forbidden for note generation (§8.3)
 - [ ] Check whether the Circle of Willis labels separate M1 from M2
 - [ ] `prep_isles24.py` + `01_prep_isles24.ipynb` → `slim/isles24_slim_v1.tar`
-- [ ] `prep_rsna.py` + `02_prep_rsna.ipynb` on Kaggle: patient-level splits, scan-level index, windowed 3-channel slices if preprocessing beats on-the-fly reading; record slice thickness
+- [ ] `prep_rsna.py` + `02_prep_rsna.ipynb` on Kaggle: 320 px windowed JPEG tar shards plus a scan-level index with patient IDs and slice positions; patient-level splits are made from that index
 - [ ] `splits.py` + `splits/folds.json` generated with fixed seed; `tests/test_splits.py`
 - [ ] `isles24.py`: `load_case(id)` returns arrays + clinical row + spacing; `rsna.py` equivalents
 - [ ] `00_template.ipynb`: install, mount, copy tarball, load one case, show maps + mask + clinical row. Must run top to bottom in five minutes on a T4
