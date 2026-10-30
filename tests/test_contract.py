@@ -55,6 +55,14 @@ def test_fixture_has_note(stem):
 
 
 @pytest.mark.parametrize("stem", FIXTURE_STEMS)
+def test_note_does_not_reveal_treatment_or_imaging(stem):
+    # Plan §8.3: notes carry baseline clinical facts only.
+    note = (FIXTURE_NOTES_DIR / f"{stem}.txt").read_text(encoding="utf-8").lower()
+    for term in ("groin", "recanal", "tici", "thrombectomy", "thrombolysis", "penumbra", "aspects"):
+        assert term not in note
+
+
+@pytest.mark.parametrize("stem", FIXTURE_STEMS)
 def test_fixture_does_not_use_real_case_ids(stem):
     # Fixtures are synthetic; a real ISLES'24 ID here could leak a held-out case.
     assert not _load_fixture(stem)["case_id"].startswith("sub-stroke")
@@ -125,12 +133,22 @@ def test_null_is_not_coerced_to_zero(fx02):
     assert out.core_ml == 18.0
 
 
+def test_null_aspects_is_valid_and_stays_null(fx02):
+    fx02["aspects"] = None
+    assert validate_vision_output(fx02).aspects is None
+
+
+def test_fixtures_cover_null_and_scored_aspects():
+    values = [_load_fixture(stem)["aspects"] for stem in FIXTURE_STEMS]
+    assert None in values and any(v is not None for v in values)
+
+
 def test_zero_core_stays_zero(fx02):
     fx02.update(core_ml=0.0, mismatch_ratio=None, mismatch_volume_ml=95.0)
     assert validate_vision_output(fx02).core_ml == 0.0
 
 
-@pytest.mark.parametrize("key", ["core_ml", "mismatch_ratio", "occlusion_site", "warnings"])
+@pytest.mark.parametrize("key", ["core_ml", "mismatch_ratio", "occlusion_site", "aspects", "warnings"])
 def test_missing_field_rejected(fx02, key):
     # null must be explicit; a missing key is not "not computed".
     del fx02[key]
@@ -147,6 +165,9 @@ def test_missing_field_rejected(fx02, key):
         (("schema_version",), "0.2"),
         (("occlusion_site",), "M3"),
         (("core_ml",), -1.0),
+        (("aspects",), 11),
+        (("aspects",), -1),
+        (("aspects",), 7.5),
         (("haemorrhage", "present"), "true"),
         (("haemorrhage", "confidence"), 1.2),
         (("confidence", "penumbra"), -0.1),
@@ -163,8 +184,8 @@ def test_invalid_value_rejected(fx02, path, value):
 
 
 def test_extra_field_rejected(fx02):
-    fx02["aspects"] = 7
-    with pytest.raises(ContractError, match="aspects"):
+    fx02["mass_effect"] = True
+    with pytest.raises(ContractError, match="mass_effect"):
         validate_vision_output(fx02)
 
 
@@ -223,14 +244,19 @@ def recommendation():
         "prompt_version": "reasoner_v1",
         "thrombolysis": {
             "recommend": False,
-            "rule_ids": ["AHA2019-3.5.1"],
+            "rule_ids": ["AHA2026-x.y.z"],
             "blocking_factors": ["last known well 9 h ago, beyond 4.5 h"],
         },
         "thrombectomy": {"recommend": True, "rule_ids": ["DEFUSE3-inclusion-2"], "blocking_factors": []},
         "rationale": [
-            {"claim": "Infarct core volume is 18.0 mL.", "source": {"type": "vision", "field": "core_ml"}},
-            {"claim": "The patient was last known well 9 h ago.", "source": {"type": "note", "quote": "Time from last known well to imaging: 9 h 0 min."}},
-            {"claim": "DEFUSE-3 requires core volume under 70 mL.", "source": {"type": "passage", "id": "DEFUSE3-inclusion-2"}},
+            {"claim": "Infarct core volume is 18.0 mL.", "sources": [{"type": "vision", "field": "core_ml"}], "derived": False},
+            {"claim": "The patient was last known well 9 h ago.", "sources": [{"type": "note", "quote": "Time from last known well to imaging: 9 h 0 min."}], "derived": False},
+            {"claim": "DEFUSE-3 requires core volume under 70 mL.", "sources": [{"type": "passage", "id": "DEFUSE3-inclusion-2"}], "derived": False},
+            {
+                "claim": "The core of 18.0 mL is within the DEFUSE-3 limit.",
+                "sources": [{"type": "vision", "field": "core_ml"}, {"type": "passage", "id": "DEFUSE3-inclusion-2"}],
+                "derived": True,
+            },
         ],
         "uncertainties": ["onset time is last-known-well, not witnessed"],
     }
@@ -252,8 +278,20 @@ def test_recommendation_example_validates(recommendation):
     ],
 )
 def test_recommendation_bad_source_rejected(recommendation, source):
-    recommendation["rationale"][0]["source"] = source
+    recommendation["rationale"][0]["sources"] = [source]
     with pytest.raises(ContractError):
+        validate_recommendation(recommendation)
+
+
+def test_recommendation_claim_needs_a_source(recommendation):
+    recommendation["rationale"][0]["sources"] = []
+    with pytest.raises(ContractError):
+        validate_recommendation(recommendation)
+
+
+def test_recommendation_claim_needs_derived_flag(recommendation):
+    del recommendation["rationale"][0]["derived"]
+    with pytest.raises(ContractError, match="derived"):
         validate_recommendation(recommendation)
 
 

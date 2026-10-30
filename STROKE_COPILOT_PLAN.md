@@ -3,7 +3,7 @@
 **Stroke Decision Copilot — build plan and reference for every session**
 
 MAAI 901 (Deep Learning for Visual Data) + MAAI 902 (NLP & LLMs) joint group project, MSc Applied AI, UOWD.
-Team of five. Plan version 0.1, 29 October 2026.
+Team of five. Plan version 0.2, 30 October 2026.
 
 This file is the single technical source of truth for the repo. The Notion hub (Project HQ → Stroke Decision Copilot) is the team coordination layer: tasks, decisions, experiments, meetings. When the two disagree, fix whichever one is wrong the same day and note it in CHANGELOG.md.
 
@@ -31,14 +31,14 @@ Read §1–§3 once, §5–§6 before touching data, §8 for your component, §1
 
 Acute ischaemic stroke: a clot blocks an artery in the brain and tissue starts dying within minutes. There are two main treatments.
 
-- **Thrombolysis** (IV alteplase/tenecteplase): a clot-dissolving drug. Standard window is 4.5 hours from symptom onset. Absolutely contraindicated if there is an intracranial haemorrhage.
-- **Thrombectomy**: a catheter physically removes the clot. Indicated for large-vessel occlusions; the window can extend to 24 hours *if imaging shows salvageable tissue* (DAWN and DEFUSE-3 trials).
+- **Thrombolysis** (IV alteplase/tenecteplase): a clot-dissolving drug. Standard window is 4.5 hours from symptom onset, extendable to 9 hours in selected patients if imaging shows salvageable tissue. Absolutely contraindicated if there is an intracranial haemorrhage.
+- **Thrombectomy**: a catheter physically removes the clot. Indicated for large-vessel occlusions; the window can extend to 24 hours in selected patients (DAWN and DEFUSE-3 trials, 2026 AHA/ASA guideline), and eligibility now reaches large-core strokes.
 
 Eligibility therefore depends on three things at once:
 
 1. What the scan shows — how much tissue is already dead (**core**), how much is starving but salvageable (**penumbra**), whether there is a bleed, where the occlusion is.
 2. Facts about the patient — time since onset (or last known well), age, NIHSS score, anticoagulant use, prior disability.
-3. Published rules — the AHA/ASA guideline and the trial criteria.
+3. Published rules — the 2026 AHA/ASA guideline and the trial criteria.
 
 Clinicians do this under time pressure. Our system does the imaging part with vision models, the reasoning part with a retrieval-grounded language model, and then audits the language model's output claim by claim.
 
@@ -59,6 +59,8 @@ Clinicians do this under time pressure. Our system does the imaging part with vi
 
 The verifier lets us measure, on a clinical decision task with known ground truth inputs, how often different language models assert things that are not in their inputs. The deliverable that matters for the report is a table: hallucination rate (and critical hallucination rate) per model, per clinical scenario, with confidence intervals.
 
+Guideline-grounded claim checking already exists in the literature, so the distinctive contribution is the vision link: how errors in imaging-derived values carry through to treatment decisions, measured by comparing ground-truth and predicted vision inputs, and whether retrieval reduces hallucination at all, measured against a no-retrieval arm.
+
 Everything else — the segmentation Dice, the haemorrhage AUC, the demo — supports that table.
 
 ### 1.4 What "done" looks like
@@ -76,12 +78,18 @@ These are recorded in the Notion Decisions log. Do not change them without a new
 
 | # | Decision | Status |
 |---|---|---|
-| DEC-1 | Group project is the Stroke Decision Copilot, replacing Bias Lens | Proposed — pending written confirmation from both professors |
+| DEC-1 | Group project is the Stroke Decision Copilot, replacing Bias Lens | Decided — professors approved (reported by Parsa, 30 Oct 2026) |
 | DEC-2 | Datasets: ISLES'24 (Zenodo) for perfusion + infarct + clinical variables; RSNA Intracranial Haemorrhage (Kaggle) for bleed detection; AHA/ASA guideline + DAWN + DEFUSE-3 papers for the corpus | Decided |
 | DEC-3 | Compute: Google Colab Pro. Storage: shared Google Drive folder `StrokeCopilot/`. Training data is copied to Colab local disk as one tarball per session — never read per-file through the Drive mount | Decided |
 | DEC-4 | Contract-first: `schemas/vision_output.json` is frozen at the end of Phase 0. NLP builds against hand-written fixtures until Phase 3 | Decided |
 | DEC-5 | Evaluation split is fixed on day one: 5 folds + ~20 held-out cases. Held-out cases are untouched until Phase 4 | Decided |
 | DEC-6 | The lead builds Phase 0–1 alone, then onboards the team within 7–10 days of 29 Oct 2026 | Decided |
+| DEC-7 | `penumbra_ml` is the total Tmax > 6 s volume, core included; salvageable tissue is `mismatch_volume_ml` | Decided — Notion row pending |
+| DEC-8 | The rule baseline is the 2026 AHA/ASA guideline plus DAWN and DEFUSE-3, not the 2018/2019 guideline | Decided — Notion row pending |
+| DEC-9 | The contract carries a nullable `aspects` field. No ASPECTS model is built: it is null from the real pipeline and set only in fixtures and synthetic scenarios | Decided — Notion row pending |
+| DEC-10 | A rationale claim can cite several sources and be marked `derived`. The hallucination definition changes to match (§6.4, §8.4) | Decided — Notion row pending |
+| DEC-11 | The primary hallucination evaluation uses 100–200 synthetic scenarios; held-out cases are the realism check. Added: seeded errors, no-retrieval arm, ground-truth vs predicted vision arm (§9) | Decided — Notion row pending |
+| DEC-12 | ISLES'24 uses the latest Zenodo record (17652035), not 16748089, because the data dictionary was only added after that version | Decided — Notion row pending |
 
 ---
 
@@ -135,7 +143,9 @@ strokecopilot/
 │   │       ├── claims.py          # rationale → list of atomic claims
 │   │       ├── trace.py           # claim → source (vision field / note / passage) or None
 │   │       ├── metrics.py         # hallucination rate, critical rate, omission rate, CIs
-│   │       └── adjudicate.py      # export samples for human labelling, agreement stats
+│   │       ├── adjudicate.py      # export samples for human labelling, agreement stats
+│   │       ├── scenarios.py       # synthetic scenario matrix with rule-derived expected output
+│   │       └── seeded_errors.py   # plant known fabrications to measure verifier recall
 │   ├── pipeline/
 │   │   ├── end_to_end.py          # case_id + note → full output
 │   │   └── report.py              # metrics.json writer, run folder conventions
@@ -235,26 +245,30 @@ Kaggle token, Hugging Face token, LLM API keys: Colab Secrets panel only. The pa
 
 ### 5.1 ISLES'24
 
-- Source: Zenodo record 16748089, v2 (August 2025), open access. ~99 GB. 149 training cases from a multi-centre acute ischaemic stroke cohort. Cite the two preprints listed on the record (arXiv:2408.11142 and arXiv:2408.10966).
-- Contents per case (to be confirmed against the archive in Phase 1 and recorded in `docs/DATA.md`): acute non-contrast CT, CT angiography with vessel-occlusion mask, CT perfusion (4D source and/or derived maps — CBF, CBV, MTT, Tmax), follow-up MRI with the delineated final infarct mask, and a row of clinical/demographic variables.
+- Source: Zenodo, latest record 17652035 (20 November 2025, DOI 10.5281/zenodo.17652035), open access, ~99 GB, one `train.7z`. Record the record ID and md5 in `docs/DATA.md`. Earlier records lack `clinical_data-description.xlsx`, which first appears in 16813698. 149 training cases from two centres. Licence: CC BY-NC-SA 4.0, so non-commercial, and derivatives such as the slim tarball must stay under the same licence. Cite the dataset paper (arXiv:2408.11142) and the challenge paper (arXiv:2408.10966); the Zenodo text gives 2408.09259 for the dataset paper, but that ID resolves to an unrelated paper. Cite TopCoW too if the Circle of Willis masks are used.
+- **Cohort.** Every patient had interventional reperfusion therapy with near-complete recanalisation (mTICI 2c or 3), and follow-up MRI 2–9 days later. Consequences: final infarct is a stronger core proxy than in an untreated cohort but will not generalise to patients who are not reperfused; real cases are not expected to include haemorrhage and offer little variety in recommendations, which is why §9 relies on synthetic scenarios.
+- Contents per case (from the paper; confirm against the archive in Phase 1 and record in `docs/DATA.md`): acute NCCT, CTA, 4D CTP, perfusion maps (CBF, CBV, MTT, Tmax, from icobrain cva), follow-up DWI/ADC with the final infarct mask, a vessel-occlusion mask, an automatically generated Circle of Willis mask, and baseline and outcome CSVs. Preprocessed images and masks are already in NCCT space.
+- Tabular fields (paper): age, sex, atrial fibrillation, hypertension, diabetes, hyperlipidaemia, anticoagulation, statins, antiplatelets, glucose, leucocytes, CRP, INR, referral type (wake-up, in-house, external), times (onset to door, alert to door, door to imaging, door to groin, door to first series, time of intervention, door to recanalisation), NIHSS, mRS (including premorbid), mTICI. No ASPECTS field is listed. Lab values and times were altered by ±5% for anonymisation, which matters near hard cut-offs such as 4.5 h.
 - What we use:
   - **Input to Vision A:** perfusion maps (and NCCT if useful).
-  - **Target for Vision A:** final infarct mask on follow-up MRI, registered to CT space (check whether the archive already provides this registration; if not, it is a Phase 1 task).
-  - **Occlusion site:** from the CTA mask, mapped to ICA / M1 / M2 / basilar / none / unknown.
+  - **Target for Vision A:** final infarct mask on follow-up MRI, in NCCT space (linear registration by the data providers; spot-check quality in Phase 1).
+  - **Occlusion site:** overlap of the occlusion mask with the Circle of Willis labels, mapped to ICA / M1 / M2 / basilar / none / unknown. Check in Phase 1 whether the labels can separate M1 from M2; if not, use `unknown` or a distance heuristic and record it.
   - **Clinical variables:** to generate triage notes (§8.3) and to stratify the split.
 - Known issue: challenge test data is not public; our held-out set is carved from the 149 training cases.
 
 ### 5.2 RSNA Intracranial Haemorrhage
 
 - Source: Kaggle competition dataset. Raw is ~180 GB of DICOM slices with per-slice labels (epidural, intraparenchymal, intraventricular, subarachnoid, subdural, any).
-- We do not download raw DICOM. Use a preprocessed PNG/NPZ version from Kaggle via the API, or subsample 10–20k slices with a balanced "any" label. Record exactly which in `docs/DATA.md`.
+- We do not download raw DICOM. Use a preprocessed PNG/NPZ version from Kaggle via the API, or subsample 10–20k slices with a balanced "any" label. Record exactly which in `docs/DATA.md`, including who made a third-party preprocessed version and its terms.
+- Terms: the dataset is listed for non-commercial use including academic research (AWS Open Data listing, RSNA MIRA research use agreement). Read the full agreement and the Kaggle rules in Phase 0; a third-party version does not remove them.
+- Record the slice thickness of the version used. ISLES'24 NCCT must be presented to Vision B at a comparable thickness (§8.2).
 - Windowing: stack three CT windows as channels — brain (centre 40, width 80), subdural (80/200), bone (600/2800). This is the standard trick and matters for small bleeds.
 - Scan-level labels: a scan is positive if any slice is positive. We need scan-level predictions for the contract.
 
 ### 5.3 Guideline corpus
 
-- AHA/ASA acute ischaemic stroke guideline (latest edition at time of ingestion; record the year), DAWN trial paper, DEFUSE-3 trial paper. Add others only via a Decisions row.
-- Chunked by criterion, not by page: each passage gets a stable ID like `AHA2019-3.5.2` or `DEFUSE3-inclusion-4`. The reasoner cites IDs; the verifier resolves them.
+- 2026 AHA/ASA guideline for the early management of acute ischaemic stroke (*Stroke*, doi:10.1161/STR.0000000000000513, published 26 January 2026; it replaces the 2018 guideline and 2019 update), DAWN trial paper, DEFUSE-3 trial paper. Add others only via a Decisions row.
+- Chunked by criterion, not by page: each passage gets a stable ID like `AHA2026-4.7.1` or `DEFUSE3-inclusion-4`. The reasoner cites IDs; the verifier resolves them.
 - Stored at `artifacts/corpus/passages.jsonl`; a human-readable summary with the same IDs lives in `docs/RULEBOOK.md`.
 
 ### 5.4 Slim format (v1)
@@ -267,8 +281,10 @@ isles24_slim_v1/
   clinical.csv               # one row per case
   sub-strokeXXXX/
     ncct.nii.gz              # resampled to common grid
+    ncct_native.nii.gz       # original spacing, HU preserved, for Vision B (§8.2)
     cbf.nii.gz cbv.nii.gz mtt.nii.gz tmax.nii.gz
     cta_occlusion.nii.gz
+    cow.nii.gz               # Circle of Willis labels, for occlusion site
     infarct_followup.nii.gz  # target, in CT space
 ```
 
@@ -313,6 +329,7 @@ This is the only thing the vision side hands to the NLP side. Frozen at end of P
 | `mismatch_ratio` | float \| null | `penumbra_ml / core_ml`; null if core < 1 mL | Vision A |
 | `mismatch_volume_ml` | float \| null | `penumbra_ml - core_ml` | Vision A |
 | `occlusion_site` | enum | `ICA`, `M1`, `M2`, `basilar`, `none`, `unknown` | Vision A |
+| `aspects` | int 0–10 \| null | ASPECTS on NCCT; null means unknown, never a low score | none: null from the real pipeline, set in fixtures and synthetic scenarios |
 | `confidence.core` | float 0–1 | model confidence | Vision A |
 | `confidence.penumbra` | float 0–1 | model confidence | Vision A |
 | `warnings` | string[] | e.g. `"motion artefact"`, `"incomplete perfusion coverage"` | pipeline |
@@ -328,13 +345,15 @@ This is the only thing the vision side hands to the NLP side. Frozen at end of P
 
 Five hand-written outputs in `fixtures/`, each with a matching triage note in `fixtures/notes/`. They are the NLP side's test bed until Phase 3 and remain the regression set afterwards.
 
+Expected recommendations are drafted from secondary summaries of the 2026 guideline and must be confirmed against the corpus and reviewed by a clinician. Details are in `fixtures/README.md`.
+
 | Fixture | Scenario | Expected recommendation (to be confirmed against the corpus) |
 |---|---|---|
-| fx01 | 2.5 h from onset, NIHSS 8, no bleed, small core, M2 occlusion | thrombolysis: yes; thrombectomy: consider |
-| fx02 | 9 h from LKW, NIHSS 16, no bleed, core 18 mL, penumbra 95 mL, M1 | thrombolysis: no (window); thrombectomy: yes (DEFUSE-3 mismatch) |
-| fx03 | 2 h, NIHSS 12, haemorrhage present | thrombolysis: no (absolute contraindication); thrombectomy: no |
-| fx04 | 6 h, NIHSS 18, core 110 mL, penumbra 120 mL, M1 | thrombolysis: no; thrombectomy: no (core too large) |
-| fx05 | wake-up stroke, LKW 10 h ago, NIHSS 11, age 82, core 15 mL, M1 | thrombolysis: no; thrombectomy: DAWN criteria — borderline, must cite |
+| fx01 | 2.5 h from onset, NIHSS 8, no bleed, small core, M2 occlusion, ASPECTS 9 | thrombolysis: yes; thrombectomy: consider |
+| fx02 | 9 h from LKW, NIHSS 16, no bleed, core 18 mL, penumbra 95 mL, M1, ASPECTS 8 | thrombolysis: borderline, end of the 4.5–9 h window, must cite; thrombectomy: yes (DEFUSE-3 mismatch) |
+| fx03 | 2 h, NIHSS 12, haemorrhage present, ASPECTS null | thrombolysis: no (absolute contraindication); thrombectomy: no |
+| fx04 | 6 h, age 71, NIHSS 18, mRS 0, core 110 mL, penumbra 120 mL, M1, ASPECTS 4 | thrombolysis: no (little salvageable tissue); thrombectomy: yes (large-core tier, must state mass effect is not reported). Fails DEFUSE-3, so it catches pre-2026 knowledge |
+| fx05 | wake-up stroke, LKW 10 h ago, sleep midpoint about 5 h 45 min before imaging, NIHSS 11, age 82, core 15 mL, M1, ASPECTS null | thrombolysis: borderline, sleep-midpoint rule, must cite; thrombectomy: DAWN criteria — borderline, must cite |
 
 ### 6.4 Reasoner output: `schemas/recommendation.json`
 
@@ -343,17 +362,19 @@ Five hand-written outputs in `fixtures/`, each with a matching triage note in `f
   "case_id": "...",
   "model": "gpt-4o-2024-08-06",
   "prompt_version": "reasoner_v1",
-  "thrombolysis": {"recommend": true, "rule_ids": ["AHA2019-3.5.1"], "blocking_factors": []},
-  "thrombectomy": {"recommend": false, "rule_ids": ["DEFUSE3-inclusion-2"], "blocking_factors": ["core_ml above 70"]},
+  "thrombolysis": {"recommend": false, "rule_ids": ["AHA2026-x.y.z"], "blocking_factors": ["last known well 10 h ago"]},
+  "thrombectomy": {"recommend": true, "rule_ids": ["DEFUSE3-inclusion-2"], "blocking_factors": []},
   "rationale": [
-    {"claim": "Infarct core volume is 18.0 mL.", "source": {"type": "vision", "field": "core_ml"}},
-    {"claim": "DEFUSE-3 requires core volume under 70 mL.", "source": {"type": "passage", "id": "DEFUSE3-inclusion-2"}}
+    {"claim": "Infarct core volume is 18.0 mL.", "sources": [{"type": "vision", "field": "core_ml"}], "derived": false},
+    {"claim": "The patient was last known well 10 h before imaging.", "sources": [{"type": "note", "quote": "Time from last known well to imaging: 10 h 0 min."}], "derived": false},
+    {"claim": "DEFUSE-3 requires core volume under 70 mL.", "sources": [{"type": "passage", "id": "DEFUSE3-inclusion-2"}], "derived": false},
+    {"claim": "The core of 18.0 mL is within the DEFUSE-3 limit.", "sources": [{"type": "vision", "field": "core_ml"}, {"type": "passage", "id": "DEFUSE3-inclusion-2"}], "derived": true}
   ],
   "uncertainties": ["onset time is last-known-well, not witnessed"]
 }
 ```
 
-The reasoner is asked to produce this structure directly. The verifier checks the `source` the model claimed *and* independently re-traces each claim; disagreement between the two is itself a recorded error type.
+Passage IDs above are illustrative. A claim cites everything it rests on, and `derived: true` marks a calculation or comparison over its sources rather than something they state directly. The reasoner is asked to produce this structure directly. The verifier checks the `sources` the model claimed *and* independently re-traces each claim; disagreement between the two is itself a recorded error type.
 
 ---
 
@@ -367,9 +388,12 @@ Goal: decisions recorded, contract frozen, data downloading, repo scaffolded.
 
 - [ ] Get written confirmation from both professors for the switch (DEC-1 → Decided); agree deliverables (§12)
 - [ ] Create shared Drive folder with the layout in §4.2; share with team
-- [ ] Start ISLES'24 download to `raw/` from a Colab session; verify md5; record sizes
+- [ ] Start ISLES'24 download (record 17652035) to `raw/` from a Colab session; verify md5; record sizes
 - [ ] Start RSNA preprocessed download to `raw/`
 - [ ] Read Zenodo licence and RSNA terms; fill `docs/` note and the Notion "Data-use terms" page
+- [ ] Obtain the 2026 AHA/ASA guideline full text; verify every rule in §8.3 and the fixture expectations against it
+- [ ] Ask a clinician to review the rulebook and fixture expectations once (via the professors if the team has no contact)
+- [ ] Confirm the two provisional contract choices (`mismatch_ratio` two decimals; `haemorrhage.confidence` = P(haemorrhage)), then freeze v0.1
 - [x] Scaffold repo per §3: package skeleton, `pyproject.toml`, `CLAUDE.md`, `CHANGELOG.md`, `README.md`, `.gitignore`
 - [x] Write `schemas/vision_output.json` (§6.1) and `contract/schema.py` (pydantic mirror)
 - [x] Write the five fixtures and their notes (§6.3)
@@ -384,9 +408,11 @@ Goal: slim tarballs on Drive; Colab template runs end to end on one case; team o
 
 - [ ] Inspect ISLES'24 archive layout; write `docs/DATA.md` with exact paths and which perfusion maps exist
 - [ ] Decide the common grid (spacing, crop) → record in `manifest.json` and CHANGELOG
-- [ ] Check whether follow-up infarct masks are already in CT space; if not, implement registration (ANTs/SimpleITK) in `prep_isles24.py` and note its cost
+- [ ] Spot-check that the provided infarct masks align with NCCT (the paper says they are already in NCCT space); implement registration only if this fails
+- [ ] Read `clinical_data-description.xlsx`: confirm the fields in §5.1, and tag each column as allowed or forbidden for note generation (§8.3)
+- [ ] Check whether the Circle of Willis labels separate M1 from M2
 - [ ] `prep_isles24.py` + `01_prep_isles24.ipynb` → `slim/isles24_slim_v1.tar`
-- [ ] `prep_rsna.py` + `02_prep_rsna.ipynb` → `slim/rsna_slim_v1.tar` (windowed 3-channel slices, scan-level index)
+- [ ] `prep_rsna.py` + `02_prep_rsna.ipynb` → `slim/rsna_slim_v1.tar` (windowed 3-channel slices, scan-level index); record slice thickness
 - [ ] `splits.py` + `splits/folds.json` generated with fixed seed; `tests/test_splits.py`
 - [ ] `isles24.py`: `load_case(id)` returns arrays + clinical row + spacing; `rsna.py` equivalents
 - [ ] `00_template.ipynb`: install, mount, copy tarball, load one case, show maps + mask + clinical row. Must run top to bottom in five minutes on a T4
@@ -403,7 +429,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 **Vision A (perfusion)**
 - [ ] `thresholds.py`: core = rCBF < 30% of contralateral, penumbra = Tmax > 6 s; compute volumes; evaluate Dice of thresholded core vs final infarct per fold — this is the clinical-standard baseline
 - [ ] nnU-Net v2 dataset conversion (perfusion maps as channels, final infarct as label); train fold 0 with reduced epochs; checkpoint/resume to Drive; report Dice
-- [ ] `volumes.py`: mask → mL using spacing; mismatch ratio/volume; occlusion-site lookup from CTA mask (rule-based for now)
+- [ ] `volumes.py`: mask → mL using spacing; mismatch ratio/volume via `contract.schema.derive_mismatch`; occlusion-site lookup from the occlusion mask and Circle of Willis labels
 
 **Vision B (haemorrhage)**
 - [ ] 2D classifier (pretrained ResNet-50 or EfficientNet-B3) on windowed slices, "any" label; slice AUC
@@ -413,7 +439,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 **NLP A (reasoner)**
 - [ ] `ingest.py`: guideline PDF + two trial papers → passages with stable IDs; `docs/RULEBOOK.md` generated from the same source
 - [ ] `index.py`: embed passages; retrieve top-k by query; sanity-check that each fixture's expected rule IDs are retrievable
-- [ ] `notes/generate.py`: clinical row → triage note (templated with controlled variation); produce notes for all 149 cases
+- [ ] `notes/generate.py`: clinical row → triage note (templated with controlled variation), using allowed columns only; test that nothing post-treatment leaks; produce notes for all 149 cases
 - [ ] `reasoner/run.py` v0 with `prompts/reasoner_v1.md`: fixture JSON + note + retrieved passages → `recommendation.json`; run on all five fixtures with one model
 
 **NLP B (verifier & eval)**
@@ -421,6 +447,8 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 - [ ] `claims.py`: rationale → atomic claims (LLM-assisted with `prompts/claim_extractor_v1.md`, plus a rule-based numeric extractor)
 - [ ] `trace.py`: numeric claims vs vision JSON (after rounding); patient facts vs note; rule claims vs passage text (embedding similarity + NLI or LLM judge — pick one, record it)
 - [ ] `metrics.py`: hallucination rate, critical hallucination rate, omission rate; bootstrap CIs
+- [ ] `scenarios.py`: 100–200 synthetic scenarios with expected recommendations derived from the rulebook in code; review the rule code against the corpus
+- [ ] `seeded_errors.py`: plant known fabrications of each sub-type and measure verifier recall and false-flag rate
 - [ ] Run verifier on the five fixture outputs; `tests/test_claims.py`, `tests/test_trace.py`
 
 **Everyone**
@@ -435,6 +463,7 @@ Goal: each component made good; real vision outputs replace fixtures; the multi-
 **Vision A**
 - [ ] All 5 folds for nnU-Net; mean ± std Dice; compare against threshold baseline
 - [ ] Core/penumbra heads or a two-stage approach (predict final infarct = core proxy; penumbra from Tmax) — decide and record
+- [ ] Decide which core feeds the contract: rCBF < 30% threshold or learned model, compared on volume error and decision-threshold crossings (§8.1)
 - [ ] Confidence estimates (`confidence.core/penumbra`) from fold ensemble disagreement or MC dropout
 - [ ] Error analysis: where does the model fail (small lesions, posterior circulation, artefacts)?
 - [ ] `contract/build.py` produces valid `vision_output.json` for every non-held-out case; validate all
@@ -448,12 +477,12 @@ Goal: each component made good; real vision outputs replace fixtures; the multi-
 - [ ] Switch reasoner inputs from fixtures to real `vision_output.json` + generated notes
 - [ ] Prompt v2 informed by Phase 2 verifier findings (what did the model get wrong?)
 - [ ] `providers.py`: at least three models — one frontier API model, one open mid-size model (e.g. Llama-class via HF or API), one small medical model. Exact list → Decisions row
-- [ ] Run all three on all fixtures and on a sample of real cases; outputs to `runs/`
+- [ ] Run all three on all fixtures, the synthetic scenarios and a sample of real cases, with and without retrieval; outputs to `runs/`
 
 **NLP B**
 - [ ] `41_nlpB_model_comparison.ipynb`: the hallucination table — per model, per scenario, with CIs
-- [ ] Human adjudication: two team members label ~100 sampled claims; report inter-annotator agreement and verifier-vs-human agreement
-- [ ] Error taxonomy with examples: wrong number, invented finding, wrong rule, uncited rule, mis-attributed source, omission
+- [ ] Human adjudication: two team members label ~100 claims, sampled across models and blind to the model; report inter-annotator agreement and verifier-vs-human agreement
+- [ ] Error taxonomy with examples: wrong number, invented finding, wrong rule, misapplied rule, faulty derivation, uncited rule, mis-attributed source, omission
 
 Acceptance: the hallucination table exists with ≥3 models and CIs; vision outputs validate for all training cases; adjudication agreement reported.
 
@@ -462,7 +491,7 @@ Acceptance: the hallucination table exists with ≥3 models and CIs; vision outp
 Goal: end-to-end on held-out cases; error propagation analysis; demo.
 
 - [ ] Unlock held-out cases (`ALLOW_HELDOUT=1` in Phase 4 notebooks only); never retrain after this
-- [ ] `pipeline/end_to_end.py` on all ~20 held-out cases × 3 models
+- [ ] `pipeline/end_to_end.py` on all ~20 held-out cases × 3 models, with predicted vision values and with ground-truth (oracle) values
 - [ ] Error propagation: for each wrong recommendation, was the cause vision error, retrieval error, reasoning error, or verifier miss? Table + examples
 - [ ] Sensitivity analysis: perturb `core_ml` by ±20% and see which recommendations flip — shows how much vision accuracy matters clinically
 - [ ] `demo/app.py`: pick a case → show maps + masks → show note → show recommendation with each claim clickable, linking to the vision field or the passage; flagged claims in red; "research prototype, not for clinical use" banner on every screen
@@ -486,8 +515,8 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 
 **Inputs.** CT perfusion maps (CBF, CBV, MTT, Tmax) resampled to the common grid; optionally NCCT as an extra channel.
 
-**Targets.** Final infarct mask from follow-up MRI (ISLES'24 ground truth). Note the conceptual gap: final infarct ≠ core at imaging time — it includes penumbra that was not saved. Report this limitation and handle it as follows:
-- *Core proxy:* model trained to predict final infarct, evaluated as the "core" estimate. Also report the clinical threshold baseline (rCBF < 30%).
+**Targets.** Final infarct mask from follow-up MRI (ISLES'24 ground truth). Note the conceptual gap: final infarct ≠ core at imaging time — it includes tissue lost before recanalisation, and the mask is drawn 2–9 days later. Because the whole cohort reached mTICI 2c/3, the gap is smaller than in an untreated cohort, but the model is only valid for reperfused patients. Report this limitation and handle it as follows:
+- *Core proxy:* model trained to predict final infarct, evaluated as the "core" estimate. Also report the clinical threshold baseline (rCBF < 30%). Trial cut-offs such as 70 mL were defined on perfusion-derived core, not final infarct, so the core that feeds the contract is chosen by comparison in Phase 3, not assumed to be the learned one.
 - *Penumbra:* `penumbra_ml` is the total Tmax > 6 s volume, core included — the clinical convention (DEFUSE-3 used RAPID with these thresholds), so `mismatch_ratio` and `mismatch_volume_ml` (§6.1) match the DEFUSE-3 definitions directly. Salvageable tissue is `mismatch_volume_ml`. Document this as a rule, not a learned output, unless a learned version clearly beats it.
 
 **Model.** nnU-Net v2, 3D full-resolution configuration, reduced epochs to fit Colab sessions, resume from Drive. Do not build a custom U-Net in Phase 2. Consider a 2.5D variant only if 3D training is infeasible on Colab.
@@ -496,11 +525,13 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 
 **Metrics.** Dice and absolute volume error (mL) per fold, mean ± std; volume error matters more than Dice for the downstream decision, because the rules are volume thresholds. Also report how often the predicted volume crosses a decision threshold (70 mL, DAWN cut-offs) when the ground truth does not.
 
-**Occlusion site.** Rule-based from the CTA occlusion mask location relative to a vascular atlas or simple anatomical heuristics; `unknown` if the mask is empty or ambiguous. A learned classifier is out of scope unless time allows.
+**Occlusion site.** Rule-based from the overlap of the occlusion mask with the provided Circle of Willis labels; `unknown` if the mask is empty or ambiguous. The labels are automatically generated, so spot-check them. A learned classifier is out of scope unless time allows.
+
+**ASPECTS.** Not produced (DEC-9). The field stays null, and the reasoner must treat it as unknown.
 
 ### 8.2 Vision B — haemorrhage detection
 
-**Inputs.** 2D CT slices, three windows stacked as channels (§5.2). Train on RSNA ICH. The ISLES'24 NCCT is the deployment domain and is mostly negative — use it for a false-positive check only.
+**Inputs.** 2D CT slices, three windows stacked as channels (§5.2). Train on RSNA ICH. The ISLES'24 NCCT is the deployment domain and is expected to be negative, since these patients went on to reperfusion therapy — use it for a false-positive check only. Run Vision B on `ncct_native`, reformatted to the training slice thickness, never on the 1.5 mm isotropic grid.
 
 **Model.** Pretrained ResNet-50 or EfficientNet-B3, binary "any haemorrhage". Slice-level training with standard augmentation (flips, small rotations, brightness). Class balance via sampling.
 
@@ -516,40 +547,48 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 
 **Retrieval.** Embedding index (a sentence-embedding model from HF; record which). Query = structured summary of the vision JSON + note. Return top-k passages with IDs. Also always include a small fixed set of "must-have" passages (thrombolysis window, haemorrhage contraindication, DEFUSE-3 and DAWN inclusion criteria) so the reasoner can never claim it was not shown the key rule.
 
-**Triage note generation.** `notes/generate.py` turns the ISLES'24 clinical row into a short ED-style note: age, sex, last-known-well or witnessed onset time, NIHSS, anticoagulation if present, pre-stroke mRS if present, relevant comorbidities. Templated with a few phrasings per field so the reasoner does not overfit to one format. The note is an *input*; we are not learning from it. Every fact in the note is traceable back to a clinical column, which is what lets the verifier check patient-fact claims.
+**Triage note generation.** `notes/generate.py` turns the ISLES'24 clinical row into a short ED-style note: age, sex, onset or last-known-well time (from onset to door + door to imaging, and referral type for wake-up), admission NIHSS, anticoagulation and INR, pre-stroke mRS, relevant comorbidities. **Never use post-treatment or treatment-revealing columns:** door to groin, time of intervention, door to first series, door to recanalisation, mTICI, and NIHSS or mRS after admission, except premorbid mRS. The dataset paper classes some of these as baseline, but they reveal that thrombectomy happened. Templated with a few phrasings per field so the reasoner does not overfit to one format. The note is an *input*; we are not learning from it. Every fact in the note is traceable back to a clinical column, which is what lets the verifier check patient-fact claims.
 
 **Reasoner.** Prompt (`prompts/reasoner_vN.md`) instructs the model to:
 1. Read the vision JSON, the note, and the retrieved passages.
 2. Decide thrombolysis and thrombectomy separately.
-3. Return `recommendation.json` (§6.4) with every rationale claim carrying a `source`.
+3. Return `recommendation.json` (§6.4) with every rationale claim carrying its `sources` and `derived` flag.
 4. Quote numbers exactly as given; treat `null` as unknown; list uncertainties.
 
 Providers: thin wrappers with identical signatures for each model; temperature 0; log the full prompt and response to the run folder.
 
-**Clinical rulebook summary (for orientation only — the corpus is the source of truth; verify every item against the primary documents during ingestion):**
-- Thrombolysis: within 4.5 h of onset/LKW; absolute contraindication if intracranial haemorrhage; other contraindications include recent anticoagulant use with elevated INR/DOAC timing, recent major surgery, very large established infarct.
-- Thrombectomy, 0–6 h: large-vessel occlusion (ICA/M1 ± M2), NIHSS ≥ 6, small core (ASPECTS ≥ 6 on NCCT).
-- Thrombectomy, 6–16 h (DEFUSE-3): core < 70 mL, mismatch ratio ≥ 1.8, mismatch volume ≥ 15 mL.
-- Thrombectomy, 6–24 h (DAWN): clinical–core mismatch by age/NIHSS/core volume (e.g. age ≥ 80: NIHSS ≥ 10 and core < 21 mL; age < 80: NIHSS ≥ 10 and core < 31 mL, or NIHSS ≥ 20 and core 31–51 mL).
+**Clinical rulebook summary (for orientation only — the corpus is the source of truth).** Compiled on 30 October 2026 from secondary summaries of the 2026 AHA/ASA guideline, because the primary text was not accessible. COR = class of recommendation. Verify every item against the primary documents during ingestion.
+- Thrombolysis, 0–4.5 h: COR 1, tenecteplase 0.25 mg/kg (max 25 mg) or alteplase 0.9 mg/kg; do not delay for perfusion imaging. Intracranial haemorrhage is an absolute contraindication. Other contraindications include recent anticoagulant use with elevated INR/DOAC timing and recent major surgery (carried over from the earlier plan; verify).
+- Thrombolysis, extended: COR 2a, 4.5–9 h from LKW, or waking with symptoms within 9 h of the midpoint of sleep, with salvageable penumbra on automated perfusion imaging. COR 2a, DWI-FLAIR mismatch on MRI for wake-up or unknown onset beyond 4.5 h. COR 2b reported for 4.5–24 h with LVO when not eligible for thrombectomy (one summary only). The guideline's numeric definition of salvageable penumbra is **not confirmed**; trials used mismatch ratio > 1.2 (CHABILIS-T II) or > 1.8 (TRACE-III) with core < 70 mL. Pick the rule only once the text is checked.
+- Thrombectomy, 0–6 h, ICA/M1: NIHSS ≥ 6, pre-stroke mRS 0–1, ASPECTS 3–10: COR 1. ASPECTS 0–2, age < 80, no significant mass effect: COR 2a. Pre-stroke mRS 2, ASPECTS ≥ 6: COR 2a.
+- Thrombectomy, 6–24 h, ICA/M1: age < 80, NIHSS ≥ 6, mRS 0–1, ASPECTS 3–5, no significant mass effect: COR 1. ASPECTS ≥ 6, NIHSS ≥ 6, mRS 0–1: COR 1 (one slide deck only).
+- Basilar, up to 24 h: mRS 0–1, NIHSS ≥ 10, PC-ASPECTS ≥ 6: COR 1. Not well established for NIHSS 6–9.
+- M2/M3: COR 2b reported (one slide deck only).
+- Trial criteria, from the trial papers. Whether the guideline still uses them to select patients is **not confirmed**: DEFUSE-3 (6–16 h): core < 70 mL, mismatch ratio ≥ 1.8, mismatch volume ≥ 15 mL. DAWN (6–24 h): clinical–core mismatch by age/NIHSS/core volume (e.g. age ≥ 80: NIHSS ≥ 10 and core < 21 mL; age < 80: NIHSS ≥ 10 and core < 31 mL, or NIHSS ≥ 20 and core 31–51 mL).
+- Inputs we cannot observe: ASPECTS from the real pipeline and significant mass effect. The reasoner must name them as uncertainties, never assume them.
 
 ### 8.4 NLP B — verifier and evaluation
 
 **Claim.** An atomic assertion in the rationale about a number, a clinical finding, a patient fact, or a rule. Extracted by an LLM with `prompts/claim_extractor_v1.md`, cross-checked by a regex extractor for numbers and units. Hedges, restatements and formatting are not claims.
 
-**Traceable.** A claim is traceable if it is supported by exactly one of:
+**Traceable.** A claim is traceable if every part of it is supported by one or more of the following, and, for a `derived` claim, the calculation or comparison is also correct (checked in code where numeric):
 - (a) a field in `vision_output.json`, matching after rounding to one decimal;
 - (b) a statement in the triage note (string/number match against the generating clinical row);
 - (c) a passage in the corpus — checked by embedding similarity above a threshold *and* an entailment judgement (NLI model or LLM judge; pick one in Phase 2 and record it).
 
-**Hallucination.** A claim that is not traceable. Sub-types: wrong number, invented finding, wrong rule (cited passage does not say that), uncited rule (true rule, no source), mis-attributed source (claim is true but the model's declared source is wrong).
+**Hallucination.** A claim that is not traceable. Sub-types: wrong number, invented finding, wrong rule (cited passage does not say that), misapplied rule (the passage says it, but its scope or exceptions do not fit this patient), faulty derivation, uncited rule (true rule, no source), mis-attributed source (claim is true but the model's declared source is wrong).
 
 **Omission.** An input fact that should have changed the recommendation and was ignored (haemorrhage present but thrombolysis recommended; core > 70 mL but DEFUSE-3 thrombectomy recommended). Detected by rule checks on the recommendation, independent of the rationale.
 
 **Critical hallucination.** A hallucination that, if believed, would change a treatment decision. Determined by re-running the rule checks with the hallucinated value substituted.
 
-**Metrics.** Per model, per scenario: hallucination rate = hallucinated claims / total claims; critical hallucination rate; omission rate; source-attribution accuracy. Bootstrap 95% CIs over claims and over cases. Human adjudication on a sample: inter-annotator agreement (Cohen's κ) and verifier-vs-human agreement.
+**Metrics.** Per model, per scenario: hallucination rate = hallucinated claims / total claims; critical hallucination rate; omission rate; source-attribution accuracy; recommendation correctness, reported separately because a fully grounded answer can still be wrong. Bootstrap 95% CIs resampled by case, since claims from one case are not independent. Human adjudication on a sample, stratified by model and blind to it: inter-annotator agreement (Cohen's κ) and verifier-vs-human agreement.
+
+**Verifier validity.** Plant known fabrications of each sub-type in otherwise clean rationales (`seeded_errors.py`) and report recall per sub-type, plus the false-flag rate on clean rationales. This gives ground truth without depending on the size of the human sample.
 
 **Models compared.** Minimum three: one frontier API model, one open mid-size model, one small medical model. Same prompt version, same retrieval, same inputs, temperature 0. Exact list → Decisions row.
+
+**Experimental arms.** (1) With vs without retrieval: does grounding reduce hallucination? (2) Ground-truth vs predicted vision values: how much do vision errors change decisions and claims? Arm 1 runs on synthetic scenarios and sampled training cases; arm 2 runs on real cases, with held-out cases only in Phase 4.
 
 ### 8.5 Demo
 
@@ -565,12 +604,13 @@ Gradio app in `demo/app.py`, runnable from Colab. Case picker → maps and masks
 | Threshold baseline | same | same | same; compared to learned model |
 | Haemorrhage detection | RSNA ICH val; ISLES'24 NCCT | slice/scan AUC, sensitivity at operating point, ECE, FPR on ISLES | single table |
 | Retrieval | fixtures + sampled cases | recall of expected rule IDs @k | single number per k |
-| Reasoner + verifier | fixtures; sampled train cases; held-out cases | hallucination rate, critical rate, omission rate, attribution accuracy | per model × scenario, with CIs |
-| Verifier validity | ~100 adjudicated claims | κ (human–human), agreement (verifier–human) | two numbers |
-| End-to-end | ~20 held-out cases × 3 models | recommendation correctness vs rule-derived ground truth; error-propagation table | table + examples |
+| Reasoner + verifier (primary) | 100–200 synthetic scenarios | hallucination rate, critical rate, omission rate, attribution accuracy, recommendation correctness | per model × scenario, with case-level CIs; with vs without retrieval |
+| Reasoner + verifier (realism) | fixtures; sampled train cases; held-out cases | same | per model, with CIs; compared with synthetic results |
+| Verifier validity | ~100 adjudicated claims; seeded errors | κ (human–human), agreement (verifier–human); recall per sub-type, false-flag rate | numbers + small table |
+| End-to-end | ~20 held-out cases × 3 models, predicted vs ground-truth vision values | recommendation correctness vs rule-derived ground truth; error-propagation table | table + examples |
 | Sensitivity | held-out | % recommendations flipped under ±20% core perturbation | single figure |
 
-Ground truth for "correct recommendation" is derived mechanically from the ground-truth masks + clinical row + the rulebook, so it is reproducible and does not depend on anyone's clinical opinion. Say so in the report.
+Ground truth for "correct recommendation" is derived mechanically from the ground-truth masks + clinical row + the rulebook, so it is reproducible and does not depend on anyone's clinical opinion. Say so in the report, along with its limits: the rulebook is our reading of the guideline, final infarct stands in for core, real cases have no ASPECTS or mass-effect input, and a case whose rule depends on an unknown input is scored as "undetermined" and excluded from correctness, not guessed. Every real case received thrombectomy, so rule-derived labels are not compared with what clinicians actually did.
 
 ---
 
@@ -579,11 +619,14 @@ Ground truth for "correct recommendation" is derived mechanically from the groun
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | Professors do not approve the switch | low–medium | Ask this week with the charter page; keep Bias Lens materials until confirmed |
-| ISLES'24 follow-up masks not in CT space; registration is hard | medium | Check in Phase 1 day 1; use ANTs rigid+affine; if it fails, train on perfusion-space labels provided by the challenge if available |
+| ISLES'24 provided mask registration is poor on some cases | low | The paper says masks are already in NCCT space. Spot-check in Phase 1; exclude and record bad cases |
+| Rulebook misreads the guideline, or the primary text cannot be obtained | medium | Get the full text through the UOWD library; one clinician review; keep secondary-sourced rules marked until verified |
+| Real cases lack variety: all were reperfused, bleeds are not expected, no ASPECTS | certain | Synthetic scenarios are the primary evaluation; held-out cases are the realism check; state this in the report |
+| Treatment leaks into notes through time or outcome columns | medium | Column allow-list in `notes/generate.py`, tested |
 | nnU-Net too slow on Colab | medium | Reduced epochs, resume across sessions, 2.5D fallback; the threshold baseline is always available |
 | 149 cases is small; noisy Dice | high | Report CIs; lean on volume error; cross-validation; never claim SOTA |
 | Guideline PDFs hard to parse | medium | Manual cleanup of the ~50 key passages is acceptable; record it |
-| Verifier itself hallucinates (LLM judge) | medium | Human adjudication sample; rule-based numeric checks that do not use an LLM; report verifier agreement |
+| Verifier itself hallucinates (LLM judge) | medium | Seeded-error recall; human adjudication sample; rule-based numeric checks that do not use an LLM; report verifier agreement |
 | LLM API cost | low | Temperature 0, cached prompts, small sample of real cases; one API model only |
 | Team member drops or is unavailable | medium | Every component has a baseline another person can finish; contract isolates failures |
 | Scope creep (occlusion classifier, per-subtype bleeds, patient explainer) | high | Anything not in §7 needs a Decisions row; cut Phase 3 extras before touching Phase 4 |
@@ -619,7 +662,7 @@ Format, length and dates: _fill in once professors confirm._
 3. Data — ISLES'24, RSNA ICH, corpus; preprocessing; splits; data-use terms
 4. System — architecture, the contract, each component (§8)
 5. Experiments — vision results, retrieval, hallucination table, adjudication, end-to-end, sensitivity
-6. Discussion — error propagation, what the hallucination table says, limitations (final infarct ≠ core, small N, synthetic notes, verifier validity)
+6. Discussion — error propagation, what the hallucination table says, limitations (final infarct ≠ core, reperfused-only cohort, small N, synthetic notes and scenarios, no ASPECTS input, verifier validity)
 7. Ethics and safety — prototype only; de-identified data; failure modes that would matter clinically
 8. Conclusion and future work
 9. Contributions — who did what (per role)
@@ -635,7 +678,9 @@ Appendices: contract schema, prompts, rulebook with passage IDs, fixture definit
 - **LVO** — large-vessel occlusion (ICA, M1, proximal M2, basilar). Thrombectomy target.
 - **NIHSS** — 0–42 stroke severity score. **mRS** — 0–6 disability scale; pre-stroke mRS matters for eligibility.
 - **LKW** — last known well; the clock starts here when onset is unwitnessed (wake-up strokes).
-- **ASPECTS** — 0–10 score of early ischaemic change on NCCT; ≥ 6 usually required for early thrombectomy.
+- **ASPECTS** — 0–10 score of early ischaemic change on NCCT; the 2026 guideline's thrombectomy tiers are defined on it, including large-core strokes at 3–5. Null in our real pipeline (DEC-9).
+- **COR** — class of recommendation in AHA/ASA guidelines: 1 is strongest, then 2a, 2b.
+- **mTICI** — 0–3 grade of reperfusion after thrombectomy; every ISLES'24 case is 2c or 3.
 - **DWI/FLAIR** — MRI sequences; DWI shows acute infarct within minutes, FLAIR within hours. ISLES'24 follow-up masks are drawn on MRI.
 - **Dice** — overlap between predicted and true masks, 0–1.
 - **Hallucination (ours)** — a rationale claim not traceable to the vision JSON, the note, or a corpus passage. See §8.4 for the precise definition.

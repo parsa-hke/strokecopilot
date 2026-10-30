@@ -59,6 +59,7 @@ class VisionOutput(_Strict):
     mismatch_ratio: Optional[float] = Field(ge=0)
     mismatch_volume_ml: Optional[float]
     occlusion_site: OcclusionSite
+    aspects: Optional[int] = Field(ge=0, le=10)
     confidence: Confidence
     warnings: list[str]
 

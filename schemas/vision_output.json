@@ -15,6 +15,7 @@
     "mismatch_ratio",
     "mismatch_volume_ml",
     "occlusion_site",
+    "aspects",
     "confidence",
     "warnings"
   ],
@@ -73,6 +74,12 @@
     "occlusion_site": {
       "description": "Vessel occlusion site from the CTA occlusion mask.",
       "enum": ["ICA", "M1", "M2", "basilar", "none", "unknown"]
+    },
+    "aspects": {
+      "description": "ASPECTS score on NCCT, 0-10. No model produces this: null from the real pipeline, set only in fixtures and synthetic scenarios. null means unknown, never a low score.",
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 10
     },
     "confidence": {
       "description": "Vision A model confidence.",

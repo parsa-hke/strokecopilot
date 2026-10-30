@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "recommendation.json",
   "title": "Stroke Copilot reasoner recommendation",
-  "description": "Structured output of the reasoner (plan §6.4). Every rationale claim declares a source; the verifier re-traces each claim independently and records disagreement with the declared source.",
+  "description": "Structured output of the reasoner (plan §6.4). Every rationale claim declares its sources; the verifier re-traces each claim independently and records disagreement with the declared source.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -58,15 +58,24 @@
     "claim": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["claim", "source"],
+      "required": ["claim", "sources", "derived"],
       "properties": {
         "claim": {"type": "string", "minLength": 1},
-        "source": {
-          "oneOf": [
-            {"$ref": "#/$defs/vision_source"},
-            {"$ref": "#/$defs/note_source"},
-            {"$ref": "#/$defs/passage_source"}
-          ]
+        "sources": {
+          "description": "Everything the claim rests on. A claim comparing a vision value to a rule cites both.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              {"$ref": "#/$defs/vision_source"},
+              {"$ref": "#/$defs/note_source"},
+              {"$ref": "#/$defs/passage_source"}
+            ]
+          }
+        },
+        "derived": {
+          "description": "True if the claim is a calculation or comparison over its sources rather than something they state directly, e.g. '9 h is beyond the 4.5 h window'.",
+          "type": "boolean"
         }
       }
     },
@@ -86,6 +95,7 @@
             "mismatch_ratio",
             "mismatch_volume_ml",
             "occlusion_site",
+            "aspects",
             "confidence.core",
             "confidence.penumbra",
             "warnings"

@@ -11,6 +11,7 @@
   "mismatch_ratio": 1.09,
   "mismatch_volume_ml": 10.0,
   "occlusion_site": "M1",
+  "aspects": 4,
   "confidence": {
     "core": 0.9,
     "penumbra": 0.87
