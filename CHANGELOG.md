@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-31 — Claude Code session (Kaggle notebook fix)
+- Fixed `02a_rsna_kaggle_timing.ipynb`: the first Kaggle run could not find `stage_2_train.csv`, because the search only went two folders deep. It now walks the input folder and skips image folders. Tested on five folder layouts; not yet rerun on Kaggle.
+- Notion sync: none pending.
+
+## 2026-10-31 — Claude Code session (run calendar)
+- Created the Notion "Run Calendar" database under the hub, covering every planned run and its prerequisites from 31 Oct to 7 Nov 2026, split across Parsa and four teammates. Teammates are placeholder roles until they join the workspace. Estimates are unmeasured.
+- This compresses the plan's 8-week phases into 8 days; §7 has not been changed. 7 Nov needs confirming as the real deadline before the plan is rewritten around it.
+- Notion sync: done in this session.
+
 ## 2026-10-31 — Claude Code session (contract freeze)
 - Parsa froze `schemas/vision_output.json` at v0.1 with no new fields (DEC-4). Mass effect, M2 dominance and extensive hypodensity stay out of the contract; the reasoner must name them as uncertainties. Later changes need a Decisions row and a version bump.
 - Notion sync: done in this session (contract task marked Done).
