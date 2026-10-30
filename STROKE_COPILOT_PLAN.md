@@ -117,7 +117,7 @@ strokecopilot/
 │   │   ├── isles24.py             # load_case(), list_cases(), slim format reader
 │   │   ├── rsna.py                # RSNA slice/scan loaders, windowing
 │   │   ├── prep_isles24.py        # raw archive → slim tarball (run once)
-│   │   ├── prep_rsna.py           # raw/preprocessed → slim tarball (run once)
+│   │   ├── prep_rsna.py           # raw DICOM → JPEG tar shards + scan index (run once, on Kaggle)
 │   │   └── splits.py              # reads splits/folds.json; guards against held-out use
 │   ├── vision/
 │   │   ├── perfusion/             # Vision A
@@ -176,7 +176,7 @@ strokecopilot/
 │   ├── 00_download_isles24.ipynb  # Phase 0: resumable download to raw/ + md5 (self-contained)
 │   ├── 00_template.ipynb          # install, mount, copy tarball, load one case
 │   ├── 01_prep_isles24.ipynb      # runs prep_isles24; produces slim tarball
-│   ├── 02_prep_rsna.ipynb
+│   ├── 02_prep_rsna.ipynb         # runs on Kaggle, once per shard
 │   ├── 02a_rsna_kaggle_timing.ipynb  # Phase 0: runs on Kaggle; times full RSNA for DEC-17 (self-contained)
 │   ├── 10_visionA_nnunet.ipynb
 │   ├── 11_visionA_thresholds.ipynb
