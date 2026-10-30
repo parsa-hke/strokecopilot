@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-30 — Claude Code session (Notion sync and RSNA review)
+- Notion synced by this session: DEC-1 Decided; DEC-7 to DEC-13 added as Decided; DEC-14 and DEC-15 added as Proposed. Nine tasks added, stale Phase 0 rows updated, Data guide and hub links updated. Plan §2 now matches.
+- RSNA review: the AWS listing's licence bars sharing or redistributing the data, which affects third-party preprocessed copies and possibly the shared Drive. Source not chosen; plan §5.2 marks this and asks for whole-scan sampling.
+- Notion sync: done in this session.
+
 ## 2026-10-30 — Claude Code session (git attribution)
 - Parsa's rule: commits and PRs never credit Claude. Added to CLAUDE.md.
 - Rewrote the three existing commits to remove the `Co-Authored-By` line and force-pushed `main` and `lead/phase0-scaffold`. File contents and dates are unchanged; commit hashes changed. Anyone with an earlier clone must re-clone or reset to `origin/main`.

@@ -84,12 +84,15 @@ These are recorded in the Notion Decisions log. Do not change them without a new
 | DEC-4 | Contract-first: `schemas/vision_output.json` is frozen at the end of Phase 0. NLP builds against hand-written fixtures until Phase 3 | Decided |
 | DEC-5 | Evaluation split is fixed on day one: 5 folds + ~20 held-out cases. Held-out cases are untouched until Phase 4 | Decided |
 | DEC-6 | The lead builds Phase 0–1 alone, then onboards the team within 7–10 days of 29 Oct 2026 | Decided |
-| DEC-7 | `penumbra_ml` is the total Tmax > 6 s volume, core included; salvageable tissue is `mismatch_volume_ml` | Decided — Notion row pending |
-| DEC-8 | The rule baseline is the 2026 AHA/ASA guideline plus DAWN and DEFUSE-3, not the 2018/2019 guideline | Decided — Notion row pending |
-| DEC-9 | The contract carries a nullable `aspects` field. No ASPECTS model is built: it is null from the real pipeline and set only in fixtures and synthetic scenarios | Decided — Notion row pending |
-| DEC-10 | A rationale claim can cite several sources and be marked `derived`. The hallucination definition changes to match (§6.4, §8.4) | Decided — Notion row pending |
-| DEC-11 | The primary hallucination evaluation uses 100–200 synthetic scenarios; held-out cases are the realism check. Added: seeded errors, no-retrieval arm, ground-truth vs predicted vision arm (§9) | Decided — Notion row pending |
-| DEC-12 | ISLES'24 uses the latest Zenodo record (17652035), not 16748089, because the data dictionary was only added after that version | Decided — Notion row pending |
+| DEC-7 | `penumbra_ml` is the total Tmax > 6 s volume, core included; salvageable tissue is `mismatch_volume_ml` | Decided |
+| DEC-8 | The rule baseline is the 2026 AHA/ASA guideline plus DAWN and DEFUSE-3, not the 2018/2019 guideline | Decided |
+| DEC-9 | The contract carries a nullable `aspects` field. No ASPECTS model is built: it is null from the real pipeline and set only in fixtures and synthetic scenarios | Decided |
+| DEC-10 | A rationale claim can cite several sources and be marked `derived`. The hallucination definition changes to match (§6.4, §8.4) | Decided |
+| DEC-11 | The primary hallucination evaluation uses 100–200 synthetic scenarios; held-out cases are the realism check. Added: seeded errors, no-retrieval arm, ground-truth vs predicted vision arm (§9) | Decided |
+| DEC-12 | ISLES'24 uses the latest Zenodo record (17652035), not 16748089, because the data dictionary was only added after that version | Decided |
+| DEC-13 | Slim format v1 gains `ncct_native` and `cow` volumes (§5.4) | Decided |
+| DEC-14 | `mismatch_ratio` is rounded to two decimals, from the rounded volumes | Proposed — awaiting Parsa's confirmation before the freeze |
+| DEC-15 | `haemorrhage.confidence` means the calibrated probability that a haemorrhage is present | Proposed — awaiting Parsa's confirmation before the freeze |
 
 ---
 
@@ -261,7 +264,8 @@ Kaggle token, Hugging Face token, LLM API keys: Colab Secrets panel only. The pa
 
 - Source: Kaggle competition dataset. Raw is ~180 GB of DICOM slices with per-slice labels (epidural, intraparenchymal, intraventricular, subarachnoid, subdural, any).
 - We do not download raw DICOM. Use a preprocessed PNG/NPZ version from Kaggle via the API, or subsample 10–20k slices with a balanced "any" label. Record exactly which in `docs/DATA.md`, including who made a third-party preprocessed version and its terms.
-- Terms: the dataset is listed for non-commercial use including academic research (AWS Open Data listing, RSNA MIRA research use agreement). Read the full agreement and the Kaggle rules in Phase 0; a third-party version does not remove them.
+- Terms: the AWS Open Data listing gives a non-commercial licence, including academic research, that bars sharing or redistributing any part of the data. Read the RSNA MIRA research use agreement, the RSNA Terms of Use and the Kaggle rules before choosing a source. Third-party preprocessed copies, and a slim tarball on a shared Drive, must both be checked against them. **The source is not chosen yet**, so the preprocessed-copy plan above is provisional.
+- Sample whole scans, not independent slices, because scan-level labels are needed. Slice spacing varies across the dataset (reported as typically 2.5–5 mm).
 - Record the slice thickness of the version used. ISLES'24 NCCT must be presented to Vision B at a comparable thickness (§8.2).
 - Windowing: stack three CT windows as channels — brain (centre 40, width 80), subdural (80/200), bone (600/2800). This is the standard trick and matters for small bleeds.
 - Scan-level labels: a scan is positive if any slice is positive. We need scan-level predictions for the contract.
