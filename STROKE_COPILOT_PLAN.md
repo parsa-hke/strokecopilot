@@ -395,7 +395,7 @@ Goal: decisions recorded, contract frozen, data downloading, repo scaffolded.
 
 - [ ] Get written confirmation from both professors for the switch (DEC-1 → Decided); agree deliverables (§12)
 - [ ] Create shared Drive folder with the layout in §4.2; share with team
-- [ ] Start ISLES'24 download (record 17652035) to `raw/` with `00_download_isles24.ipynb`; verify md5; record sizes
+- [x] Start ISLES'24 download (record 17652035) to `raw/` with `00_download_isles24.ipynb`; verify md5; record sizes
 - [x] Attach full RSNA to a Kaggle notebook; run `02a_rsna_kaggle_timing.ipynb`; settle DEC-17
 - [ ] Read Zenodo licence and RSNA terms; fill `docs/` note and the Notion "Data-use terms" page
 - [x] Obtain the 2026 AHA/ASA guideline full text; verify every rule in §8.3 and the fixture expectations against it
