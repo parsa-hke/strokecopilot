@@ -25,9 +25,12 @@ Built on Kaggle from the competition's stage 2 training data into private datase
 
 | Shard | Dataset | Slices | Failed | Tar size (GiB) | Status |
 |---|---|---:|---:|---:|---|
-| 0 | `rsna-slim-v1-s0` | 188,251 | 0 | 4.371 | Built and verified on Kaggle |
-| 1 | `rsna-slim-v1-s1` | | | | Not recorded yet |
-| 2 | `rsna-slim-v1-s2` | | | | Not recorded yet |
-| 3 | `rsna-slim-v1-s3` | | | | Not recorded yet |
+| 0 | `rsna-slim-v1-s0` | 188,251 | 0 | 4.371 | Dataset created |
+| 1 | `rsna-slim-v1-s1` | 187,442 | 0 | 4.352 | Dataset created |
+| 2 | `rsna-slim-v1-s2` | 188,381 | 1 | 4.373 | Built and verified; dataset not created yet |
+| 3 | `rsna-slim-v1-s3` | 188,729 | 0 | 4.378 | Built and verified; dataset not created yet |
+| Total | | 752,803 | 1 | 17.474 | |
 
-Shard 0 projects 16.94 GiB for all four shards. Reading speed from an attached dataset has not been measured. Excluded scans: none so far.
+Slices in the shards add up to the labelled total, so 752,802 images are usable. The failed slice raised a `ValueError` and is not in the tar. It stays in shard 2's index with `ok` false, so loaders must filter on `ok`. Its `z_mm` and `pixel_spacing_mm` are empty.
+
+The reports' `projected_total_gb` (16.94) counts JPEG bytes only; the total above includes tar overhead. Reading speed from an attached dataset has not been measured. Excluded scans: none so far.
