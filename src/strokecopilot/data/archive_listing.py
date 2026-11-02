@@ -48,10 +48,29 @@ def list_archive(archive, out_path, seven_zip="7z", timeout_s=1800, heartbeat_s=
     return seconds
 
 
-def extract_members(archive, dest, members, seven_zip="7z", timeout_s=1800, heartbeat_s=30):
+def extract_members(archive, dest, members, exclude=(), seven_zip="7z", timeout_s=1800, heartbeat_s=30):
     """Extract paths or wildcards from the archive into dest, keeping their folders."""
-    cmd = [seven_zip, "x", archive, f"-o{dest}", "-y", "-bd", *members]
+    cmd = [seven_zip, "x", archive, f"-o{dest}", "-y", "-bd", *members, *(f"-xr!{pattern}" for pattern in exclude)]
     return _run_with_heartbeat(cmd, subprocess.DEVNULL, timeout_s, heartbeat_s, "extracting")
+
+
+def copy_with_progress(src, dst, every_s=60, chunk_bytes=16 * 1024 ** 2):
+    """Copy a large file, printing progress, and return the seconds it took. Checks the final size."""
+    total = os.path.getsize(src)
+    started = last = time.time()
+    done = 0
+    with open(src, "rb") as reader, open(f"{dst}.part", "wb") as writer:
+        while chunk := reader.read(chunk_bytes):
+            writer.write(chunk)
+            done += len(chunk)
+            now = time.time()
+            if now - last >= every_s:
+                print(f"Copied {done / 1024 ** 3:.1f} of {total / 1024 ** 3:.1f} GiB, {done / 1024 ** 2 / (now - started):.0f} MiB/s", flush=True)
+                last = now
+    if os.path.getsize(f"{dst}.part") != total:
+        raise OSError(f"Copy of {src} is the wrong size.")
+    os.replace(f"{dst}.part", dst)
+    return time.time() - started
 
 
 def _fields(lines):

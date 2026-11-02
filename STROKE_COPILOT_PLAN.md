@@ -177,6 +177,7 @@ strokecopilot/
 │   ├── 00_template.ipynb          # install, mount, copy tarball, load one case
 │   ├── 01a_list_isles24.ipynb     # Phase 1: lists the raw archive without extracting; layout, maps, decode cost
 │   ├── 01b_clinical_isles24.ipynb # Phase 1: extracts the Excel files; data dictionary and aggregate column survey
+│   ├── 01c_unpack_split_survey.ipynb # Phase 1: working copy, split, spot-check, label and grid evidence
 │   ├── 01_prep_isles24.ipynb      # runs prep_isles24; produces slim tarball
 │   ├── 02_prep_rsna.ipynb         # runs on Kaggle, once per shard
 │   ├── 02a_rsna_kaggle_timing.ipynb  # Phase 0: runs on Kaggle; times full RSNA for DEC-17 (self-contained)
@@ -310,13 +311,14 @@ Slim tarballs are immutable. A preprocessing change produces `_v2`, never an ove
 ```json
 {
   "version": 1,
-  "stratified_by": "infarct_volume_tertile",
+  "stratified_by": "center+infarct_volume_tertile",
+  "seed": 20261102,
   "heldout": ["sub-stroke0007", "..."],
   "folds": {"0": ["..."], "1": ["..."], "2": ["..."], "3": ["..."], "4": ["..."]}
 }
 ```
 
-- ~20 held-out cases, chosen once with a fixed seed, stratified by final infarct volume.
+- ~20 held-out cases, chosen once with a fixed seed, stratified by centre and final infarct volume tertile. Centre was added because the two centres differ in size and possibly in what they record.
 - 5 folds over the remaining ~129.
 - `splits.py` raises if any training function is handed a held-out ID before `ALLOW_HELDOUT=1` is set, which only happens in Phase 4 notebooks.
 

@@ -168,3 +168,17 @@ def test_extract_members_passes_paths_and_raises_on_failure(tmp_path):
     assert log.read_text().strip() == "x x.7z -o/d -y -bd a/b.xlsx c/*"
     with pytest.raises(RuntimeError, match="broken"):
         al.extract_members("x.7z", "/d", ["a"], seven_zip=_script(tmp_path, "echo broken >&2; exit 2"))
+
+
+def test_extract_members_passes_excludes(tmp_path):
+    log = tmp_path / "args.txt"
+    al.extract_members("x.7z", "/d", ["a/*"], exclude=["*_ctp.nii.gz"], seven_zip=_script(tmp_path, f'echo "$@" > {log}'))
+    assert log.read_text().strip() == "x x.7z -o/d -y -bd a/* -xr!*_ctp.nii.gz"
+
+
+def test_copy_with_progress(tmp_path):
+    src, dst = tmp_path / "a", tmp_path / "b"
+    src.write_bytes(b"x" * 1000)
+    al.copy_with_progress(str(src), str(dst), chunk_bytes=64)
+    assert dst.read_bytes() == src.read_bytes()
+    assert not (tmp_path / "b.part").exists()

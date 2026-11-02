@@ -16,16 +16,17 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 rsna = ["numpy", "pandas", "pydicom>=2.3", "opencv-python-headless"]
-isles = ["pandas", "openpyxl"]
+isles = ["numpy", "pandas", "openpyxl", "nibabel", "scipy", "matplotlib"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/strokecopilot"]
 
-# Ship the contract schemas and fixtures inside the wheel so `pip install git+...` on Colab
+# Ship the contract schemas, fixtures and split inside the wheel so `pip install git+...` on Colab
 # can validate without a repo checkout. The repo-root copies stay the single source of truth.
 [tool.hatch.build.targets.wheel.force-include]
 "schemas" = "strokecopilot/schemas"
 "fixtures" = "strokecopilot/fixtures"
+"splits" = "strokecopilot/splits"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
