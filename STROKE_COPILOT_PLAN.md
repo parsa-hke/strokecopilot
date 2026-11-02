@@ -427,7 +427,7 @@ Goal: slim tarballs on Drive; Colab template runs end to end on one case; team o
 - [x] Check whether the Circle of Willis labels separate M1 from M2
 - [ ] `prep_isles24.py` + `01_prep_isles24.ipynb` → `slim/isles24_slim_v1.tar`
 - [x] `prep_rsna.py` + `02_prep_rsna.ipynb` on Kaggle: 320 px windowed JPEG tar shards plus a scan-level index with patient IDs and slice positions; patient-level splits are made from that index
-- [ ] `splits.py` + `splits/folds.json` generated with fixed seed; `tests/test_splits.py`
+- [x] `splits.py` + `splits/folds.json` generated with fixed seed; `tests/test_splits.py`
 - [ ] `isles24.py`: `load_case(id)` returns arrays + clinical row + spacing; `rsna.py` equivalents
 - [ ] `00_template.ipynb`: install, mount, copy tarball, load one case, show maps + mask + clinical row. Must run top to bottom in five minutes on a T4
 - [ ] README with Open-in-Colab badges
