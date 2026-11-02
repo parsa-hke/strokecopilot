@@ -10,6 +10,7 @@ from collections import Counter
 
 import nibabel as nib
 import numpy as np
+import pandas as pd
 from scipy import ndimage
 
 from strokecopilot.data.clinical_survey import read_tables
@@ -56,16 +57,18 @@ def extra_rows(tables):
             if len(df) < 2:
                 continue
             counts = df.notna().sum(axis=1)
-            main, extra = df.loc[counts.idxmax()], df.loc[counts.idxmin()]
-            filled = [str(c) for c in df.columns if extra.notna()[c]]
+            order = counts.sort_values(ascending=False, kind="stable").index  # rows with equal counts stay two rows
+            main, extra = df.loc[order[0]], df.loc[order[-1]]
+            filled = [c for c in df.columns if pd.notna(extra[c])]
             found.append(
                 {
                     "kind": kind,
                     "case": case,
                     "rows": len(df),
                     "non_null_per_row": [int(n) for n in counts],
-                    "sparser_row_fills": filled,
-                    "sparser_row_conflicts_with_main_on": [str(c) for c in filled if main[c] != extra[c]],
+                    "sparser_row_fills": [str(c) for c in filled],
+                    "sparser_row_only_on": [str(c) for c in filled if pd.isna(main[c])],
+                    "sparser_row_conflicts_with_main_on": [str(c) for c in filled if pd.notna(main[c]) and main[c] != extra[c]],
                 }
             )
     return found

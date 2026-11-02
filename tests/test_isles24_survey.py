@@ -95,6 +95,15 @@ def test_centres_and_extra_rows():
     assert found["case"] == "b" and found["non_null_per_row"] == [3, 2]
     assert found["sparser_row_fills"] == ["Center", "Age"]
     assert found["sparser_row_conflicts_with_main_on"] == ["Age"]
+    assert found["sparser_row_only_on"] == []
+
+
+def test_extra_rows_compares_two_rows_with_equal_counts():
+    df = pd.DataFrame({"Center": [2, 2], "Age": [60, 61], "Sex": ["M", None], "INR": [None, 1.1]})
+    [found] = survey.extra_rows({"baseline": {"b": {"Sheet1": df}}})
+    assert found["non_null_per_row"] == [3, 3]
+    assert found["sparser_row_conflicts_with_main_on"] == ["Age"]
+    assert found["sparser_row_only_on"] == ["INR"]
 
 
 def test_stray_mask_check(root):

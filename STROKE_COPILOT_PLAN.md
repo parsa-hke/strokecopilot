@@ -264,7 +264,7 @@ Kaggle token, Hugging Face token, LLM API keys: Colab Secrets panel only. The pa
 - What we use:
   - **Input to Vision A:** perfusion maps (and NCCT if useful).
   - **Target for Vision A:** final infarct mask on follow-up MRI, in NCCT space (linear registration by the data providers; spot-check quality in Phase 1).
-  - **Occlusion site:** overlap of the occlusion mask with the Circle of Willis labels, mapped to ICA / M1 / M2 / basilar / none / unknown. Check in Phase 1 whether the labels can separate M1 from M2; if not, use `unknown` or a distance heuristic and record it.
+  - **Occlusion site:** nearest Circle of Willis label to the occlusion mask, within a distance limit, mapped to ICA / basilar / none / unknown. The labels cannot separate M1 from M2 (Phase 1, `docs/DATA.md`), so occlusions nearest an MCA label are `unknown`.
   - **Clinical variables:** to generate triage notes (§8.3) and to stratify the split.
 - Known issue: challenge test data is not public; our held-out set is carved from the 149 training cases.
 
@@ -291,6 +291,7 @@ One directory per case inside the tarball:
 isles24_slim_v1/
   manifest.json              # version, case list, voxel spacing, which maps are present
   clinical.csv               # one row per case
+  native_volumes.csv         # infarct and Tmax > 6 s mL, measured before resampling
   sub-strokeXXXX/
     ncct.nii.gz              # resampled to common grid
     ncct_native.nii.gz       # original spacing, HU preserved, for Vision B (§8.2)
@@ -300,7 +301,7 @@ isles24_slim_v1/
     infarct_followup.nii.gz  # target, in CT space
 ```
 
-Resample everything to one isotropic grid (start with 1.5 mm; decide in Phase 1 and record it in `manifest.json`). Crop to the brain bounding box to save space. Target size: 10–20 GB.
+Everything is in RAS on one 1.5 mm isotropic grid, cropped to the brain bounding box, grown if needed to hold the masks; `ncct_native` stays the unchanged source file. Only NCCT is averaged before shrinking, because volumes are read from masks and maps by threshold. Map background stays exact: Tmax -30 means no perfusion data. The grid was chosen in Phase 1 on evidence in `docs/DATA.md` and is recorded in `manifest.json`. Expected size is about 3 GiB, under the original 10–20 GB target.
 
 Slim tarballs are immutable. A preprocessing change produces `_v2`, never an overwrite. Every experiment records which version it used.
 
@@ -421,9 +422,9 @@ Goal: slim tarballs on Drive; Colab template runs end to end on one case; team o
 
 - [x] Inspect ISLES'24 archive layout; write `docs/DATA.md` with exact paths and which perfusion maps exist
 - [ ] Decide the common grid (spacing, crop) → record in `manifest.json` and CHANGELOG
-- [ ] Spot-check that the provided infarct masks align with NCCT (the paper says they are already in NCCT space); implement registration only if this fails
+- [x] Spot-check that the provided infarct masks align with NCCT (the paper says they are already in NCCT space); implement registration only if this fails
 - [x] Read `clinical_data-description.xlsx`: confirm the fields in §5.1, and tag each column as allowed or forbidden for note generation (§8.3)
-- [ ] Check whether the Circle of Willis labels separate M1 from M2
+- [x] Check whether the Circle of Willis labels separate M1 from M2
 - [ ] `prep_isles24.py` + `01_prep_isles24.ipynb` → `slim/isles24_slim_v1.tar`
 - [x] `prep_rsna.py` + `02_prep_rsna.ipynb` on Kaggle: 320 px windowed JPEG tar shards plus a scan-level index with patient IDs and slice positions; patient-level splits are made from that index
 - [ ] `splits.py` + `splits/folds.json` generated with fixed seed; `tests/test_splits.py`
@@ -538,7 +539,9 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 
 **Metrics.** Dice and absolute volume error (mL) per fold, mean ± std; volume error matters more than Dice for the downstream decision, because the rules are volume thresholds. Also report how often the predicted volume crosses a decision threshold (70 mL, DAWN cut-offs) when the ground truth does not.
 
-**Occlusion site.** Rule-based from the overlap of the occlusion mask with the provided Circle of Willis labels; `unknown` if the mask is empty or ambiguous. The labels are automatically generated, so spot-check them. A learned classifier is out of scope unless time allows.
+**Occlusion site.** Rule-based from the Circle of Willis label nearest the occlusion mask, because most masks do not overlap any label. ICA and basilar need the mask within a distance limit, set when `volumes.py` is built. Nearest an MCA label is `unknown`, because the labels cannot separate M1 from M2 and the two lead to different thrombectomy recommendations. An empty mask or anything ambiguous is also `unknown`. A learned classifier is out of scope unless time allows.
+
+**Tmax coverage.** Tmax -30 means no perfusion data, and some infarct lies in such tissue. Phase 1 measures how much. Vision A must not be expected to find infarct it has no input for, and `penumbra_ml` can undercount there.
 
 **ASPECTS.** Not produced (DEC-9). The field stays null, and the reasoner must treat it as unknown.
 

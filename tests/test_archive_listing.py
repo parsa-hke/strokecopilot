@@ -176,6 +176,12 @@ def test_extract_members_passes_excludes(tmp_path):
     assert log.read_text().strip() == "x x.7z -o/d -y -bd a/* -xr!*_ctp.nii.gz"
 
 
+def test_sha256_of(tmp_path):
+    path = tmp_path / "a"
+    path.write_bytes(b"abc")
+    assert al.sha256_of(str(path)) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+
+
 def test_copy_with_progress(tmp_path):
     src, dst = tmp_path / "a", tmp_path / "b"
     src.write_bytes(b"x" * 1000)

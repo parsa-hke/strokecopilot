@@ -21,7 +21,7 @@ Licence: CC BY-NC-SA 4.0 (plan §5.1).
 
 ### Archive layout
 
-From the archive's file list, read on 2 November 2026 with `01a_list_isles24.ipynb`. No file has been extracted yet, so image shapes, spacing and file contents are unconfirmed. The full listing and summary are in `StrokeCopilot/artifacts/isles24_listing/`.
+From the archive's file list, read on 2 November 2026 with `01a_list_isles24.ipynb`. The full listing and summary are in `StrokeCopilot/artifacts/isles24_listing/`.
 
 - 2,982 files, 95.840 GiB unpacked. 92.222 GiB packed, because the images are already gzipped.
 - 149 cases. IDs run from `sub-stroke0001` to `sub-stroke0189`, so they have gaps.
@@ -51,11 +51,42 @@ From the archive's file list, read on 2 November 2026 with `01a_list_isles24.ipy
 
 What this means:
 
-- **No NCCT in `derivatives/`.** NCCT exists only in `raw_data/`, which fits NCCT being the reference space. Whether `space-ncct` files match its shape is still to be checked.
+- **No NCCT in `derivatives/`.** NCCT exists only in `raw_data/`, which fits NCCT being the reference space. See the image survey below for how well `space-ncct` files match it.
 - **Clinical data is two Excel files per case,** not the CSVs the paper describes. Preparation has to merge 298 files.
 - **Extracting a single modality saves almost nothing.** The archive is solid, with 26 blocks. Getting any `derivatives/` file type means decoding about 79 GiB, including the lesion masks. Clinical files need about 1.7 GiB and the data dictionary almost none. The `-x` option still saves disk, because skipped files are decoded but not written.
 - **Disk:** a CPU runtime had 205 GiB free, and a full unpack needs 95.840 GiB. Other runtime types may differ.
-- **Stray file:** `sub-stroke0142` also has `derivatives/sub-stroke0142/ses-02/sub-stroke0142_ses-02_lesion-msk.nii` (0.025 GiB, not gzipped, no `space-ncct`). All 149 cases have the normal mask. What this file holds is unchecked. Preparation selects files by exact name, so it will not pick this one up.
+- **Stray file:** `sub-stroke0142` also has `derivatives/sub-stroke0142/ses-02/sub-stroke0142_ses-02_lesion-msk.nii` (0.025 GiB, not gzipped, no `space-ncct`). All 149 cases have the normal mask. The stray file is on the same grid and close to the normal mask (0.37 vs 0.34 mL, Dice 0.66). We ignore it, and preparation selects files by exact name, so it will not pick this one up.
+
+### Image survey
+
+From `01c_unpack_split_survey.ipynb`, run on 2 November 2026. Results are in `StrokeCopilot/artifacts/isles24_survey/`. The working copy of the files we use is `artifacts/isles24_work/isles24_work.tar` (10.32 GiB); making it took 9,845 s on a Colab CPU runtime, 6,089 s of that decoding. Alignment, labels, values and grids were measured on development cases only.
+
+**Headers (all 149).** All images are 3D. Spacing is 0.305–0.562 mm in-plane (median 0.41) and 0.8–4.0 mm between slices (median 2.0). Shape is 512 × 512–686 × 34–177. Every file matches the NCCT grid except one Circle of Willis mask, which is in a held-out case. Preparation moves any off-grid file by world position and reports a count only.
+
+**Alignment.** Median 99.6% of an infarct mask sits on soft-tissue NCCT voxels (p5 93.7%, lowest 81.9%, 127 cases). In the figure the outline matches the bright area on DWI in all six cases. No registration is needed. Two development infarct masks are empty, and two development occlusion masks are empty.
+
+**Circle of Willis labels.** Labels 1–12, and 15 in 4 cases. By the TopCoW numbering (from memory, not confirmed for this dataset) there is one MCA label per side, 5 and 7, with a median of about 0.1 mL, and each is missing in 14 of 129 cases. **So M1 and M2 cannot be separated.**
+
+Most occlusion masks do not overlap any label (median share outside 100%). The median distance to a label is 3.3 mm, p95 45 mm. Nearest labels over 127 masks: 7 (38), 5 (35), 1 (20), 3 (9), 6 (8), 4 (7), 12 (5), 2 (3), 11 (2). So about 57% are nearest an MCA label and become `unknown` (plan §8.1). The 20 nearest label 1, the basilar, look high and need the distance limit.
+
+**Values (10 cases).**
+- NCCT looks like HU: air at -1000, bone up to about 1400.
+- Tmax background is -30. CBF, CBV and MTT background is 0.
+- CBV and MTT have negative values (p0.1 -15 and -97). MTT has 8 non-finite voxels.
+- Units are unconfirmed.
+- Tmax has gaps inside the brain, in places a whole region (`sub-stroke0012`) or a whole slice (`sub-stroke0094`), and some infarct lies in them. It looks like limited CTP coverage. How much infarct this affects is measured in preparation.
+
+**Grid.** Chosen: **1.5 mm isotropic, cropped to the brain.** Measured on 10 cases, so the p95 values are close to the worst case:
+
+| Spacing | Lesion error p50 / p95 | Tmax > 6 s error p50 / p95 | Median crop | Projected slim |
+|---|---:|---:|---:|---:|
+| 1.0 mm | 0.8% / 5.3% | 3.9 / 6.7 mL | 145×178×140 | 5.36 GiB |
+| 1.5 mm | 1.4% / 9.5% | 2.6 / 6.8 mL | 98×120×94 | 2.98 GiB |
+| 2.0 mm | 1.1% / 13.3% | 1.8 / 6.0 mL | 73×90×70 | 2.37 GiB |
+
+1.0 mm has about 3.3 times the voxels with no gain on Tmax, and 2.0 mm has the worst p95 lesion error. Tmax error getting worse at finer spacing is unexplained. Because a 2–7 mL resampling error matters near a volume threshold, `native_volumes.csv` keeps volumes measured before resampling.
+
+**Split.** 20 held-out and folds of 26, 26, 26, 26 and 25, with centres balanced. Infarct p95 is 56 mL in held-out and 107–168 mL in the folds, so Phase 4 says little about very large infarcts, which may be chance with 20 cases. The split stays as it is.
 
 ### Clinical data
 
@@ -103,7 +134,7 @@ No ASPECTS column and no thrombolysis column exist.
 
 What this means:
 
-- **Extra rows:** one baseline and one outcome workbook have two rows. In baseline the extra row is nearly empty but has `Center` and `Age`. Which cases these are is unchecked. Preparation must handle them explicitly and report them.
+- **Extra rows:** both workbooks of `sub-stroke0180` have two rows, with the same number of values in each (16 and 16 in baseline, 1 and 1 in outcome). Whether they agree is unchecked, because the survey's check compared a row with itself; that is fixed. Preparation merges them: gaps are filled, values that disagree become missing, and it reports what it found.
 - **Onset time is often unknown:** only 74 rows have `Onset to door` and 14 have `Alert to door`, so at least 61 of the 149 cases have neither. There is no last-known-well or sleep-midpoint column.
 - **Rule inputs are often unknown:** `INR` is missing in 61 rows and `mRS premorbid` in 60. Notes must say these are not recorded, so the reasoner treats them as unknown.
 - **Possible centre effect:** centre 2 has 50 rows, and several columns are missing in about 51. That suggests centre 2 does not record them, but it is not confirmed.

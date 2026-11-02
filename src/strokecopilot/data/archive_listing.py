@@ -6,6 +6,7 @@ block from the start up to that file. `decode_bytes` is that cost for a whole pa
 decides whether single modalities can be extracted cheaply.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -71,6 +72,14 @@ def copy_with_progress(src, dst, every_s=60, chunk_bytes=16 * 1024 ** 2):
         raise OSError(f"Copy of {src} is the wrong size.")
     os.replace(f"{dst}.part", dst)
     return time.time() - started
+
+
+def sha256_of(path, chunk_bytes=16 * 1024 ** 2):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(chunk_bytes):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _fields(lines):
