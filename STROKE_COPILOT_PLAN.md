@@ -301,7 +301,7 @@ isles24_slim_v1/
     infarct_followup.nii.gz  # target, in CT space
 ```
 
-Everything is in RAS on one 1.5 mm isotropic grid, cropped to the brain bounding box, grown if needed to hold the masks; `ncct_native` stays the unchanged source file. Only NCCT is averaged before shrinking, because volumes are read from masks and maps by threshold. Map background stays exact: Tmax -30 means no perfusion data. The grid was chosen in Phase 1 on evidence in `docs/DATA.md` and is recorded in `manifest.json`. Expected size is about 3 GiB, under the original 10–20 GB target.
+Everything is in RAS on one 1.5 mm isotropic grid, cropped to the brain bounding box, grown if needed to hold the masks; `ncct_native` stays the unchanged source file. Only NCCT is averaged before shrinking, because volumes are read from masks and maps by threshold. Map background stays exact: Tmax -30 means no perfusion data. The grid was chosen in Phase 1 on evidence in `docs/DATA.md` and is recorded in `manifest.json`. The tarball is 2.86 GiB, under the original 10–20 GB target.
 
 Slim tarballs are immutable. A preprocessing change produces `_v2`, never an overwrite. Every experiment records which version it used.
 
@@ -421,11 +421,11 @@ Acceptance: `pytest tests/test_contract.py` passes; the five fixtures validate; 
 Goal: slim tarballs on Drive; Colab template runs end to end on one case; team onboarded.
 
 - [x] Inspect ISLES'24 archive layout; write `docs/DATA.md` with exact paths and which perfusion maps exist
-- [ ] Decide the common grid (spacing, crop) → record in `manifest.json` and CHANGELOG
+- [x] Decide the common grid (spacing, crop) → record in `manifest.json` and CHANGELOG
 - [x] Spot-check that the provided infarct masks align with NCCT (the paper says they are already in NCCT space); implement registration only if this fails
 - [x] Read `clinical_data-description.xlsx`: confirm the fields in §5.1, and tag each column as allowed or forbidden for note generation (§8.3)
 - [x] Check whether the Circle of Willis labels separate M1 from M2
-- [ ] `prep_isles24.py` + `01_prep_isles24.ipynb` → `slim/isles24_slim_v1.tar`
+- [x] `prep_isles24.py` + `01_prep_isles24.ipynb` → `slim/isles24_slim_v1.tar`
 - [x] `prep_rsna.py` + `02_prep_rsna.ipynb` on Kaggle: 320 px windowed JPEG tar shards plus a scan-level index with patient IDs and slice positions; patient-level splits are made from that index
 - [x] `splits.py` + `splits/folds.json` generated with fixed seed; `tests/test_splits.py`
 - [ ] `isles24.py`: `load_case(id)` returns arrays + clinical row + spacing; `rsna.py` equivalents
@@ -541,7 +541,7 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 
 **Occlusion site.** Rule-based from the Circle of Willis label nearest the occlusion mask, because most masks do not overlap any label. ICA and basilar need the mask within a distance limit, set when `volumes.py` is built. Nearest an MCA label is `unknown`, because the labels cannot separate M1 from M2 and the two lead to different thrombectomy recommendations. An empty mask or anything ambiguous is also `unknown`. A learned classifier is out of scope unless time allows.
 
-**Tmax coverage.** Tmax -30 means no perfusion data, and some infarct lies in such tissue. Phase 1 measures how much. Vision A must not be expected to find infarct it has no input for, and `penumbra_ml` can undercount there.
+**Tmax coverage.** Tmax -30 means no perfusion data, and in 15 of 127 development cases over 10% of the infarct lies in such tissue (`docs/DATA.md`). Vision A must not be expected to find infarct it has no input for, and `penumbra_ml` can undercount there. Reference volumes come from `native_volumes.csv`, because resampling moves Tmax > 6 s by up to about 10 mL.
 
 **ASPECTS.** Not produced (DEC-9). The field stays null, and the reasoner must treat it as unknown.
 

@@ -74,7 +74,7 @@ Most occlusion masks do not overlap any label (median share outside 100%). The m
 - Tmax background is -30. CBF, CBV and MTT background is 0.
 - CBV and MTT have negative values (p0.1 -15 and -97). MTT has 8 non-finite voxels.
 - Units are unconfirmed.
-- Tmax has gaps inside the brain, in places a whole region (`sub-stroke0012`) or a whole slice (`sub-stroke0094`), and some infarct lies in them. It looks like limited CTP coverage. How much infarct this affects is measured in preparation.
+- Tmax has gaps inside the brain, in places a whole region (`sub-stroke0012`) or a whole slice (`sub-stroke0094`), and some infarct lies in them. It looks like limited CTP coverage. See the slim section below for how much.
 
 **Grid.** Chosen: **1.5 mm isotropic, cropped to the brain.** Measured on 10 cases, so the p95 values are close to the worst case:
 
@@ -84,9 +84,47 @@ Most occlusion masks do not overlap any label (median share outside 100%). The m
 | 1.5 mm | 1.4% / 9.5% | 2.6 / 6.8 mL | 98×120×94 | 2.98 GiB |
 | 2.0 mm | 1.1% / 13.3% | 1.8 / 6.0 mL | 73×90×70 | 2.37 GiB |
 
-1.0 mm has about 3.3 times the voxels with no gain on Tmax, and 2.0 mm has the worst p95 lesion error. Tmax error getting worse at finer spacing is unexplained. Because a 2–7 mL resampling error matters near a volume threshold, `native_volumes.csv` keeps volumes measured before resampling.
+1.0 mm has about 3.3 times the voxels with no gain on Tmax, and 2.0 mm has the worst p95 lesion error. Tmax error getting worse at finer spacing is unexplained.
 
 **Split.** 20 held-out and folds of 26, 26, 26, 26 and 25, with centres balanced. Infarct p95 is 56 mL in held-out and 107–168 mL in the folds, so Phase 4 says little about very large infarcts, which may be chance with 20 cases. The split stays as it is.
+
+### Slim tarball
+
+`StrokeCopilot/slim/isles24_slim_v1.tar`, built on 2 November 2026 with `01_prep_isles24.ipynb` (layout in plan §5.4). Immutable: a change means `_v2`. Build report and figure are in `StrokeCopilot/artifacts/isles24_prep/`.
+
+```json
+{
+  "cases": 149,
+  "spacing_mm": 1.5,
+  "size_bytes": 3066152960,
+  "sha256": "b0afd16e4cbfb16a69fb5190083fc3869f5dcc6c92f86f10135b0de1f59f4728"
+}
+```
+
+That is 2.86 GiB. It took 990 s to build (7 s per case) on a Colab CPU runtime, plus 209 s to copy the working copy from Drive. The final check found no problems in any file's grid, spacing, orientation or type. Median shape is 98×119×94, largest 112×135×110.
+
+Measured over all 149 cases, as counts:
+
+- **Orientation:** sources are 100 LAS and 49 LPS, so the slim files were turned to RAS. Those counts match centres 1 and 2, but that link is not confirmed.
+- **Off-grid:** the one Circle of Willis mask was moved to the NCCT grid.
+- **Crop:** it grew for 3 cases to hold a mask.
+- **Rescued masks:** 4 occlusion masks and 1 infarct mask would have vanished, so each keeps its best voxel.
+- **MTT:** 417,749 non-finite voxels became background. CBF, CBV and Tmax have none.
+- **Label loss, unexplained:** 5 cases lost a Circle of Willis label, 12 labels in all (1–6, 11 and 12 once each; 9 and 10 twice each). Small labels 9 and 10 are expected to vanish. The rest look like one case losing most of its labels, possibly outside the crop, since the crop does not grow for this mask. Not yet diagnosed. It only affects occlusion site, which must return `unknown` when labels are absent.
+
+Measured over 129 development cases:
+
+| | p50 | p95 |
+|---|---:|---:|
+| Infarct volume error | 0.8% (0.13 mL) | 6.2% (0.45 mL) |
+| Tmax > 6 s volume error | 2.8 mL | 9.6 mL |
+| Tmax > 6 s error if maps had been averaged | 7.5 mL | 17.4 mL |
+
+What this means:
+
+- **Use `native_volumes.csv` for true volumes.** A Tmax error up to about 10 mL is too large near a volume threshold, so read reference `penumbra_ml` from that file, not from the resampled map. Averaging would have been clearly worse.
+- **Some infarct has no perfusion input.** The share of an infarct with Tmax data has a median of 99.4% and p5 of 80.9%. In 15 of 127 cases it is under 90%, and `sub-stroke0094` has none. Vision A cannot learn or be fairly scored on tissue it has no input for, so training and metrics need to take this into account in Phase 2.
+- **Many Tmax values are negative.** Beyond the -30 background, a median of 16% (p95 28%) of remaining Tmax voxels are below zero, which has no obvious physical meaning. Black areas in the figures can be either kind, because the display starts at 0, so "no data" is only measured for -30. This does not change Tmax > 6 s, but Vision A needs a rule for it when normalising.
 
 ### Clinical data
 
@@ -113,7 +151,7 @@ Each workbook has one sheet and the same columns. They hold no case ID, so the I
 | `Wake-up` | baseline | Allowed | 2 | 42 are wake-up strokes |
 | `In-House` | baseline | Allowed | 13 | 7 are in-house strokes |
 | `Referral` | baseline | Allowed | 1 | 19 came from an external clinic |
-| `Onset to door` | baseline | Allowed | 76 | Text, hrs:min per the dictionary |
+| `Onset to door` | baseline | Allowed | 76 | Text, `hh:mm:ss`, some with microseconds. The dictionary says hrs:min |
 | `Alert to door` | baseline | Allowed | 136 | Text. Wake-up strokes only |
 | `NIHSS at admission` | baseline | Allowed | 4 | |
 | `mRS at admission` | baseline | Forbidden | 51 | Not a §8.3 note field; not the same as premorbid mRS |
@@ -134,7 +172,8 @@ No ASPECTS column and no thrombolysis column exist.
 
 What this means:
 
-- **Extra rows:** both workbooks of `sub-stroke0180` have two rows, with the same number of values in each (16 and 16 in baseline, 1 and 1 in outcome). Whether they agree is unchecked, because the survey's check compared a row with itself; that is fixed. Preparation merges them: gaps are filled, values that disagree become missing, and it reports what it found.
+- **Extra rows:** both workbooks of `sub-stroke0180` have two rows, with 16 values in each baseline row and 1 in each outcome row. Preparation found no gaps to fill and no disagreements, so they are duplicates, merged into one row.
+- **Time text:** `Onset to door`, `Alert to door` and `Door to imaging` read as `hh:mm:ss`, about a quarter with microseconds as well (development cases). The microseconds fit the ±5% alteration. `clinical.csv` keeps the text, so note generation must parse it. `clinical.csv` also holds the forbidden columns, so note generation must filter with `tag_of`.
 - **Onset time is often unknown:** only 74 rows have `Onset to door` and 14 have `Alert to door`, so at least 61 of the 149 cases have neither. There is no last-known-well or sleep-midpoint column.
 - **Rule inputs are often unknown:** `INR` is missing in 61 rows and `mRS premorbid` in 60. Notes must say these are not recorded, so the reasoner treats them as unknown.
 - **Possible centre effect:** centre 2 has 50 rows, and several columns are missing in about 51. That suggests centre 2 does not record them, but it is not confirmed.
