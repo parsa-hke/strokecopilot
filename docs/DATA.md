@@ -21,7 +21,7 @@ The archive has not been opened yet. Licence: CC BY-NC-SA 4.0 (plan §5.1).
 
 ## RSNA ICH
 
-Built on Kaggle from the competition's stage 2 training data into private datasets (DEC-17): `rsna_slim_v1`, 320 px, JPEG quality 95, 4 shards. 752,803 labelled slices in total.
+Terms limit where this data can go; see `DATA_USE.md`. Built on Kaggle from the competition's stage 2 training data into private datasets (DEC-17): `rsna_slim_v1`, 320 px, JPEG quality 95, 4 shards. 752,803 labelled slices in total.
 
 | Shard | Dataset | Slices | Failed | Tar size (GiB) | Status |
 |---|---|---:|---:|---:|---|

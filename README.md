@@ -27,7 +27,7 @@ The vision and NLP sides meet only at [`schemas/vision_output.json`](schemas/vis
 On Colab (or anywhere):
 
 ```bash
-pip install git+https://github.com/<org>/strokecopilot.git
+pip install git+https://github.com/parsa-hke/strokecopilot.git
 ```
 
 For local development (NLP side and tests; vision training is Colab-only):
@@ -50,23 +50,23 @@ Nothing under `data/` or `runs/` is committed. Datasets live in the shared Googl
 
 ## Notebooks
 
-Badges point at the notebooks once they exist; replace `<org>` with the GitHub owner after the repo is pushed.
+Badges point at the notebooks once they exist.
 
 | Notebook | Purpose | |
 |---|---|---|
-| `00_download_isles24` | Phase 0: download ISLES'24 to Drive and verify md5 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/00_download_isles24.ipynb) |
-| `00_template` | Install, mount Drive, copy tarball, load one case | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/00_template.ipynb) |
-| `01_prep_isles24` | ISLES'24 raw → slim tarball | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/01_prep_isles24.ipynb) |
-| `02_prep_rsna` | RSNA ICH → 320 px JPEG tar shards (runs on Kaggle) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/02_prep_rsna.ipynb) |
+| `00_download_isles24` | Phase 0: download ISLES'24 to Drive and verify md5 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/00_download_isles24.ipynb) |
+| `00_template` | Install, mount Drive, copy tarball, load one case | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/00_template.ipynb) |
+| `01_prep_isles24` | ISLES'24 raw → slim tarball | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01_prep_isles24.ipynb) |
+| `02_prep_rsna` | RSNA ICH → 320 px JPEG tar shards (runs on Kaggle) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/02_prep_rsna.ipynb) |
 | `02a_rsna_kaggle_timing` | Phase 0: time full RSNA on Kaggle | Upload to Kaggle; this one does not run on Colab |
-| `10_visionA_nnunet` | Vision A: nnU-Net training | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/10_visionA_nnunet.ipynb) |
-| `11_visionA_thresholds` | Vision A: threshold baseline | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/11_visionA_thresholds.ipynb) |
-| `20_visionB_train` | Vision B: haemorrhage classifier | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/20_visionB_train.ipynb) |
-| `30_nlpA_corpus` | NLP A: corpus ingestion and retrieval | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/30_nlpA_corpus.ipynb) |
-| `31_nlpA_reasoner` | NLP A: reasoner | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/31_nlpA_reasoner.ipynb) |
-| `40_nlpB_verifier` | NLP B: verifier | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/40_nlpB_verifier.ipynb) |
-| `41_nlpB_model_comparison` | NLP B: hallucination table | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/41_nlpB_model_comparison.ipynb) |
-| `50_end_to_end` | Full pipeline | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/<org>/strokecopilot/blob/main/notebooks/50_end_to_end.ipynb) |
+| `10_visionA_nnunet` | Vision A: nnU-Net training | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/10_visionA_nnunet.ipynb) |
+| `11_visionA_thresholds` | Vision A: threshold baseline | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/11_visionA_thresholds.ipynb) |
+| `20_visionB_train` | Vision B: haemorrhage classifier | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/20_visionB_train.ipynb) |
+| `30_nlpA_corpus` | NLP A: corpus ingestion and retrieval | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/30_nlpA_corpus.ipynb) |
+| `31_nlpA_reasoner` | NLP A: reasoner | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/31_nlpA_reasoner.ipynb) |
+| `40_nlpB_verifier` | NLP B: verifier | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/40_nlpB_verifier.ipynb) |
+| `41_nlpB_model_comparison` | NLP B: hallucination table | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/41_nlpB_model_comparison.ipynb) |
+| `50_end_to_end` | Full pipeline | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/50_end_to_end.ipynb) |
 
 ## Repository layout
 

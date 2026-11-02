@@ -195,6 +195,8 @@ strokecopilot/
 │   └── README.md                  # where data lives on Drive; nothing else committed here
 └── docs/
     ├── DATA.md                    # exact file layout of ISLES'24 and RSNA as found (filled in Phase 1)
+    ├── DATA_USE.md                # what each data source's terms allow, and what that means for us
+    ├── CLINICIAN_REVIEW.md        # rulebook and fixture expectations, written for a clinician reviewer
     ├── RULEBOOK.md                # human-readable summary of the clinical criteria with passage IDs
     └── REPORT_OUTLINE.md
 ```
@@ -267,7 +269,7 @@ Kaggle token, Hugging Face token, LLM API keys: Colab Secrets panel only. The pa
 
 - Source: Kaggle competition dataset. Raw is ~180 GB of DICOM slices with per-slice labels (epidural, intraparenchymal, intraventricular, subarachnoid, subdural, any).
 - We use all labelled data (DEC-16) but do not move the raw DICOM to Colab or Drive. The competition data is attached to Kaggle notebooks, where preprocessing and training run (DEC-17). Timing test, 31 Oct 2026: 752,803 labelled slices, 14.3% with a bleed, about 20–28 raw files per second, no failed reads. Raw reading is too slow to train on directly, so preprocessing runs once to 320 px three-window JPEGs in tar shards (`rsna_slim_v1`, estimated 17 GB; 256 px is the fallback). Copy shards to Kaggle's local disk each session. Record the data version, chosen image size and any excluded scans in `docs/DATA.md`.
-- Terms differ by source. The RSNA challenge Terms of Use allow academic and non-commercial use, and allow sharing or redistribution if the attribution is met (link to the datasets and cite Flanders et al., *Radiol Artif Intell* 2020;2:3). The AWS Open Data listing, whose access runs through RSNA MIRA, says copies may not be shared or redistributed. Prefer the challenge copy on Kaggle, keep all derivatives on the private Drive, and include the attribution. The Kaggle rules still need reading.
+- Terms: we use the Kaggle copy, so the Kaggle competition rules apply (read 2 November 2026; see `docs/DATA_USE.md`). They allow non-commercial use including academic research and education, and forbid redistribution, access by anyone who has not accepted the rules, and re-identification. Teammates accept the rules before getting access. RSNA data, including shards and indexes, stays in private Kaggle datasets and never goes on Drive, in the repo, or in the report or demo as images. Cite Flanders et al., *Radiol Artif Intell* 2020;2:3. The rules' clause against making copies is an open question for the professors. The RSNA challenge Terms of Use are looser, but they are not the terms for this copy.
 - Split by patient, and keep validation and test at the natural bleed rate; only training is balanced. Slices group into scans through DICOM metadata. RSNA's dataset description gives axial 5 mm slices, 512 × 512, with one site resampled to 5 mm; a later preprint reports spacing of about 2.5–5 mm. `SliceThickness` was absent in all 2,000 sampled files, so derive spacing from `ImagePositionPatient`.
 - Windowing: stack three CT windows as channels — brain (centre 40, width 80), subdural (80/200), bone (600/2800). This is the standard trick and matters for small bleeds.
 - Scan-level labels: a scan is positive if any slice is positive. We need scan-level predictions for the contract.
@@ -397,7 +399,7 @@ Goal: decisions recorded, contract frozen, data downloading, repo scaffolded.
 - [ ] Create shared Drive folder with the layout in §4.2; share with team
 - [x] Start ISLES'24 download (record 17652035) to `raw/` with `00_download_isles24.ipynb`; verify md5; record sizes
 - [x] Attach full RSNA to a Kaggle notebook; run `02a_rsna_kaggle_timing.ipynb`; settle DEC-17
-- [ ] Read Zenodo licence and RSNA terms; fill `docs/` note and the Notion "Data-use terms" page
+- [x] Read Zenodo licence and RSNA terms; fill `docs/` note and the Notion "Data-use terms" page
 - [x] Obtain the 2026 AHA/ASA guideline full text; verify every rule in §8.3 and the fixture expectations against it
 - [ ] Ask a clinician to review the rulebook and fixture expectations once (via the professors if the team has no contact)
 - [x] Freeze contract v0.1 (DEC-14 and DEC-15 are confirmed)
@@ -405,7 +407,7 @@ Goal: decisions recorded, contract frozen, data downloading, repo scaffolded.
 - [x] Write `schemas/vision_output.json` (§6.1) and `contract/schema.py` (pydantic mirror)
 - [x] Write the five fixtures and their notes (§6.3)
 - [x] `tests/test_contract.py`: fixtures validate; mismatch ratio and volume computed correctly; null handling
-- [ ] Push to GitHub (private), add repo URL to Notion hub Links
+- [x] Push to GitHub (private), add repo URL to Notion hub Links
 
 Acceptance: `pytest tests/test_contract.py` passes; the five fixtures validate; the ISLES'24 download is complete or in progress with its md5 check queued; full RSNA is attached on Kaggle and timed.
 
