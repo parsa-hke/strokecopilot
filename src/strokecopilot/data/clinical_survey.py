@@ -107,7 +107,7 @@ def survey(tables, cases):
                     values[name].extend(df[col].tolist())
                     present_in[name].add(case)
                     found_id = found_id or df[col].astype(str).str.strip().eq(case).any()
-            id_in_file += found_id
+            id_in_file += bool(found_id)
         report["kinds"][kind] = {
             "workbooks": len(by_case),
             "sheet_layouts": [{"sheets": list(k), "workbooks": v} for k, v in sheets.most_common()],

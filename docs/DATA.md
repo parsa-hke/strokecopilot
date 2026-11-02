@@ -55,7 +55,60 @@ What this means:
 - **Clinical data is two Excel files per case,** not the CSVs the paper describes. Preparation has to merge 298 files.
 - **Extracting a single modality saves almost nothing.** The archive is solid, with 26 blocks. Getting any `derivatives/` file type means decoding about 79 GiB, including the lesion masks. Clinical files need about 1.7 GiB and the data dictionary almost none. The `-x` option still saves disk, because skipped files are decoded but not written.
 - **Disk:** a CPU runtime had 205 GiB free, and a full unpack needs 95.840 GiB. Other runtime types may differ.
-- **Stray file:** one case also has `derivatives/{c}/ses-02/{c}_ses-02_lesion-msk.nii` (0.025 GiB, not gzipped, no `space-ncct`). All 149 cases have the normal mask. Which case it is and what it holds are unchecked. Preparation selects files by exact name, so it will not pick this one up.
+- **Stray file:** `sub-stroke0142` also has `derivatives/sub-stroke0142/ses-02/sub-stroke0142_ses-02_lesion-msk.nii` (0.025 GiB, not gzipped, no `space-ncct`). All 149 cases have the normal mask. What this file holds is unchecked. Preparation selects files by exact name, so it will not pick this one up.
+
+### Clinical data
+
+Surveyed on 2 November 2026 with `01b_clinical_isles24.ipynb`, in aggregate only. The results are in `StrokeCopilot/artifacts/isles24_clinical/`. Extraction took 129 s on Colab. Note tags are enforced in `src/strokecopilot/data/clinical_columns.py`.
+
+Each workbook has one sheet and the same columns. They hold no case ID, so the ID comes from the path. "Missing" counts rows out of 150, because of the extra row described below.
+
+| Column | Source | Note tag | Missing | Remarks |
+|---|---|---|---:|---|
+| `Center` | baseline | Forbidden | 0 | 1 or 2. Not in the dictionary, which lists `Identifier` instead |
+| `Sex` | baseline | Allowed | 1 | M 75, F 74 |
+| `Age` | baseline | Allowed | 0 | Decimal, though the dictionary says integer |
+| `Atrial fibrillation` | baseline | Allowed | 2 | |
+| `Hypertension` | baseline | Allowed | 1 | |
+| `Diabetes` | baseline | Allowed | 2 | The dictionary's description wrongly says hypertension |
+| `Hyperlipidemia` | baseline | Allowed | 3 | Has one value of 99, read as unknown. Same dictionary error |
+| `Anticoagulation` | baseline | Allowed | 3 | |
+| `Lipid lowering drugs` | baseline | Allowed | 5 | The dictionary calls it `Statins` |
+| `PAIs` | baseline | Allowed | 4 | Platelet aggregation inhibitors |
+| `Glucose` | baseline | Allowed | 19 | mg/dl, altered ±5% |
+| `Leucocytes` | baseline | Allowed | 60 | G/l, altered ±5% |
+| `CRP` | baseline | Allowed | 60 | mg/dl, altered ±5% |
+| `INR` | baseline | Allowed | 61 | Altered ±5% |
+| `Wake-up` | baseline | Allowed | 2 | 42 are wake-up strokes |
+| `In-House` | baseline | Allowed | 13 | 7 are in-house strokes |
+| `Referral` | baseline | Allowed | 1 | 19 came from an external clinic |
+| `Onset to door` | baseline | Allowed | 76 | Text, hrs:min per the dictionary |
+| `Alert to door` | baseline | Allowed | 136 | Text. Wake-up strokes only |
+| `NIHSS at admission` | baseline | Allowed | 4 | |
+| `mRS at admission` | baseline | Forbidden | 51 | Not a §8.3 note field; not the same as premorbid mRS |
+| `mRS premorbid` | baseline | Allowed | 60 | |
+| `Door to imaging` | baseline | Allowed | 12 | Text |
+| `Door to groin` | baseline | Forbidden | 12 | Reveals thrombectomy |
+| `Door to first series` | baseline | Forbidden | 51 | Reveals thrombectomy |
+| `Time of intervention` | baseline | Forbidden | 54 | Reveals thrombectomy |
+| `Door to recanalization` | baseline | Forbidden | 55 | Reveals thrombectomy |
+| `TICI postinterventional` | outcome | Forbidden | 51 | Text: 3 (75), 2c (22), 2b (1), 2a (1) |
+| `NIHSS 24h` | outcome | Forbidden | 66 | After treatment |
+| `mRS 24h` | outcome | Forbidden | 65 | After treatment |
+| `NIHSS discharge` | outcome | Forbidden | 53 | After treatment |
+| `mRS discharge` | outcome | Forbidden | 53 | After treatment |
+| `mRS 3 months` | outcome | Forbidden | 20 | After treatment |
+
+No ASPECTS column and no thrombolysis column exist.
+
+What this means:
+
+- **Extra rows:** one baseline and one outcome workbook have two rows. In baseline the extra row is nearly empty but has `Center` and `Age`. Which cases these are is unchecked. Preparation must handle them explicitly and report them.
+- **Onset time is often unknown:** only 74 rows have `Onset to door` and 14 have `Alert to door`, so at least 61 of the 149 cases have neither. There is no last-known-well or sleep-midpoint column.
+- **Rule inputs are often unknown:** `INR` is missing in 61 rows and `mRS premorbid` in 60. Notes must say these are not recorded, so the reasoner treats them as unknown.
+- **Possible centre effect:** centre 2 has 50 rows, and several columns are missing in about 51. That suggests centre 2 does not record them, but it is not confirmed.
+- **Reperfusion:** of the 99 rows with a TICI value, 97 are 2c or 3 and 2 are lower. The rest have none, so the data does not show that every patient reached 2c or 3.
+- **±5% on times:** the dictionary states this for labs only, while the paper says it covers times too (plan §5.1). We treat times as altered.
 
 ## RSNA ICH
 

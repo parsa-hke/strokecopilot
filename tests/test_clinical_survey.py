@@ -44,6 +44,7 @@ def test_column_counts_and_types(surveyed):
     baseline = surveyed[0]["kinds"]["baseline"]
     assert baseline["rows_per_sheet"] == {"1": len(CASES)}
     assert baseline["workbooks_holding_their_case_id"] == len(CASES)
+    assert type(baseline["workbooks_holding_their_case_id"]) is int  # numpy ints reach the JSON as strings
     assert baseline["columns"]["INR"]["null"] == 1
     age = baseline["columns"]["Age"]
     assert age["types"] == {"text": 1, "number": len(CASES) - 1}
