@@ -200,3 +200,54 @@ def test_montage_writes_a_png(root, tmp_path):
     out = tmp_path / "m.png"
     survey.montage(root, CASES[:2], str(out))
     assert out.stat().st_size > 1000
+
+
+def _slim_like(tmp_path, case, cow, tmax=None, infarct=None, ncct=None):
+    folder = tmp_path / "slim" / case
+    os.makedirs(folder, exist_ok=True)
+    affine = np.diag([1.5, 1.5, 1.5, 1.0])
+    shape = (10, 10, 10)
+    arrays = {
+        "cow": (cow, np.uint8),
+        "tmax": (tmax if tmax is not None else np.full(shape, -30.0), np.float32),
+        "infarct_followup": (infarct if infarct is not None else np.zeros(shape), np.uint8),
+        "ncct": (ncct if ncct is not None else np.full(shape, 35), np.int16),
+    }
+    for name, (array, dtype) in arrays.items():
+        nib.save(nib.Nifti1Image(array.astype(dtype), affine), folder / f"{name}.nii.gz")
+    return str(tmp_path / "slim")
+
+
+def test_cow_label_check_separates_cases_and_measures_the_crop(root, tmp_path):
+    small = np.zeros((6, 6, 6))
+    small[0, 0, 0] = 5  # label 7 is missing; the crop is 9 mm, so it lies outside
+    slim = _slim_like(tmp_path, CASES[0], small)
+    _slim_like(tmp_path, CASES[1], small)
+    result = survey.cow_label_check(root, slim, CASES[:2], development=[CASES[0]])
+    [row] = result["development"][CASES[0]]
+    assert row["label"] == 7 and row["native_voxels"] == 12 and row["inside_crop"] == 0
+    assert CASES[1] not in json.dumps(result)
+    assert (result["other_cases"], result["other_labels_lost"], result["other_native_voxels"]) == (1, 1, 12)
+
+
+def test_mtt_non_finite_check(root):
+    assert survey.mtt_non_finite_check(root, CASES) == {"cases": 6, "cases_affected": 0, "voxels_p50_p95_max_affected": None}
+    mtt = np.full(SHAPE, 10.0, dtype=np.float32)
+    mtt[0, 0, :3] = np.nan
+    _save(root, CASES[0], "mtt", mtt)
+    result = survey.mtt_non_finite_check(root, CASES)
+    assert result["cases_affected"] == 1 and result["voxels_p50_p95_max_affected"][2] == 3
+
+
+def test_tmax_negative_check(tmp_path):
+    tmax = np.full((10, 10, 10), 4.0)
+    tmax[:5] = -3.0
+    infarct = np.zeros((10, 10, 10))
+    infarct[4:6] = 1
+    ncct = np.full((10, 10, 10), 35)
+    ncct[:2] = 10
+    slim = _slim_like(tmp_path, CASES[0], np.zeros((10, 10, 10)), tmax=tmax, infarct=infarct, ncct=ncct)
+    result = survey.tmax_negative_check(slim, [CASES[0]])
+    assert result["negative_value_p5_p50_p95_median_across_cases"] == [-3.0, -3.0, -3.0]
+    assert result["share_on_tissue_20_60_hu_p50"] == [0.6] and result["share_on_csf_like_minus5_20_hu_p50"] == [0.4]
+    assert result["infarct_on_negative_tmax_p50_p95"] == [0.5, 0.5]

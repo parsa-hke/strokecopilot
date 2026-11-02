@@ -371,6 +371,70 @@ def montage(root, cases, out_png):
     plt.close(fig)
 
 
+# Questions left by the slim build (docs/DATA.md). Held-out cases reach the report only as totals.
+
+
+def cow_label_check(root, slim_root, cases, development):
+    """For Circle of Willis labels missing from the slim file: how big they were and whether the crop cut them."""
+    per_case = {}
+    for case in cases:
+        source = nib.as_closest_canonical(_load(root, case, "cow"))
+        slim = nib.load(os.path.join(slim_root, case, "cow.nii.gz"))
+        native = np.asanyarray(source.dataobj).astype(np.int32)
+        small = np.asanyarray(slim.dataobj)
+        lost = sorted(set(np.unique(native).tolist()) - set(np.unique(small).tolist()))
+        if not lost:
+            continue
+        to_slim = np.linalg.inv(slim.affine) @ source.affine
+        rows = []
+        for label in lost:
+            voxels = np.argwhere(native == label)
+            where = np.rint(nib.affines.apply_affine(to_slim, voxels))
+            inside = np.all((where >= 0) & (where < np.array(small.shape)), axis=1)
+            rows.append({"label": label, "native_voxels": len(voxels), "inside_crop": int(inside.sum()), "native_ml": round(_volume_ml(native == label, _zooms(source)), 4)})
+        per_case[case] = rows
+    dev = {case: rows for case, rows in per_case.items() if case in set(development)}
+    other = [row for case, rows in per_case.items() if case not in set(development) for row in rows]
+    return {
+        "development": dev,
+        "other_cases": len(per_case) - len(dev),
+        "other_labels_lost": len(other),
+        "other_native_voxels": sum(row["native_voxels"] for row in other),
+        "other_inside_crop": sum(row["inside_crop"] for row in other),
+    }
+
+
+def mtt_non_finite_check(root, cases):
+    """How the non-finite MTT voxels spread across cases. Counts only."""
+    counts = [int((~np.isfinite(np.asanyarray(_load(root, case, "mtt").dataobj))).sum()) for case in cases]
+    affected = [n for n in counts if n]
+    return {"cases": len(counts), "cases_affected": len(affected), "voxels_p50_p95_max_affected": _percentiles(affected, (50, 95, 100))}
+
+
+def tmax_negative_check(slim_root, cases):
+    """Where negative Tmax values sit on the slim grid: their size, tissue type and overlap with the infarct."""
+    values, in_tissue, in_csf, on_infarct, infarct_with_positive = [], [], [], [], []
+    for case in cases:
+        load = lambda name: np.asanyarray(nib.load(os.path.join(slim_root, case, f"{name}.nii.gz")).dataobj)  # noqa: E731
+        tmax, ncct, infarct = load("tmax"), load("ncct"), load("infarct_followup") > 0
+        negative = (tmax < 0) & (tmax > -30)
+        if negative.any():
+            values.append(np.percentile(tmax[negative], (5, 50, 95)))
+            in_tissue.append(float(((ncct[negative] >= 20) & (ncct[negative] <= 60)).mean()))
+            in_csf.append(float(((ncct[negative] >= -5) & (ncct[negative] < 20)).mean()))
+        if infarct.any():
+            on_infarct.append(float(negative[infarct].mean()))
+            infarct_with_positive.append(float((tmax[infarct] >= 0).mean()))
+    return {
+        "cases": len(cases),
+        "negative_value_p5_p50_p95_median_across_cases": np.median(values, axis=0).round(2).tolist() if values else None,
+        "share_on_tissue_20_60_hu_p50": _percentiles(in_tissue, (50,)),
+        "share_on_csf_like_minus5_20_hu_p50": _percentiles(in_csf, (50,)),
+        "infarct_on_negative_tmax_p50_p95": _percentiles(on_infarct, (50, 95)),
+        "infarct_with_tmax_at_least_0_p5_p50": _percentiles(infarct_with_positive, (5, 50)),
+    }
+
+
 def read_clinical_tables(root, cases):
     return read_tables(os.path.join(root, "phenotype"), cases)
 
