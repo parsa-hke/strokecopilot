@@ -257,7 +257,7 @@ Kaggle token, Hugging Face token, LLM API keys: Colab Secrets panel only. The pa
 
 - Source: Zenodo, latest record 17652035 (20 November 2025, DOI 10.5281/zenodo.17652035), open access, ~99 GB, one `train.7z`. Record the record ID and md5 in `docs/DATA.md`. Earlier records lack `clinical_data-description.xlsx`, which first appears in 16813698. 149 training cases from two centres. Licence: CC BY-NC-SA 4.0, so non-commercial, and derivatives such as the slim tarball must stay under the same licence. Cite the dataset paper (arXiv:2408.11142) and the challenge paper (arXiv:2408.10966); the Zenodo text gives 2408.09259 for the dataset paper, but that ID resolves to an unrelated paper. Cite TopCoW too if the Circle of Willis masks are used.
 - **Cohort.** Every patient had interventional reperfusion therapy with near-complete recanalisation (mTICI 2c or 3), and follow-up MRI 2–9 days later. Consequences: final infarct is a stronger core proxy than in an untreated cohort but will not generalise to patients who are not reperfused; real cases are not expected to include haemorrhage and offer little variety in recommendations, which is why §9 relies on synthetic scenarios.
-- Contents per case (from the paper; confirm against the archive in Phase 1 and record in `docs/DATA.md`): acute NCCT, CTA, 4D CTP, perfusion maps (CBF, CBV, MTT, Tmax, from icobrain cva), follow-up DWI/ADC with the final infarct mask, a vessel-occlusion mask, an automatically generated Circle of Willis mask, and baseline and outcome CSVs. Preprocessed images and masks are already in NCCT space.
+- Contents per case (file names confirmed against the archive's file list; exact paths in `docs/DATA.md`): acute NCCT, CTA, 4D CTP, perfusion maps (CBF, CBV, MTT, Tmax, from icobrain cva), follow-up DWI/ADC with the final infarct mask, a vessel-occlusion mask, an automatically generated Circle of Willis mask, and baseline and outcome Excel files, one of each per case. Preprocessed images and masks are already in NCCT space.
 - Tabular fields (paper): age, sex, atrial fibrillation, hypertension, diabetes, hyperlipidaemia, anticoagulation, statins, antiplatelets, glucose, leucocytes, CRP, INR, referral type (wake-up, in-house, external), times (onset to door, alert to door, door to imaging, door to groin, door to first series, time of intervention, door to recanalisation), NIHSS, mRS (including premorbid), mTICI. No ASPECTS field is listed. Lab values and times were altered by ±5% for anonymisation, which matters near hard cut-offs such as 4.5 h.
 - What we use:
   - **Input to Vision A:** perfusion maps (and NCCT if useful).
@@ -416,7 +416,7 @@ Acceptance: `pytest tests/test_contract.py` passes; the five fixtures validate; 
 
 Goal: slim tarballs on Drive; Colab template runs end to end on one case; team onboarded.
 
-- [ ] Inspect ISLES'24 archive layout; write `docs/DATA.md` with exact paths and which perfusion maps exist
+- [x] Inspect ISLES'24 archive layout; write `docs/DATA.md` with exact paths and which perfusion maps exist
 - [ ] Decide the common grid (spacing, crop) → record in `manifest.json` and CHANGELOG
 - [ ] Spot-check that the provided infarct masks align with NCCT (the paper says they are already in NCCT space); implement registration only if this fails
 - [ ] Read `clinical_data-description.xlsx`: confirm the fields in §5.1, and tag each column as allowed or forbidden for note generation (§8.3)
