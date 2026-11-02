@@ -2,12 +2,16 @@
 
 The index holds slice, patient and study IDs, so nothing here prints them, and none of this data may
 leave Kaggle (docs/DATA_USE.md). Image channels are brain, subdural, bone, as `prep_rsna` stored them.
+
+Kaggle unpacks archives when a dataset is made, so an attached shard can be a folder of JPEGs and a
+plain CSV instead of a tar and a .csv.gz. Both layouts are read the same way.
 """
 
 import os
 import random
 import re
 import shutil
+import subprocess
 import tarfile
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -18,21 +22,25 @@ import pandas as pd
 
 from strokecopilot.data.prep_rsna import IMAGE_SIZE, LABEL_NAMES, N_SHARDS, SLIM_VERSION, window_image
 
-SHARD_RE = re.compile(rf"^{SLIM_VERSION}_\d+px_s(\d+)(\.tar|_index\.csv\.gz)$")
+DATA_RE = re.compile(rf"^{SLIM_VERSION}_\d+px_s(\d+)(\.tar)?$")
+INDEX_RE = re.compile(rf"^{SLIM_VERSION}_\d+px_s(\d+)_index\.csv(\.gz)?$")
 
 
 def find_shards(root, n_shards=N_SHARDS):
-    """{shard: (tar path, index path)} under root, such as /kaggle/input. Raises if any is missing."""
-    found = {}
-    for folder, _, files in os.walk(root):
-        for name in files:
-            match = SHARD_RE.match(name)
-            if match:
-                found.setdefault(int(match.group(1)), {})[match.group(2)] = os.path.join(folder, name)
-    complete = {shard: (paths[".tar"], paths["_index.csv.gz"]) for shard, paths in found.items() if len(paths) == 2}
+    """{shard: (tar or folder path, index path)} under root, such as /kaggle/input. Raises if any is missing."""
+    data, indexes = {}, {}
+    for folder, subfolders, files in os.walk(root):
+        for name in subfolders + files:
+            path = os.path.join(folder, name)
+            if (match := DATA_RE.match(name)) and (name in files) == name.endswith(".tar"):
+                data.setdefault(int(match.group(1)), path)
+            elif (match := INDEX_RE.match(name)) and name in files:
+                indexes[int(match.group(1))] = path
+        subfolders[:] = [d for d in subfolders if not DATA_RE.match(d)]  # 188,000 JPEGs need no listing here
+    complete = {shard: (data[shard], indexes[shard]) for shard in data if shard in indexes}
     missing = sorted(set(range(n_shards)) - set(complete))
     if missing:
-        raise FileNotFoundError(f"Shards {missing} lack a tar or an index under {root}. Attach every rsna-slim-v1 dataset with Add Input.")
+        raise FileNotFoundError(f"Shards {missing} lack images or an index under {root}. Attach every rsna-slim-v1 dataset with Add Input.")
     return dict(sorted(complete.items()))
 
 
@@ -61,7 +69,11 @@ class ShardReader:
     def __init__(self, tar_path):
         self.path = tar_path
         with tarfile.open(tar_path) as tar:
-            self.offsets = {m.name[: -len(".jpg")]: (m.offset_data, m.size) for m in tar if m.isfile()}
+            self.offsets = {
+                os.path.basename(m.name)[: -len(".jpg")]: (m.offset_data, m.size)
+                for m in tar
+                if m.isfile() and m.name.endswith(".jpg") and not os.path.basename(m.name).startswith("._")  # macOS metadata
+            }
         self._fd = os.open(tar_path, os.O_RDONLY)
 
     def __contains__(self, image_id):
@@ -69,6 +81,9 @@ class ShardReader:
 
     def __len__(self):
         return len(self.offsets)
+
+    def ids(self):
+        return set(self.offsets)
 
     def read_bytes(self, image_id):
         offset, size = self.offsets[image_id]
@@ -79,6 +94,41 @@ class ShardReader:
 
     def close(self):
         os.close(self._fd)
+
+
+class FolderReader:
+    """The same reads from a shard Kaggle unpacked into a folder of JPEGs."""
+
+    def __init__(self, folder):
+        self.path = folder
+        self.paths = {}
+        for parent, _, files in os.walk(folder):
+            for name in files:
+                if name.endswith(".jpg"):
+                    self.paths[name[: -len(".jpg")]] = os.path.join(parent, name)
+
+    def __contains__(self, image_id):
+        return image_id in self.paths
+
+    def __len__(self):
+        return len(self.paths)
+
+    def ids(self):
+        return set(self.paths)
+
+    def read_bytes(self, image_id):
+        with open(self.paths[image_id], "rb") as f:
+            return f.read()
+
+    def read(self, image_id):
+        return decode(self.read_bytes(image_id))
+
+    def close(self):
+        pass
+
+
+def open_shard(path):
+    return FolderReader(path) if os.path.isdir(path) else ShardReader(path)
 
 
 def decode(jpeg):
@@ -94,18 +144,21 @@ def window_hu(hu, size=IMAGE_SIZE):
     return window_image(hu, 1, 0, size)
 
 
-def copy_shard(tar_path, dest_dir):
-    """Copy a shard to local disk, and return the new path and seconds taken."""
+def copy_shard(path, dest_dir):
+    """Put a shard on local disk as one tar, and return the new path and seconds taken. A folder is packed."""
     os.makedirs(dest_dir, exist_ok=True)
     started = time.perf_counter()
-    dest = os.path.join(dest_dir, os.path.basename(tar_path))
-    shutil.copyfile(tar_path, dest)
+    dest = os.path.join(dest_dir, f"{os.path.basename(path).removesuffix('.tar')}.tar")
+    if os.path.isdir(path):
+        subprocess.run(["tar", "-cf", dest, "-C", path, "."], check=True)
+    else:
+        shutil.copyfile(path, dest)
     return dest, time.perf_counter() - started
 
 
 def measure_read(reader, n=2000, threads=1, seed=0):
     """Random reads and decodes per second. Returns numbers only."""
-    ids = random.Random(seed).sample(sorted(reader.offsets), min(n, len(reader)))
+    ids = random.Random(seed).sample(sorted(reader.ids()), min(n, len(reader)))
     started = time.perf_counter()
     if threads == 1:
         for image_id in ids:

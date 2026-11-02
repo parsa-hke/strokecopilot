@@ -109,8 +109,8 @@ Measured over all 149 cases, as counts:
 - **Off-grid:** the one Circle of Willis mask was moved to the NCCT grid.
 - **Crop:** it grew for 3 cases to hold a mask.
 - **Rescued masks:** 4 occlusion masks and 1 infarct mask would have vanished, so each keeps its best voxel.
-- **MTT:** 417,749 non-finite voxels became background. CBF, CBV and Tmax have none.
-- **Label loss, unexplained:** 5 cases lost a Circle of Willis label, 12 labels in all (1–6, 11 and 12 once each; 9 and 10 twice each). Small labels 9 and 10 are expected to vanish. The rest look like one case losing most of its labels, possibly outside the crop, since the crop does not grow for this mask. Not yet diagnosed. It only affects occlusion site, which must return `unknown` when labels are absent.
+- **MTT:** 417,749 non-finite voxels became background, in 21 cases. Most are small (median 250 voxels), and the worst has 225,045, about 1% of a median volume. CBF, CBV and Tmax have none.
+- **Label loss:** 5 cases lost a Circle of Willis label, for two different reasons, checked with `01d_check_slim.ipynb`. In 4 development cases one tiny label (9 or 10, about 0.005 mL, 13–15 voxels) vanished in resampling, which is expected. One held-out case lost 8 labels (1,051 voxels), all outside the crop, so its mask does not sit where the brain does. It is very likely the one off-grid mask, but that link is inferred. We do not look further at a held-out case. v1 stands, and occlusion site must return `unknown` when labels are absent or too far away.
 
 Measured over 129 development cases:
 
@@ -123,8 +123,8 @@ Measured over 129 development cases:
 What this means:
 
 - **Use `native_volumes.csv` for true volumes.** A Tmax error up to about 10 mL is too large near a volume threshold, so read reference `penumbra_ml` from that file, not from the resampled map. Averaging would have been clearly worse.
-- **Some infarct has no perfusion input.** The share of an infarct with Tmax data has a median of 99.4% and p5 of 80.9%. In 15 of 127 cases it is under 90%, and `sub-stroke0094` has none. Vision A cannot learn or be fairly scored on tissue it has no input for, so training and metrics need to take this into account in Phase 2.
-- **Many Tmax values are negative.** Beyond the -30 background, a median of 16% (p95 28%) of remaining Tmax voxels are below zero, which has no obvious physical meaning. Black areas in the figures can be either kind, because the display starts at 0, so "no data" is only measured for -30. This does not change Tmax > 6 s, but Vision A needs a rule for it when normalising.
+- **Some infarct has no usable perfusion input.** Counting only -30 as no data, the share of an infarct with Tmax has a median of 99.4% and p5 of 80.9%, and is under 90% in 15 of 127 cases. Counting only Tmax of 0 or more, it is a median of 95.3% and p5 of 65.1%. `sub-stroke0094` has none. Vision A cannot learn or be fairly scored on tissue it has no input for, so training and metrics need to take this into account in Phase 2.
+- **Many Tmax values are negative, and they are not small.** Beyond -30, a median of 16% (p95 28%) of remaining voxels are below zero, typically from -28 to -0.7 with a median of -14 s, which has no physical meaning as a delay. 43% lie on soft tissue (20–60 HU) and 8% on CSF-like values, so about half lie on neither. A median of 4% (p95 16%) of an infarct lies on them. The cause is unknown; failed perfusion fits are a guess, and -30 may be the lower limit of the same values rather than a separate fill value. **Recommendation for Vision A:** treat all negative Tmax as no reliable data. Tmax > 6 s itself is unaffected, but tissue with a failed fit cannot count as penumbra, so `penumbra_ml` can undercount there.
 
 ### Clinical data
 

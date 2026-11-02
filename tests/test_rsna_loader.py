@@ -101,3 +101,47 @@ def test_measure_read_returns_numbers_only(shards):
 def test_copy_shard(shards, tmp_path):
     dest, seconds = rsna.copy_shard(shards[0][0], str(tmp_path / "local"))
     assert os.path.getsize(dest) == os.path.getsize(shards[0][0]) and seconds >= 0
+
+
+@pytest.fixture
+def unpacked(tmp_path):
+    """Two shards as Kaggle leaves them: a folder of JPEGs and a plain CSV."""
+    _write_shard(tmp_path / "a" / "s0", 0, [_row(0, "a", 10.0), _row(1, "a", 5.0), _row(2, "b", 0.0, ok=False)])
+    _write_shard(tmp_path / "a" / "s1", 1, [_row(3, "b", 5.0)])
+    for shard in (0, 1):
+        folder = tmp_path / "a" / f"s{shard}"
+        tar_path, index_path = prep_rsna.shard_paths(str(folder), shard, SIZE)
+        with tarfile.open(tar_path) as tar:
+            tar.extractall(tar_path[: -len(".tar")], filter="data")
+        os.remove(tar_path)
+        pd.read_csv(index_path).to_csv(index_path[: -len(".gz")], index=False)
+        os.remove(index_path)
+    return tmp_path
+
+
+def test_unpacked_shards_are_found_and_read_like_tars(unpacked):
+    shards = rsna.find_shards(str(unpacked), n_shards=2)
+    assert os.path.isdir(shards[0][0]) and shards[0][1].endswith("_index.csv")
+    assert sorted(rsna.load_index(shards)["image_id"]) == ["ID_0", "ID_1", "ID_3"]
+    reader = rsna.open_shard(shards[0][0])
+    assert isinstance(reader, rsna.FolderReader) and reader.ids() == {"ID_0", "ID_1"}
+    assert abs(int(reader.read("ID_1")[0, 0, 0]) - 41) <= 2
+    assert rsna.measure_read(reader, n=5)["slices"] == 2
+
+
+def test_a_folder_is_packed_into_a_tar_that_reads_the_same(unpacked, tmp_path):
+    shards = rsna.find_shards(str(unpacked), n_shards=2)
+    dest, _ = rsna.copy_shard(shards[0][0], str(tmp_path / "local"))
+    assert dest.endswith("_s00.tar")
+    reader = rsna.open_shard(dest)
+    assert isinstance(reader, rsna.ShardReader) and reader.ids() == {"ID_0", "ID_1"}
+    assert abs(int(reader.read("ID_0")[0, 0, 0]) - 40) <= 2
+    reader.close()
+
+
+def test_a_folder_without_an_index_is_missing(unpacked):
+    for name in os.listdir(unpacked / "a" / "s1"):
+        if name.endswith(".csv"):
+            os.remove(unpacked / "a" / "s1" / name)
+    with pytest.raises(FileNotFoundError, match=r"\[1\]"):
+        rsna.find_shards(str(unpacked), n_shards=2)

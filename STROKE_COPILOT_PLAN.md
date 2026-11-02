@@ -543,7 +543,7 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 
 **Occlusion site.** Rule-based from the Circle of Willis label nearest the occlusion mask, because most masks do not overlap any label. ICA and basilar need the mask within a distance limit, set when `volumes.py` is built. Nearest an MCA label is `unknown`, because the labels cannot separate M1 from M2 and the two lead to different thrombectomy recommendations. An empty mask or anything ambiguous is also `unknown`. A learned classifier is out of scope unless time allows.
 
-**Tmax coverage.** Tmax -30 means no perfusion data, and in 15 of 127 development cases over 10% of the infarct lies in such tissue (`docs/DATA.md`). Vision A must not be expected to find infarct it has no input for, and `penumbra_ml` can undercount there. Reference volumes come from `native_volumes.csv`, because resampling moves Tmax > 6 s by up to about 10 mL.
+**Tmax coverage.** Tmax -30 means no perfusion data, and negative values are not physically meaningful either, so treat all Tmax below 0 as no reliable data. Only a median of 95.3% (p5 65.1%) of a development infarct has Tmax of 0 or more (`docs/DATA.md`). Vision A must not be expected to find infarct it has no input for, and `penumbra_ml` can undercount there. Reference volumes come from `native_volumes.csv`, because resampling moves Tmax > 6 s by up to about 10 mL.
 
 **ASPECTS.** Not produced (DEC-9). The field stays null, and the reasoner must treat it as unknown.
 
