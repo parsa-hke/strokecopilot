@@ -145,3 +145,41 @@ def test_a_folder_without_an_index_is_missing(unpacked):
             os.remove(unpacked / "a" / "s1" / name)
     with pytest.raises(FileNotFoundError, match=r"\[1\]"):
         rsna.find_shards(str(unpacked), n_shards=2)
+
+
+def test_pack_shard_stores_a_folder_as_one_file_that_reads_the_same(unpacked, tmp_path, capsys):
+    shards = rsna.find_shards(str(unpacked), n_shards=2)
+    out = tmp_path / "out" / "rsna_slim_v1_32px_s00.shard"
+    out.parent.mkdir()
+    result = rsna.pack_shard(shards[0][0], str(out), threads=2, every=1)
+    assert result["slices"] == 2 and result["threads"] == 2
+    assert not (tmp_path / "out" / "rsna_slim_v1_32px_s00.shard.part").exists()
+    assert "ID_" not in capsys.readouterr().out
+    reader = rsna.open_shard(str(out))
+    assert isinstance(reader, rsna.ShardReader) and reader.ids() == {"ID_0", "ID_1"}
+    assert abs(int(reader.read("ID_1")[0, 0, 0]) - 41) <= 2
+    reader.close()
+    first = out.read_bytes()
+    rsna.pack_shard(shards[0][0], str(out), threads=1)
+    assert out.read_bytes() == first
+
+
+def test_a_single_file_wins_over_a_folder_when_both_are_attached(unpacked):
+    folder = rsna.find_shards(str(unpacked), n_shards=2)[0][0]
+    new = unpacked / "new"
+    new.mkdir()
+    rsna.pack_shard(folder, str(new / f"{os.path.basename(folder)}.shard"))
+    shards = rsna.find_shards(str(unpacked), n_shards=2)
+    assert shards[0][0].endswith(".shard") and os.path.isdir(shards[1][0])
+
+
+def test_offsets_from_a_local_copy_read_the_attached_file(unpacked, tmp_path):
+    folder = rsna.find_shards(str(unpacked), n_shards=2)[0][0]
+    attached = tmp_path / "rsna_slim_v1_32px_s00.shard"
+    rsna.pack_shard(folder, str(attached))
+    local, _ = rsna.copy_shard(str(attached), str(tmp_path / "local"))
+    assert local.endswith("_s00.tar")
+    offsets = rsna.ShardReader(local).offsets
+    reader = rsna.ShardReader(str(attached), offsets=offsets)
+    assert abs(int(reader.read("ID_0")[0, 0, 0]) - 40) <= 2
+    reader.close()

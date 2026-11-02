@@ -4,7 +4,9 @@ The index holds slice, patient and study IDs, so nothing here prints them, and n
 leave Kaggle (docs/DATA_USE.md). Image channels are brain, subdural, bone, as `prep_rsna` stored them.
 
 Kaggle unpacks archives when a dataset is made, so an attached shard can be a folder of JPEGs and a
-plain CSV instead of a tar and a .csv.gz. Both layouts are read the same way.
+plain CSV instead of a tar and a .csv.gz. First reads from such a folder run at about 25 slices per
+second, so `pack_shard` stores a shard as one tar named .shard, which Kaggle should leave alone. All
+layouts are read the same way, and a single file wins if both are attached.
 """
 
 import os
@@ -15,28 +17,32 @@ import subprocess
 import tarfile
 import time
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing.pool import ThreadPool
 
 import cv2
 import numpy as np
 import pandas as pd
 
-from strokecopilot.data.prep_rsna import IMAGE_SIZE, LABEL_NAMES, N_SHARDS, SLIM_VERSION, window_image
+from strokecopilot.data.prep_rsna import IMAGE_SIZE, LABEL_NAMES, N_SHARDS, SLIM_VERSION, _write_jpeg, window_image
 
-DATA_RE = re.compile(rf"^{SLIM_VERSION}_\d+px_s(\d+)(\.tar)?$")
+DATA_RE = re.compile(rf"^{SLIM_VERSION}_\d+px_s(\d+)(\.tar|\.shard)?$")
 INDEX_RE = re.compile(rf"^{SLIM_VERSION}_\d+px_s(\d+)_index\.csv(\.gz)?$")
 
 
 def find_shards(root, n_shards=N_SHARDS):
-    """{shard: (tar or folder path, index path)} under root, such as /kaggle/input. Raises if any is missing."""
-    data, indexes = {}, {}
+    """{shard: (file or folder path, index path)} under root, such as /kaggle/input. Raises if any is missing."""
+    single_files, folders, indexes = {}, {}, {}
     for folder, subfolders, files in os.walk(root):
-        for name in subfolders + files:
-            path = os.path.join(folder, name)
-            if (match := DATA_RE.match(name)) and (name in files) == name.endswith(".tar"):
-                data.setdefault(int(match.group(1)), path)
-            elif (match := INDEX_RE.match(name)) and name in files:
-                indexes[int(match.group(1))] = path
+        for name in files:
+            if (match := DATA_RE.match(name)) and match.group(2):
+                single_files[int(match.group(1))] = os.path.join(folder, name)
+            elif match := INDEX_RE.match(name):
+                indexes[int(match.group(1))] = os.path.join(folder, name)
+        for name in subfolders:
+            if (match := DATA_RE.match(name)) and not match.group(2):
+                folders[int(match.group(1))] = os.path.join(folder, name)
         subfolders[:] = [d for d in subfolders if not DATA_RE.match(d)]  # 188,000 JPEGs need no listing here
+    data = {**folders, **single_files}
     complete = {shard: (data[shard], indexes[shard]) for shard in data if shard in indexes}
     missing = sorted(set(range(n_shards)) - set(complete))
     if missing:
@@ -64,17 +70,25 @@ def slices_of_scan(index, series_id):
 
 
 class ShardReader:
-    """Random access to one uncompressed tar. Reads are thread-safe, because each states its offset."""
+    """Random access to one uncompressed tar. Reads are thread-safe, because each states its offset.
 
-    def __init__(self, tar_path):
+    Listing a tar reads every member's header, which may be very slow on an attached dataset, so list
+    a local copy and pass its offsets to read the same file elsewhere.
+    """
+
+    def __init__(self, tar_path, offsets=None):
         self.path = tar_path
+        self.offsets = offsets if offsets is not None else self._list(tar_path)
+        self._fd = os.open(tar_path, os.O_RDONLY)
+
+    @staticmethod
+    def _list(tar_path):
         with tarfile.open(tar_path) as tar:
-            self.offsets = {
+            return {
                 os.path.basename(m.name)[: -len(".jpg")]: (m.offset_data, m.size)
                 for m in tar
                 if m.isfile() and m.name.endswith(".jpg") and not os.path.basename(m.name).startswith("._")  # macOS metadata
             }
-        self._fd = os.open(tar_path, os.O_RDONLY)
 
     def __contains__(self, image_id):
         return image_id in self.offsets
@@ -148,7 +162,7 @@ def copy_shard(path, dest_dir):
     """Put a shard on local disk as one tar, and return the new path and seconds taken. A folder is packed."""
     os.makedirs(dest_dir, exist_ok=True)
     started = time.perf_counter()
-    dest = os.path.join(dest_dir, f"{os.path.basename(path).removesuffix('.tar')}.tar")
+    dest = os.path.join(dest_dir, f"{os.path.basename(path).removesuffix('.tar').removesuffix('.shard')}.tar")
     if os.path.isdir(path):
         subprocess.run(["tar", "-cf", dest, "-C", path, "."], check=True)
     else:
@@ -168,3 +182,23 @@ def measure_read(reader, n=2000, threads=1, seed=0):
             list(pool.map(reader.read, ids))
     seconds = time.perf_counter() - started
     return {"slices": len(ids), "threads": threads, "slices_per_second": round(len(ids) / max(seconds, 1e-6), 1)}
+
+
+def pack_shard(folder, out_path, threads=16, every=20000):
+    """Store a shard's folder as one tar, reading with threads. Returns numbers only.
+
+    Reads may finish out of order, but they are written in sorted order, so reruns give identical
+    files. The output keeps a .part name until it is complete.
+    """
+    reader = FolderReader(folder)
+    ids = sorted(reader.ids())
+    part = f"{out_path}.part"
+    started = time.perf_counter()
+    with ThreadPool(threads) as pool, tarfile.open(part, "w") as tar:
+        for done, (image_id, jpeg) in enumerate(zip(ids, pool.imap(reader.read_bytes, ids, chunksize=32)), 1):
+            _write_jpeg(tar, image_id, jpeg)
+            if done % every == 0:
+                print(f"{done:,} of {len(ids):,} slices, {done / (time.perf_counter() - started):.0f} per second", flush=True)
+    os.replace(part, out_path)
+    seconds = time.perf_counter() - started
+    return {"slices": len(ids), "threads": threads, "seconds": round(seconds), "slices_per_second": round(len(ids) / max(seconds, 1e-6), 1), "gib": round(os.path.getsize(out_path) / 1024 ** 3, 3)}

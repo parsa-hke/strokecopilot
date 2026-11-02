@@ -188,10 +188,23 @@ Terms limit where this data can go; see `DATA_USE.md`. Built on Kaggle from the 
 |---|---|---:|---:|---:|---|
 | 0 | `rsna-slim-v1-s0` | 188,251 | 0 | 4.371 | Dataset created |
 | 1 | `rsna-slim-v1-s1` | 187,442 | 0 | 4.352 | Dataset created |
-| 2 | `rsna-slim-v1-s2` | 188,381 | 1 | 4.373 | Built and verified; dataset not created yet |
-| 3 | `rsna-slim-v1-s3` | 188,729 | 0 | 4.378 | Built and verified; dataset not created yet |
+| 2 | `rsna-slim-v1-s2` | 188,381 | 1 | 4.373 | Dataset created |
+| 3 | `rsna-slim-v1-s3` | 188,729 | 0 | 4.378 | Dataset created |
 | Total | | 752,803 | 1 | 17.474 | |
 
 Slices in the shards add up to the labelled total, so 752,802 images are usable. The failed slice raised a `ValueError` and is not in the tar. It stays in shard 2's index with `ok` false, so loaders must filter on `ok`. Its `z_mm` and `pixel_spacing_mm` are empty.
 
-The reports' `projected_total_gb` (16.94) counts JPEG bytes only; the total above includes tar overhead. Reading speed from an attached dataset has not been measured. Excluded scans: none so far.
+The reports' `projected_total_gb` (16.94) counts JPEG bytes only; the total above includes tar overhead. Excluded scans: none so far.
+
+### What the datasets hold, and read speed
+
+Measured on 3 November 2026 with `02b_rsna_read_speed.ipynb` on a 4-CPU Kaggle runtime. Kaggle unpacked each tar when the dataset was made, so each shard is a folder of JPEGs, and each index a plain CSV. Every shard's images match its index. There are 752,802 readable slices, 21,744 scans and 18,938 patients. 14.34% of slices and 40.85% of scans have a bleed. Scans have 28–44 slices (p5–p95), median 33.
+
+| Reading from | Threads | Slices per second |
+|---:|---:|---:|
+| Attached folder, first read | 1 | 25 |
+| Attached folder, same files again | 4 | 1,726 (cached, so not a real speed) |
+| Local tar, just written | 1 | 847 |
+| Local tar, same files again | 4 | 1,856 |
+
+Packing one shard from its folder into a local tar took 7,579 s (2.1 hours), which is also 25 files per second. The first read from a folder is therefore too slow to train on: about 8.4 hours for one pass or to pack all four shards. A local tar is fast enough, at about 7 minutes a pass for reading and decoding alone. Local speeds are best-case, because the file had just been written and so was probably in memory. The true 4-thread speed from a folder on first read, and the speed of copying one large file from an attached dataset, are not measured.

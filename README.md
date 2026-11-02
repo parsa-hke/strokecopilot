@@ -63,7 +63,8 @@ Badges point at the notebooks once they exist.
 | `01d_check_slim` | Phase 1: read the tarball through the loader; label, MTT and Tmax questions | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01d_check_slim.ipynb) |
 | `02_prep_rsna` | RSNA ICH → 320 px JPEG tar shards (runs on Kaggle) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/02_prep_rsna.ipynb) |
 | `02a_rsna_kaggle_timing` | Phase 0: time full RSNA on Kaggle | Upload to Kaggle; this one does not run on Colab |
-| `02b_rsna_read_speed` | Phase 1: check the four RSNA datasets and measure read speed on Kaggle | Upload to Kaggle; this only runs there |
+| `02b_rsna_read_speed` | Phase 1: check the RSNA shards and measure read speed on Kaggle | Upload to Kaggle; this only runs there |
+| `02c_rsna_repack` | Phase 1: store an RSNA shard as one file on Kaggle | Upload to Kaggle; this only runs there |
 | `10_visionA_nnunet` | Vision A: nnU-Net training | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/10_visionA_nnunet.ipynb) |
 | `11_visionA_thresholds` | Vision A: threshold baseline | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/11_visionA_thresholds.ipynb) |
 | `20_visionB_train` | Vision B: haemorrhage classifier | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/20_visionB_train.ipynb) |

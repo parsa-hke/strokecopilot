@@ -181,7 +181,8 @@ strokecopilot/
 │   ├── 01_prep_isles24.ipynb      # runs prep_isles24; produces slim tarball
 │   ├── 01d_check_slim.ipynb       # Phase 1: reads the tarball through the loader; label, MTT and Tmax questions
 │   ├── 02_prep_rsna.ipynb         # runs on Kaggle, once per shard
-│   ├── 02b_rsna_read_speed.ipynb  # Phase 1: runs on Kaggle; checks the four datasets and measures read speed
+│   ├── 02b_rsna_read_speed.ipynb  # Phase 1: runs on Kaggle; checks the four shards and measures read speed
+│   ├── 02c_rsna_repack.ipynb      # Phase 1: runs on Kaggle, once per shard; stores a shard as one file
 │   ├── 02a_rsna_kaggle_timing.ipynb  # Phase 0: runs on Kaggle; times full RSNA for DEC-17 (self-contained)
 │   ├── 10_visionA_nnunet.ipynb
 │   ├── 11_visionA_thresholds.ipynb
