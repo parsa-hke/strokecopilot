@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-11-02 — Claude Code session (DEC-6 changed: onboarding deferred)
+- **Parsa changed DEC-6:** no fixed onboarding date. Parsa sends teammates instructions when assigning them work. Nobody has been onboarded yet; this is deferred, not done.
+- **Phase 1 acceptance changed:** tarballs ready, loaders working on real data for both datasets, and RSNA read speed measured and fit for training. It was every teammate running `00_template`.
+- `00_template`, onboarding and Phase 2 assignment moved to a deferred list in §7, unticked. `00_template` gets written when the first teammate is brought in. Week 1 in §7 now starts when the first Phase 2 tasks are assigned.
+- Still needed before anyone joins: the shared Drive folder, and their acceptance of the RSNA competition rules.
+- Notion sync: pending. Decisions → update DEC-6. Tasks → mark the onboarding task deferred.
+
 ## 2026-11-02 — Claude Code session (Phase 1: RSNA shards are unpacked on Kaggle)
 - The first run of `02b_rsna_read_speed.ipynb` showed all four datasets attached, so `-s2` and `-s3` exist, but `-s0` holds a folder instead of a `.tar`: Kaggle unpacks archives when a dataset is made. The other three are assumed the same, because no shard was found.
 - `rsna.py` now reads both layouts: `FolderReader`, `open_shard`, and `copy_shard` packs a folder into one local tar. `02b` measures speed from the attached folder and from a local tar, and the time to pack, which is the set-up cost of a session.

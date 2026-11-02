@@ -83,7 +83,7 @@ These are recorded in the Notion Decisions log. Do not change them without a new
 | DEC-3 | Compute: Google Colab Pro. Storage: shared Google Drive folder `StrokeCopilot/`. Training data is copied to Colab local disk as one tarball per session — never read per-file through the Drive mount | Decided |
 | DEC-4 | Contract-first: `schemas/vision_output.json` is frozen at the end of Phase 0. NLP builds against hand-written fixtures until Phase 3 | Decided |
 | DEC-5 | Evaluation split is fixed on day one: 5 folds + ~20 held-out cases. Held-out cases are untouched until Phase 4 | Decided |
-| DEC-6 | The lead builds Phase 0–1 alone, then onboards the team within 7–10 days of 29 Oct 2026 | Decided |
+| DEC-6 | The lead builds Phase 0–1 alone, then sends teammates instructions when assigning them work, with no fixed onboarding date. Changed by Parsa on 2 Nov 2026; it was within 7–10 days of 29 Oct 2026 | Decided |
 | DEC-7 | `penumbra_ml` is the total Tmax > 6 s volume, core included; salvageable tissue is `mismatch_volume_ml` | Decided |
 | DEC-8 | The rule baseline is the 2026 AHA/ASA guideline plus DAWN and DEFUSE-3, not the 2018/2019 guideline | Decided |
 | DEC-9 | The contract carries a nullable `aspects` field. No ASPECTS model is built: it is null from the real pipeline and set only in fixtures and synthetic scenarios | Decided |
@@ -396,7 +396,7 @@ Passage IDs above are illustrative. A claim cites everything it rests on, and `d
 
 ## 7. Phases
 
-Weeks are relative to the kickoff (week 1 starts when the team is onboarded). Deadline: _fill in once professors confirm_. If the deadline is shorter than 8 weeks, cut Phase 3 scope first (fewer LLMs, no occlusion-site model), never Phase 4.
+Weeks are relative to the kickoff (week 1 starts when the lead assigns the first Phase 2 tasks). Deadline: _fill in once professors confirm_. If the deadline is shorter than 8 weeks, cut Phase 3 scope first (fewer LLMs, no occlusion-site model), never Phase 4.
 
 ### Phase 0 — Setup (this week; lead alone)
 
@@ -418,9 +418,9 @@ Goal: decisions recorded, contract frozen, data downloading, repo scaffolded.
 
 Acceptance: `pytest tests/test_contract.py` passes; the five fixtures validate; the ISLES'24 download is complete or in progress with its md5 check queued; full RSNA is attached on Kaggle and timed.
 
-### Phase 1 — Data (week 1; lead alone, then onboard)
+### Phase 1 — Data (week 1; lead alone)
 
-Goal: slim tarballs on Drive; Colab template runs end to end on one case; team onboarded.
+Goal: slim tarballs ready, and loaders working on real data for both datasets. Teammates are brought in later (DEC-6).
 
 - [x] Inspect ISLES'24 archive layout; write `docs/DATA.md` with exact paths and which perfusion maps exist
 - [x] Decide the common grid (spacing, crop) → record in `manifest.json` and CHANGELOG
@@ -431,12 +431,15 @@ Goal: slim tarballs on Drive; Colab template runs end to end on one case; team o
 - [x] `prep_rsna.py` + `02_prep_rsna.ipynb` on Kaggle: 320 px windowed JPEG tar shards plus a scan-level index with patient IDs and slice positions; patient-level splits are made from that index
 - [x] `splits.py` + `splits/folds.json` generated with fixed seed; `tests/test_splits.py`
 - [ ] `isles24.py`: `load_case(id)` returns arrays + clinical row + spacing; `rsna.py` equivalents
-- [ ] `00_template.ipynb`: install, mount, copy tarball, load one case, show maps + mask + clinical row. Must run top to bottom in five minutes on a T4
 - [ ] README with Open-in-Colab badges
-- [ ] Onboard the team: share repo + Notion; fill the Person column; everyone runs `00_template`
-- [ ] Assign Phase 2 tasks per role
 
-Acceptance: every teammate has run `00_template` successfully and screenshotted the output into the Notion onboarding task.
+Acceptance: `slim/isles24_slim_v1.tar` and the RSNA shards are ready, `isles24.py` and `rsna.py` work on the real data, and RSNA read speed is measured and fit for training. Changed by Parsa on 2 November 2026 (DEC-6); it was every teammate running `00_template`.
+
+**Deferred, not done (DEC-6).** Do these when the lead first brings someone in. Nobody has been onboarded yet:
+
+- [ ] `00_template.ipynb`: install, mount, copy tarball, load one case, show maps + mask + clinical row, and warn against opening or attaching `splits/folds.json`. Must run top to bottom in five minutes on a T4
+- [ ] Onboard each teammate as they are assigned work: share repo + Notion + the Drive folder; fill the Person column; they accept the RSNA competition rules before getting dataset access; they run `00_template`
+- [ ] Assign Phase 2 tasks per role, with the notes in `docs/DATA.md`: Tmax and `native_volumes.csv` for Vision A; missing clinical data, time text and `unknown` occlusion site for NLP A
 
 ### Phase 2 — Baselines (weeks 1–2; whole team)
 

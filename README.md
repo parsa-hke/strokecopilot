@@ -55,7 +55,7 @@ Badges point at the notebooks once they exist.
 | Notebook | Purpose | |
 |---|---|---|
 | `00_download_isles24` | Phase 0: download ISLES'24 to Drive and verify md5 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/00_download_isles24.ipynb) |
-| `00_template` | Install, mount Drive, copy tarball, load one case | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/00_template.ipynb) |
+| `00_template` | Install, mount Drive, copy tarball, load one case | Not written yet; comes when the first teammate is brought in |
 | `01a_list_isles24` | Phase 1: list the ISLES'24 archive without extracting it | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01a_list_isles24.ipynb) |
 | `01b_clinical_isles24` | Phase 1: survey the ISLES'24 clinical columns | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01b_clinical_isles24.ipynb) |
 | `01c_unpack_split_survey` | Phase 1: working copy, fixed split, spot-check and grid evidence | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01c_unpack_split_survey.ipynb) |
