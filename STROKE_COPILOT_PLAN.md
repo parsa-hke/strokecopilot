@@ -176,6 +176,7 @@ strokecopilot/
 │   ├── 00_download_isles24.ipynb  # Phase 0: resumable download to raw/ + md5 (self-contained)
 │   ├── 00_template.ipynb          # install, mount, copy tarball, load one case
 │   ├── 01a_list_isles24.ipynb     # Phase 1: lists the raw archive without extracting; layout, maps, decode cost
+│   ├── 01b_clinical_isles24.ipynb # Phase 1: extracts the Excel files; data dictionary and aggregate column survey
 │   ├── 01_prep_isles24.ipynb      # runs prep_isles24; produces slim tarball
 │   ├── 02_prep_rsna.ipynb         # runs on Kaggle, once per shard
 │   ├── 02a_rsna_kaggle_timing.ipynb  # Phase 0: runs on Kaggle; times full RSNA for DEC-17 (self-contained)

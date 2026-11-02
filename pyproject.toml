@@ -16,6 +16,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 rsna = ["numpy", "pandas", "pydicom>=2.3", "opencv-python-headless"]
+isles = ["pandas", "openpyxl"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/strokecopilot"]

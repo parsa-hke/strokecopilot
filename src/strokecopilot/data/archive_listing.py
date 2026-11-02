@@ -21,26 +21,37 @@ MAX_SHARED_SHOWN = 40
 MAX_MISSING_SHOWN = 20
 
 
+def _run_with_heartbeat(cmd, stdout, timeout_s, heartbeat_s, doing):
+    """Run a 7z command, printing progress, and return the seconds it took."""
+    started = last = time.time()
+    proc = subprocess.Popen(cmd, stdout=stdout, stderr=subprocess.PIPE, text=True)
+    while proc.poll() is None:
+        time.sleep(min(heartbeat_s, 1))
+        now = time.time()
+        if now - started > timeout_s:
+            proc.kill()
+            raise TimeoutError(f"7z took over {timeout_s} s {doing}. Reconnect and run again.")
+        if now - last >= heartbeat_s:
+            print(f"Still {doing}: {now - started:.0f} s", flush=True)
+            last = now
+    if proc.returncode:
+        raise RuntimeError(f"7z exited with {proc.returncode}: {proc.stderr.read()[-800:]}")
+    return time.time() - started
+
+
 def list_archive(archive, out_path, seven_zip="7z", timeout_s=1800, heartbeat_s=30):
     """Write `7z l -slt` output to out_path. Reads the archive only; out_path appears only on success."""
     part = f"{out_path}.part"
-    started = time.time()
     with open(part, "w") as out:
-        proc = subprocess.Popen([seven_zip, "l", "-slt", archive], stdout=out, stderr=subprocess.PIPE, text=True)
-        last = started
-        while proc.poll() is None:
-            time.sleep(min(heartbeat_s, 1))
-            now = time.time()
-            if now - started > timeout_s:
-                proc.kill()
-                raise TimeoutError(f"7z listing took over {timeout_s} s. Reconnect and run again.")
-            if now - last >= heartbeat_s:
-                print(f"Still reading the file list: {now - started:.0f} s", flush=True)
-                last = now
-    if proc.returncode:
-        raise RuntimeError(f"7z exited with {proc.returncode}: {proc.stderr.read()[-800:]}")
+        seconds = _run_with_heartbeat([seven_zip, "l", "-slt", archive], out, timeout_s, heartbeat_s, "reading the file list")
     os.replace(part, out_path)
-    return time.time() - started
+    return seconds
+
+
+def extract_members(archive, dest, members, seven_zip="7z", timeout_s=1800, heartbeat_s=30):
+    """Extract paths or wildcards from the archive into dest, keeping their folders."""
+    cmd = [seven_zip, "x", archive, f"-o{dest}", "-y", "-bd", *members]
+    return _run_with_heartbeat(cmd, subprocess.DEVNULL, timeout_s, heartbeat_s, "extracting")
 
 
 def _fields(lines):

@@ -160,3 +160,11 @@ def test_list_archive_prints_heartbeat_and_times_out(tmp_path, capsys):
     with pytest.raises(TimeoutError):
         al.list_archive("x.7z", str(out), seven_zip=_script(tmp_path, "sleep 30"), timeout_s=1)
     assert not out.exists()
+
+
+def test_extract_members_passes_paths_and_raises_on_failure(tmp_path):
+    log = tmp_path / "args.txt"
+    al.extract_members("x.7z", "/d", ["a/b.xlsx", "c/*"], seven_zip=_script(tmp_path, f'echo "$@" > {log}'))
+    assert log.read_text().strip() == "x x.7z -o/d -y -bd a/b.xlsx c/*"
+    with pytest.raises(RuntimeError, match="broken"):
+        al.extract_members("x.7z", "/d", ["a"], seven_zip=_script(tmp_path, "echo broken >&2; exit 2"))
