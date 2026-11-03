@@ -463,7 +463,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 - [ ] `reasoner/run.py` v0 with `prompts/reasoner_v1.md`: fixture JSON + note + retrieved passages → `recommendation.json`; run on all five fixtures with one model
 
 **NLP B (verifier & eval)**
-- [ ] Write the hallucination metric definition (§8.4) in `docs/` and Notion — before code
+- [x] Write the hallucination metric definition (§8.4) in `docs/` and Notion — before code (`docs/HALLUCINATION_METRIC.md`, approved 3 Nov 2026)
 - [ ] `claims.py`: rationale → atomic claims (LLM-assisted with `prompts/claim_extractor_v1.md`, plus a rule-based numeric extractor)
 - [ ] `trace.py`: numeric claims vs vision JSON (after rounding); patient facts vs note; rule claims vs passage text (embedding similarity + NLI or LLM judge — pick one, record it)
 - [ ] `metrics.py`: hallucination rate, critical hallucination rate, omission rate; bootstrap CIs
@@ -577,7 +577,7 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 3. Return `recommendation.json` (§6.4) with every rationale claim carrying its `sources` and `derived` flag.
 4. Quote numbers exactly as given; treat `null` as unknown; list uncertainties.
 
-Providers: thin wrappers with identical signatures for each model; temperature 0; log the full prompt and response to the run folder.
+Providers: thin wrappers with identical signatures for each model; temperature 0 where the provider allows it, otherwise the provider default (current Claude models reject the setting), with a repeat sample to show run-to-run spread (`docs/HALLUCINATION_METRIC.md` §6); log the full prompt and response to the run folder.
 
 **Clinical rulebook summary (for orientation only — the corpus is the source of truth).** Checked on 30 October 2026 against the primary text of the 2026 AHA/ASA guideline (*Stroke* 2026;57:e316–e436), adults only. COR = class of recommendation; section numbers are the guideline's.
 - Thrombolysis, within 4.5 h (§4.6.1): COR 1, for disabling deficits, regardless of NIHSS, starting as fast as possible and without waiting for CTA or perfusion imaging. Mild non-disabling deficits: COR 3 no benefit. Tenecteplase 0.25 mg/kg (max 25 mg) or alteplase (§4.6.2).
@@ -611,7 +611,7 @@ Providers: thin wrappers with identical signatures for each model; temperature 0
 **Traceable.** A claim is traceable if every part of it is supported by one or more of the following, and, for a `derived` claim, the calculation or comparison is also correct (checked in code where numeric):
 - (a) a field in `vision_output.json`, matching after rounding to one decimal;
 - (b) a statement in the triage note (string/number match against the generating clinical row);
-- (c) a passage in the corpus — checked by embedding similarity above a threshold *and* an entailment judgement (NLI model or LLM judge; pick one in Phase 2 and record it).
+- (c) a passage in the corpus — checked by embedding similarity above a threshold *and* an entailment judgement by an LLM judge (chosen over NLI on 3 November 2026, because misapplied-rule checks need scope reasoning that NLI models handle poorly; the judge model is picked by seeded-error recall in Phase 2). Full definition: `docs/HALLUCINATION_METRIC.md`.
 
 **Hallucination.** A claim that is not traceable. Sub-types: wrong number, invented finding, wrong rule (cited passage does not say that), misapplied rule (the passage says it, but its scope or exceptions do not fit this patient), faulty derivation, uncited rule (true rule, no source), mis-attributed source (claim is true but the model's declared source is wrong).
 
@@ -623,7 +623,7 @@ Providers: thin wrappers with identical signatures for each model; temperature 0
 
 **Verifier validity.** Plant known fabrications of each sub-type in otherwise clean rationales (`seeded_errors.py`) and report recall per sub-type, plus the false-flag rate on clean rationales. This gives ground truth without depending on the size of the human sample.
 
-**Models compared.** Minimum three: one frontier API model, one open mid-size model, one small medical model. Same prompt version, same retrieval, same inputs, temperature 0. Exact list → Decisions row.
+**Models compared.** Minimum three: one frontier API model, one open mid-size model, one small medical model. Same prompt version, same retrieval, same inputs, temperature 0 where allowed (§8.3). Exact list → Decisions row.
 
 **Experimental arms.** (1) With vs without retrieval: does grounding reduce hallucination? (2) Ground-truth vs predicted vision values: how much do vision errors change decisions and claims? Arm 1 runs on synthetic scenarios and sampled training cases; arm 2 runs on real cases, with held-out cases only in Phase 4.
 
@@ -664,7 +664,7 @@ Ground truth for "correct recommendation" is derived mechanically from the groun
 | 149 cases is small; noisy Dice | high | Report CIs; lean on volume error; cross-validation; never claim SOTA |
 | Guideline PDFs hard to parse | medium | Manual cleanup of the ~50 key passages is acceptable; record it |
 | Verifier itself hallucinates (LLM judge) | medium | Seeded-error recall; human adjudication sample; rule-based numeric checks that do not use an LLM; report verifier agreement |
-| LLM API cost | low | Temperature 0, cached prompts, small sample of real cases; one API model only |
+| LLM API cost | medium | About $100 of Claude credits: cached prompts, Batch API, judge model chosen by measured recall and cost, small sample of real cases; one API model only |
 | Full RSNA training exceeds Kaggle limits | medium | Timing test in Phase 0; checkpoint and resume; smaller image size; teammates' own GPU quotas; fall back to a whole-scan subset via a Decisions row |
 | Team member drops or is unavailable | medium | Every component has a baseline another person can finish; contract isolates failures |
 | Scope creep (occlusion classifier, per-subtype bleeds, patient explainer) | high | Anything not in §7 needs a Decisions row; cut Phase 3 extras before touching Phase 4 |

@@ -66,7 +66,7 @@ Badges point at the notebooks once they exist.
 | `02b_rsna_read_speed` | Phase 1: check the RSNA shards and measure read speed on Kaggle | Upload to Kaggle; this only runs there |
 | `02c_rsna_repack` | Phase 1: store an RSNA shard as one file on Kaggle | Upload to Kaggle; this only runs there |
 | `10_visionA_nnunet` | Vision A: nnU-Net training | Not written yet (Phase 2 or later) |
-| `11_visionA_thresholds` | Vision A: threshold baseline | Not written yet (Phase 2 or later) |
+| `11_visionA_thresholds` | Phase 2: threshold baseline (EXP-1) and occlusion-to-label distances | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/11_visionA_thresholds.ipynb) |
 | `20_visionB_train` | Vision B: haemorrhage classifier | Not written yet (Phase 2 or later) |
 | `30_nlpA_corpus` | NLP A: corpus ingestion and retrieval | Not written yet (Phase 2 or later) |
 | `31_nlpA_reasoner` | NLP A: reasoner | Not written yet (Phase 2 or later) |
