@@ -207,4 +207,17 @@ Measured on 3 November 2026 with `02b_rsna_read_speed.ipynb` on a 4-CPU Kaggle r
 | Local tar, just written | 1 | 847 |
 | Local tar, same files again | 4 | 1,856 |
 
-Packing one shard from its folder into a local tar took 7,579 s (2.1 hours), which is also 25 files per second. The first read from a folder is therefore too slow to train on: about 8.4 hours for one pass or to pack all four shards. A local tar is fast enough, at about 7 minutes a pass for reading and decoding alone. Local speeds are best-case, because the file had just been written and so was probably in memory. The true 4-thread speed from a folder on first read, and the speed of copying one large file from an attached dataset, are not measured.
+Packing one shard from its folder into a local tar took 7,579 s (2.1 hours), which is also 25 files per second. The first read from a folder is therefore too slow to train on: about 8.4 hours for one pass or to pack all four shards. A local tar is fast enough, at about 7 minutes a pass for reading and decoding alone. Local speeds are best-case, because the file had just been written and so was probably in memory. 
+
+**Re-store test on shard 0, 3 November 2026.** Kaggle keeps a file named `.shard` whole, while a `.tar` next to it is unpacked, confirmed with a small test and then with the real 4.371 GiB file. Packing shard 0 with `02c_rsna_repack.ipynb` and 16 threads took 748 s, at 252 slices per second.
+
+| Reading from | Threads | Slices per second |
+|---:|---:|---:|
+| Attached `.shard`, random reads | 1 | 16.5 |
+| Attached `.shard`, random reads | 4 | 15.3 |
+| Local copy, different slices each time | 1 | 877 |
+| Local copy, different slices each time | 4 | 2,193 |
+
+Copying the file to local disk took 103 s (about 43 MiB/s) and listing it 17.5 s. **Always copy first: never read directly from the attached file.** Reading and decoding alone takes about 5.7 minutes per pass, best-case because the copy is probably in memory. Augmentation and the GPU will add to this.
+
+**All four as single files, 3 November 2026.** Datasets `rsna-slim-v1-file-s0` to `-s3` hold one `.shard` file and its index each, and all 752,802 readable slices match their indexes. Copying all four took 199 s (33–69 s each) and listing them 35 s, so **a training session sets up in about 4 minutes.** With all four copied, local random reads ran at 373 slices per second on 1 thread and 1,227 on 4, about 10 minutes per pass for reading and decoding alone. That is lower than the one-shard test, probably because 17.5 GiB no longer fits in memory; it is the more realistic figure. The old `rsna-slim-v1-s0` to `-s3` folder datasets are no longer needed.

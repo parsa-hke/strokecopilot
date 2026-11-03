@@ -61,18 +61,18 @@ Badges point at the notebooks once they exist.
 | `01c_unpack_split_survey` | Phase 1: working copy, fixed split, spot-check and grid evidence | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01c_unpack_split_survey.ipynb) |
 | `01_prep_isles24` | ISLES'24 raw → slim tarball | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01_prep_isles24.ipynb) |
 | `01d_check_slim` | Phase 1: read the tarball through the loader; label, MTT and Tmax questions | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01d_check_slim.ipynb) |
-| `02_prep_rsna` | RSNA ICH → 320 px JPEG tar shards (runs on Kaggle) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/02_prep_rsna.ipynb) |
+| `02_prep_rsna` | RSNA ICH → 320 px JPEG tar shards (runs on Kaggle) | Upload to Kaggle; this only runs there |
 | `02a_rsna_kaggle_timing` | Phase 0: time full RSNA on Kaggle | Upload to Kaggle; this one does not run on Colab |
 | `02b_rsna_read_speed` | Phase 1: check the RSNA shards and measure read speed on Kaggle | Upload to Kaggle; this only runs there |
 | `02c_rsna_repack` | Phase 1: store an RSNA shard as one file on Kaggle | Upload to Kaggle; this only runs there |
-| `10_visionA_nnunet` | Vision A: nnU-Net training | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/10_visionA_nnunet.ipynb) |
-| `11_visionA_thresholds` | Vision A: threshold baseline | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/11_visionA_thresholds.ipynb) |
-| `20_visionB_train` | Vision B: haemorrhage classifier | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/20_visionB_train.ipynb) |
-| `30_nlpA_corpus` | NLP A: corpus ingestion and retrieval | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/30_nlpA_corpus.ipynb) |
-| `31_nlpA_reasoner` | NLP A: reasoner | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/31_nlpA_reasoner.ipynb) |
-| `40_nlpB_verifier` | NLP B: verifier | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/40_nlpB_verifier.ipynb) |
-| `41_nlpB_model_comparison` | NLP B: hallucination table | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/41_nlpB_model_comparison.ipynb) |
-| `50_end_to_end` | Full pipeline | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/50_end_to_end.ipynb) |
+| `10_visionA_nnunet` | Vision A: nnU-Net training | Not written yet (Phase 2 or later) |
+| `11_visionA_thresholds` | Vision A: threshold baseline | Not written yet (Phase 2 or later) |
+| `20_visionB_train` | Vision B: haemorrhage classifier | Not written yet (Phase 2 or later) |
+| `30_nlpA_corpus` | NLP A: corpus ingestion and retrieval | Not written yet (Phase 2 or later) |
+| `31_nlpA_reasoner` | NLP A: reasoner | Not written yet (Phase 2 or later) |
+| `40_nlpB_verifier` | NLP B: verifier | Not written yet (Phase 2 or later) |
+| `41_nlpB_model_comparison` | NLP B: hallucination table | Not written yet (Phase 2 or later) |
+| `50_end_to_end` | Full pipeline | Not written yet (Phase 2 or later) |
 
 ## Repository layout
 
