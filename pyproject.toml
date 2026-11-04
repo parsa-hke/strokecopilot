@@ -21,12 +21,13 @@ isles = ["numpy", "pandas", "openpyxl", "nibabel", "scipy", "matplotlib"]
 [tool.hatch.build.targets.wheel]
 packages = ["src/strokecopilot"]
 
-# Ship the contract schemas, fixtures and split inside the wheel so `pip install git+...` on Colab
+# Ship the contract schemas, fixtures, split and prompts inside the wheel so `pip install git+...` on Colab
 # can validate without a repo checkout. The repo-root copies stay the single source of truth.
 [tool.hatch.build.targets.wheel.force-include]
 "schemas" = "strokecopilot/schemas"
 "fixtures" = "strokecopilot/fixtures"
 "splits" = "strokecopilot/splits"
+"prompts" = "strokecopilot/prompts"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

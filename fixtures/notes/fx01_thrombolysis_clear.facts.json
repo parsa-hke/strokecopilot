@@ -1,0 +1,131 @@
+{
+ "note": "fx01_thrombolysis_clear.txt",
+ "written_by": "hand, 4 November 2026",
+ "facts": [
+  {
+   "key": "age",
+   "type": "number",
+   "value": 68,
+   "unit": "years",
+   "span": "68-year-old"
+  },
+  {
+   "key": "sex",
+   "type": "text",
+   "value": "female",
+   "span": "woman"
+  },
+  {
+   "key": "onset_witnessed",
+   "type": "bool",
+   "value": true,
+   "span": "Witnessed sudden onset"
+  },
+  {
+   "key": "onset_clock",
+   "type": "time",
+   "value": "13:30",
+   "span": "at 13:30"
+  },
+  {
+   "key": "deficits",
+   "type": "text",
+   "value": "right arm weakness and word-finding difficulty",
+   "span": "right arm weakness and word-finding difficulty"
+  },
+  {
+   "key": "referral",
+   "type": "text",
+   "value": "ambulance",
+   "span": "brought in by ambulance"
+  },
+  {
+   "key": "onset_to_imaging",
+   "type": "number",
+   "value": 150,
+   "unit": "min",
+   "span": "Time from symptom onset to imaging: 2 h 30 min."
+  },
+  {
+   "key": "nihss",
+   "type": "number",
+   "value": 8,
+   "span": "NIHSS on arrival: 8."
+  },
+  {
+   "key": "premorbid_mrs",
+   "type": "number",
+   "value": 0,
+   "span": "Pre-stroke mRS: 0 (fully independent)."
+  },
+  {
+   "key": "medications",
+   "type": "text",
+   "value": "metformin, ramipril",
+   "span": "Medications: metformin, ramipril."
+  },
+  {
+   "key": "anticoagulant",
+   "type": "bool",
+   "value": false,
+   "span": "No anticoagulant or antiplatelet use."
+  },
+  {
+   "key": "antiplatelet",
+   "type": "bool",
+   "value": false,
+   "span": "No anticoagulant or antiplatelet use."
+  },
+  {
+   "key": "hypertension",
+   "type": "bool",
+   "value": true,
+   "span": "History: hypertension"
+  },
+  {
+   "key": "diabetes",
+   "type": "bool",
+   "value": true,
+   "span": "type 2 diabetes"
+  },
+  {
+   "key": "recent_surgery",
+   "type": "bool",
+   "value": false,
+   "span": "No recent surgery, head trauma or previous intracranial haemorrhage."
+  },
+  {
+   "key": "head_trauma",
+   "type": "bool",
+   "value": false,
+   "span": "No recent surgery, head trauma or previous intracranial haemorrhage."
+  },
+  {
+   "key": "previous_ich",
+   "type": "bool",
+   "value": false,
+   "span": "No recent surgery, head trauma or previous intracranial haemorrhage."
+  },
+  {
+   "key": "bp_systolic",
+   "type": "number",
+   "value": 168,
+   "unit": "mmHg",
+   "span": "BP 168/92 mmHg"
+  },
+  {
+   "key": "bp_diastolic",
+   "type": "number",
+   "value": 92,
+   "unit": "mmHg",
+   "span": "BP 168/92 mmHg"
+  },
+  {
+   "key": "glucose",
+   "type": "number",
+   "value": 7.4,
+   "unit": "mmol/L",
+   "span": "capillary glucose 7.4 mmol/L"
+  }
+ ]
+}

@@ -1,0 +1,119 @@
+{
+ "note": "fx04_large_core_no_mismatch.txt",
+ "written_by": "hand, 4 November 2026",
+ "facts": [
+  {
+   "key": "age",
+   "type": "number",
+   "value": 71,
+   "unit": "years",
+   "span": "71-year-old"
+  },
+  {
+   "key": "sex",
+   "type": "text",
+   "value": "female",
+   "span": "woman"
+  },
+  {
+   "key": "onset_witnessed",
+   "type": "bool",
+   "value": true,
+   "span": "Witnessed collapse"
+  },
+  {
+   "key": "onset_clock",
+   "type": "time",
+   "value": "09:15",
+   "span": "at 09:15"
+  },
+  {
+   "key": "deficits",
+   "type": "text",
+   "value": "collapse with right-sided weakness and inability to speak",
+   "span": "collapse with right-sided weakness and inability to speak"
+  },
+  {
+   "key": "referral",
+   "type": "text",
+   "value": "transferred from a regional hospital",
+   "span": "transferred from a regional hospital"
+  },
+  {
+   "key": "onset_to_imaging",
+   "type": "number",
+   "value": 360,
+   "unit": "min",
+   "span": "Time from symptom onset to imaging: 6 h 0 min."
+  },
+  {
+   "key": "nihss",
+   "type": "number",
+   "value": 18,
+   "span": "NIHSS on arrival: 18."
+  },
+  {
+   "key": "premorbid_mrs",
+   "type": "number",
+   "value": 0,
+   "span": "Pre-stroke mRS: 0 (fully independent)."
+  },
+  {
+   "key": "medications",
+   "type": "text",
+   "value": "bisoprolol, atorvastatin",
+   "span": "Medications: bisoprolol, atorvastatin."
+  },
+  {
+   "key": "anticoagulant",
+   "type": "bool",
+   "value": false,
+   "span": "No anticoagulant use."
+  },
+  {
+   "key": "hypertension",
+   "type": "bool",
+   "value": true,
+   "span": "History: hypertension"
+  },
+  {
+   "key": "ischaemic_heart_disease",
+   "type": "bool",
+   "value": true,
+   "span": "ischaemic heart disease"
+  },
+  {
+   "key": "recent_surgery",
+   "type": "bool",
+   "value": false,
+   "span": "No recent surgery or bleeding."
+  },
+  {
+   "key": "recent_bleeding",
+   "type": "bool",
+   "value": false,
+   "span": "No recent surgery or bleeding."
+  },
+  {
+   "key": "bp_systolic",
+   "type": "number",
+   "value": 176,
+   "unit": "mmHg",
+   "span": "BP 176/94 mmHg"
+  },
+  {
+   "key": "bp_diastolic",
+   "type": "number",
+   "value": 94,
+   "unit": "mmHg",
+   "span": "BP 176/94 mmHg"
+  },
+  {
+   "key": "glucose",
+   "type": "number",
+   "value": 8.2,
+   "unit": "mmol/L",
+   "span": "capillary glucose 8.2 mmol/L"
+  }
+ ]
+}

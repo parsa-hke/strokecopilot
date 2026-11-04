@@ -1,0 +1,119 @@
+{
+ "note": "fx02_thrombectomy_large_mismatch.txt",
+ "written_by": "hand, 4 November 2026",
+ "facts": [
+  {
+   "key": "age",
+   "type": "number",
+   "value": 64,
+   "unit": "years",
+   "span": "64-year-old"
+  },
+  {
+   "key": "sex",
+   "type": "text",
+   "value": "male",
+   "span": "man"
+  },
+  {
+   "key": "lkw_clock",
+   "type": "time",
+   "value": "08:00",
+   "span": "Last seen well by a colleague at 08:00"
+  },
+  {
+   "key": "found_clock",
+   "type": "time",
+   "value": "15:30",
+   "span": "found at 15:30"
+  },
+  {
+   "key": "deficits",
+   "type": "text",
+   "value": "left-sided weakness and left gaze neglect",
+   "span": "left-sided weakness and left gaze neglect"
+  },
+  {
+   "key": "onset_witnessed",
+   "type": "bool",
+   "value": false,
+   "span": "Onset not witnessed."
+  },
+  {
+   "key": "lkw_to_imaging",
+   "type": "number",
+   "value": 540,
+   "unit": "min",
+   "span": "Time from last known well to imaging: 9 h 0 min."
+  },
+  {
+   "key": "nihss",
+   "type": "number",
+   "value": 16,
+   "span": "NIHSS on arrival: 16."
+  },
+  {
+   "key": "premorbid_mrs",
+   "type": "number",
+   "value": 0,
+   "span": "Pre-stroke mRS: 0 (fully independent)."
+  },
+  {
+   "key": "medications",
+   "type": "text",
+   "value": "atorvastatin",
+   "span": "Medications: atorvastatin."
+  },
+  {
+   "key": "anticoagulant",
+   "type": "bool",
+   "value": false,
+   "span": "No anticoagulant use."
+  },
+  {
+   "key": "hyperlipidaemia",
+   "type": "bool",
+   "value": true,
+   "span": "History: hyperlipidaemia"
+  },
+  {
+   "key": "smoker",
+   "type": "bool",
+   "value": true,
+   "span": "current smoker (20 pack-years)"
+  },
+  {
+   "key": "recent_surgery",
+   "type": "bool",
+   "value": false,
+   "span": "No recent surgery or bleeding."
+  },
+  {
+   "key": "recent_bleeding",
+   "type": "bool",
+   "value": false,
+   "span": "No recent surgery or bleeding."
+  },
+  {
+   "key": "bp_systolic",
+   "type": "number",
+   "value": 154,
+   "unit": "mmHg",
+   "span": "BP 154/88 mmHg"
+  },
+  {
+   "key": "bp_diastolic",
+   "type": "number",
+   "value": 88,
+   "unit": "mmHg",
+   "span": "BP 154/88 mmHg"
+  },
+  {
+   "key": "glucose",
+   "type": "number",
+   "value": 6.1,
+   "unit": "mmol/L",
+   "span": "capillary glucose 6.1 mmol/L"
+  }
+ ]
+}

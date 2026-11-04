@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (NLP B: claims, tracing, metrics)
+- **Claim extraction** (`nlp/verifier/claims.py`, `prompts/claim_extractor_v1.md`):
+  - The LLM splits rationale entries, blocking factors and fact-stating uncertainties into atomic claims. It labels each claim's kind and subject from fixed vocabularies of vision fields, note facts and inputs the pipeline cannot observe (plan §8.3).
+  - It is never shown the inputs' values, and it returns numbers as written, so stated precision is kept.
+  - A regex adds a claim for any number with a unit, or after a score name, that the LLM missed. It skips passage IDs, section numbers and ranges.
+  - Each `rule_ids` entry becomes a citation claim.
+- **Tracing** (`nlp/verifier/trace.py`, `prompts/judge_v1.md`):
+  - Vision and note facts are checked in code. The true value is converted to the claim's unit and rounded to the claim's stated precision. Null means unknown, and silent notes support nothing.
+  - Comparisons are recomputed from the true values.
+  - Rules go to the LLM judge with cited and retrieved passages, returning a verdict plus scope.
+  - Sub-types are assigned in the §4 order.
+- **Attribution is settled per rationale entry**, because the claims of one entry share its source list. A part left uncovered while the entry declares a source that backs nothing is mis-attributed (7). Otherwise an uncovered rule is uncited (6), and an uncovered vision or note part is incomplete but clean.
+- **Two interpretations of `docs/HALLUCINATION_METRIC.md` (for Parsa's OK):**
+  - Blocking factors have no `sources` in the schema, so they inherit their decision's `rule_ids`.
+  - A claim that a known value is unknown ("ASPECTS is not available" when it is 8) counts as an invented finding (2).
+- **Metrics** (`nlp/verifier/metrics.py`): every §6 rate pooled over claims, the mean per-case rate, the sub-type breakdown, 95% case-bootstrap intervals from 10 cases up, and paired differences. Criticality and omissions stay None until `scenarios.py` exists. §7 task ticked.
+- **Fact sheets** for the five fixture notes (`fixtures/notes/*.facts.json`, written by hand), with a format in `nlp/notes/facts.py` that `notes/generate.py` will reuse. Every span is checked verbatim against its note.
+- **Provider:** `nlp/reasoner/providers.py` has `ClaudeJSON` (structured JSON output, cached system prompt, effort set, no temperature). Refusals raise rather than fall back to another model, so the judge model stays fixed. The key comes from Colab or Kaggle Secrets, or the environment.
+- `prompts/` now ships in the wheel; `config.PROMPTS_DIR` added.
+- **Tests:** `test_claims.py`, `test_trace.py`, `test_verifier_metrics.py`, `test_providers.py`. They cover a clean fx02 output that traces fully, one seeded error per sub-type caught as that sub-type, the doc's rounding examples, and the extractor never seeing the note. All use a fake extractor, a fake judge and a synthetic test corpus.
+- **Not yet run with a real model:** extractor quality, judge verdicts, whether the API accepts both JSON schemas, cost, and τ (needs the corpus) are all untested. The `claims.py` and `trace.py` tasks stay open until then.
+- pytest: 274 passed.
+- **Notion sync:**
+  - pending: Tasks → `metrics.py` done; Decisions rows for the LLM judge, embedding model, RSNA split and temperature wording.
+
 ## 2026-11-04 — Claude Code session (EXP-5 Vision B dummy; EXP-6 sized)
 - **EXP-5 ran on Kaggle** (T4, one GPU used, 4 CPUs, commit `0e8740a`):
   - **Split:** the scan bleed rate is 0.4058 in validation and 0.4119 in test, against 0.4085 overall, well inside the 1.5-point check.

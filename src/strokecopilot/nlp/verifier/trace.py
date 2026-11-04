@@ -1,1 +1,451 @@
-"""Claim -> source (vision field / note / passage) or None. Phase 2."""
+"""Claim -> its sources, and the hallucination sub-type if it has none (docs/HALLUCINATION_METRIC.md §3-4).
+
+Every claim is traced on its own, ignoring the sources the model declared, then the declared
+sources are compared with what was found:
+- (a) vision fields and (b) note facts are compared in code, a number after rounding the true value
+  to the precision the claim states, in the claim's unit;
+- (c) rules go to an LLM judge with the passages the claim cites plus the retriever's top 5 above a
+  similarity threshold tau. The judge returns supported / contradicted / not_addressed per passage
+  and, for a claim that applies a rule to this patient, whether the passage's scope fits;
+- comparisons are recomputed in code from the true values of their inputs.
+
+Each hallucination gets one sub-type, the first that applies: 1 wrong number, 2 invented finding,
+3 wrong rule, 4 misapplied rule, 5 faulty derivation, 6 uncited rule, 7 mis-attributed source.
+Criticality needs the rulebook in code (scenarios.py), so it is left None here.
+"""
+
+import json
+import math
+import operator
+import re
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+
+from strokecopilot.config import PROMPTS_DIR
+from strokecopilot.nlp.verifier.claims import UNOBSERVED_SUBJECTS, VISION_SUBJECTS
+
+SUBTYPES = {1: "wrong_number", 2: "invented_finding", 3: "wrong_rule", 4: "misapplied_rule",
+            5: "faulty_derivation", 6: "uncited_rule", 7: "misattributed_source"}
+CONTENT_FALSE = {1, 2, 3, 4, 5}
+JUDGE_PROMPT = "judge_v1"
+TOP_K = 5
+LARGE_VESSEL = {"ICA", "M1", "basilar"}
+
+# unit -> (dimension, factor to the dimension's base unit)
+_UNITS = {
+    "ml": ("volume", 1.0), "cc": ("volume", 1.0),
+    "s": ("time", 1 / 60), "sec": ("time", 1 / 60), "second": ("time", 1 / 60), "seconds": ("time", 1 / 60),
+    "min": ("time", 1.0), "mins": ("time", 1.0), "minute": ("time", 1.0), "minutes": ("time", 1.0),
+    "h": ("time", 60.0), "hr": ("time", 60.0), "hrs": ("time", 60.0), "hour": ("time", 60.0), "hours": ("time", 60.0),
+    "%": ("fraction", 0.01), "fraction": ("fraction", 1.0),
+    "y": ("years", 1.0), "year": ("years", 1.0), "years": ("years", 1.0),
+    "mmhg": ("pressure", 1.0), "mmol/l": ("glucose", 1.0),
+}
+VISION_UNITS = {"core_ml": "mL", "penumbra_ml": "mL", "mismatch_volume_ml": "mL", "mismatch_ratio": None,
+                "haemorrhage.confidence": "fraction", "confidence.core": "fraction", "confidence.penumbra": "fraction", "aspects": None}
+_OPS = {"<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge, "==": operator.eq, "!=": operator.ne}
+_TRUE, _FALSE = {"true", "yes", "present", "positive"}, {"false", "no", "absent", "negative", "none"}
+_STOP = {"and", "the", "with", "from", "for", "was", "has", "his", "her", "of", "on", "in", "at", "to", "a", "an"}
+
+
+@dataclass
+class Inputs:
+    """What the reasoner was given, plus the verifier's own tools."""
+
+    vision: dict
+    note: str
+    facts: object  # FactSheet
+    corpus: dict  # passage id -> {"text", "source", "section", ...}
+    judge: object = None  # callable(claim_text, passages, case_inputs, applied) -> {id: (verdict, scope_fits)}
+    retriever: object = None  # callable(text, k) -> [(passage id, similarity)]
+    tau: float = 0.0
+
+
+@dataclass
+class Trace:
+    claim_id: str
+    field: str
+    kind: str
+    traceable: bool
+    subtype: int | None
+    subtype_name: str | None
+    content_false: bool
+    reason: str
+    used: list = field(default_factory=list)  # supporting sources found
+    supported_passages: list = field(default_factory=list)
+    declared_ok: bool = True
+    incomplete: bool = False
+    critical: bool | None = None
+    substitution: dict | None = None  # for criticality: the claimed value of a vision or note subject
+
+    def to_dict(self):
+        return asdict(self)
+
+
+# --- values and units ---------------------------------------------------------------------
+
+def _unit(unit):
+    if unit is None:
+        return (None, 1.0)
+    return _UNITS.get(unit.strip().lower(), (unit.strip().lower(), 1.0))
+
+
+def _decimals(text):
+    return len(text.split(".", 1)[1]) if "." in text else 0
+
+
+def number_matches(claimed, claimed_unit, true_value, true_unit):
+    """True if the true value, in the claim's unit and rounded to its stated precision, equals the claim."""
+    try:
+        claimed_value = float(claimed)
+    except (TypeError, ValueError):
+        return False
+    c_dim, c_factor = _unit(claimed_unit if claimed_unit is not None else true_unit)
+    t_dim, t_factor = _unit(true_unit)
+    if c_dim != t_dim:
+        return False
+    in_claim_unit = true_value * t_factor / c_factor
+    return math.isclose(round(in_claim_unit + 0.0, _decimals(str(claimed))), claimed_value, abs_tol=1e-9)
+
+
+def _base(value, unit):
+    dim, factor = _unit(unit)
+    return dim, value * factor
+
+
+def _bool(text):
+    text = str(text).strip().lower()
+    return True if text in _TRUE else False if text in _FALSE else None
+
+
+def _tokens(text):
+    return {t for t in re.findall(r"[a-z0-9]+", str(text).lower()) if t not in _STOP and len(t) > 1}
+
+
+def _clock(text):
+    match = re.search(r"(\d{1,2})[:.h](\d{2})", str(text))
+    return f"{int(match.group(1)):02d}:{match.group(2)}" if match else None
+
+
+def _vision_value(vision, subject):
+    if subject == "large_vessel_occlusion":
+        site = vision.get("occlusion_site")
+        return None if site in (None, "unknown") else site in LARGE_VESSEL
+    value = vision
+    for part in subject.split("."):
+        value = value.get(part) if isinstance(value, dict) else None
+    return value
+
+
+def _vision_field(subject):
+    return "occlusion_site" if subject == "large_vessel_occlusion" else subject
+
+
+# --- checks: each returns (sub-type or None, used sources, reason) -----------------------------
+
+def check_vision(subject, value, unit, vision):
+    true = _vision_value(vision, subject)
+    used = [{"type": "vision", "field": _vision_field(subject)}]
+    if true is None and subject != "warnings":
+        if value is not None and _number_or_none(value) == 0:
+            return 1, used, f"{subject} is null (unknown), but the claim gives 0."
+        return 2, used, f"{subject} is null (unknown), but the claim gives it a value."
+    if subject == "warnings":
+        if any(_tokens(value) <= _tokens(w) for w in vision.get("warnings", [])):
+            return None, used, "Matches a warning."
+        return 2, used, "No vision warning says this."
+    if isinstance(true, bool):
+        return (None, used, "Matches.") if _bool(value) == true else (2, used, f"{subject} is {true}.")
+    if isinstance(true, (int, float)):
+        if number_matches(value, unit, float(true), VISION_UNITS.get(subject)):
+            return None, used, "Matches after rounding."
+        return 1, used, f"{subject} is {true}."
+    return (None, used, "Matches.") if str(value).strip().casefold() == str(true).casefold() else (2, used, f"{subject} is {true}.")
+
+
+def _number_or_none(text):
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def check_fact(subject, value, unit, facts):
+    fact = facts.get(subject)
+    if fact is None:
+        return 2, [], f"The note does not state {subject}."
+    used = [{"type": "note", "key": subject, "span": fact.span}]
+    if fact.type == "not_recorded":
+        return 2, used, f"The note says {subject} is not recorded."
+    if fact.type == "number":
+        if number_matches(value, unit, float(fact.value), fact.unit):
+            return None, used, "Matches after rounding."
+        return 1, used, f"The note gives {fact.value} {fact.unit or ''}".strip() + "."
+    if fact.type == "bool":
+        return (None, used, "Matches.") if _bool(value) == fact.value else (2, used, f"The note says {subject} is {fact.value}.")
+    if fact.type == "time":
+        return (None, used, "Matches.") if _clock(value) == fact.value else (2, used, f"The note gives {fact.value}.")
+    claimed = _tokens(value)
+    if claimed and claimed <= _tokens(fact.value) | _tokens(fact.span):
+        return None, used, "Matches the note's wording."
+    return 2, used, "The note does not say this."
+
+
+def check_absence(subject, inputs):
+    if subject in VISION_SUBJECTS:
+        if _vision_value(inputs.vision, subject) is None:
+            return None, [{"type": "vision", "field": _vision_field(subject)}], "The field is null."
+        return 2, [{"type": "vision", "field": _vision_field(subject)}], f"{subject} is known."
+    fact = inputs.facts.get(subject)
+    if fact is not None:
+        used = [{"type": "note", "key": subject, "span": fact.span}]
+        return (None, used, "The note says it is not recorded.") if fact.type == "not_recorded" else (2, used, "The note states it.")
+    if subject in UNOBSERVED_SUBJECTS:
+        return None, [], "The pipeline cannot observe it."
+    return 2, [], "Nothing in the inputs says it is missing; the note is silent."
+
+
+def _subject_check(subject, value, unit, inputs):
+    if subject is None or subject.startswith("other:"):
+        return 2, [], "The claim is about something no input covers."
+    if subject in VISION_SUBJECTS:
+        return check_vision(subject, value, unit, inputs.vision)
+    return check_fact(subject, value, unit, inputs.facts)
+
+
+def _true_number(subject, inputs):
+    """(value in base unit, dimension) of a vision or note number, or None."""
+    if subject in VISION_SUBJECTS:
+        value = _vision_value(inputs.vision, subject)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            dim, base = _base(float(value), VISION_UNITS.get(subject))
+            return base, dim
+        return None
+    fact = inputs.facts.get(subject) if subject else None
+    if fact is not None and fact.type == "number":
+        dim, base = _base(float(fact.value), fact.unit)
+        return base, dim
+    return None
+
+
+def check_comparison(comparison, inputs):
+    """(sub-type, used, reason, rule_needed). Inputs first, then the comparison itself."""
+    used, sides, rule_needed = [], [], False
+    for side in ("left", "right"):
+        operand = comparison[side]
+        if operand["from_rule"]:
+            rule_needed = True
+            number = _number_or_none(operand["value"])
+            if number is None:
+                return 5, used, f"The {side} threshold is not a number.", rule_needed
+            dim, base = _base(number, operand["unit"])
+            sides.append((base, dim))
+            continue
+        subtype, u, reason = _subject_check(operand["subject"], operand["value"], operand["unit"], inputs)
+        used += u
+        if subtype is not None:
+            return subtype, used, f"{side}: {reason}", rule_needed
+        true = _true_number(operand["subject"], inputs)
+        if true is None:
+            return 5, used, f"{side} is not a number that can be compared.", rule_needed
+        sides.append(true)
+    (left, l_dim), (right, r_dim) = sides
+    if l_dim != r_dim:
+        return 5, used, f"Compares {l_dim} with {r_dim}.", rule_needed
+    if not _OPS[comparison["op"]](left, right):
+        return 5, used, f"With the true values, {left:g} {comparison['op']} {right:g} is false.", rule_needed
+    return None, used, "The comparison holds with the true values.", rule_needed
+
+
+# --- rules ---------------------------------------------------------------------------------
+
+JUDGE_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["verdicts"],
+    "properties": {"verdicts": {"type": "array", "items": {
+        "type": "object", "additionalProperties": False, "required": ["id", "verdict", "scope_fits", "reason"],
+        "properties": {
+            "id": {"type": "string"},
+            "verdict": {"type": "string", "enum": ["supported", "contradicted", "not_addressed"]},
+            "scope_fits": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
+            "reason": {"type": "string"},
+        },
+    }}},
+}
+
+
+class Judge:
+    """LLM judge for rule claims (§3c). One call per claim, with all its candidate passages."""
+
+    def __init__(self, llm, version=JUDGE_PROMPT):
+        self.llm = llm
+        self.version = version
+        self.system = (Path(PROMPTS_DIR) / f"{version}.md").read_text()
+
+    def __call__(self, claim_text, passages, case_inputs, applied):
+        user = json.dumps({"claim": claim_text, "applies_to_patient": applied, "case_inputs": case_inputs,
+                           "passages": [{"id": p["id"], "text": p["text"]} for p in passages]}, indent=1)
+        reply = self.llm(self.system, user, JUDGE_SCHEMA)
+        wanted = {p["id"] for p in passages}
+        return {v["id"]: (v["verdict"], v["scope_fits"]) for v in reply["verdicts"] if v["id"] in wanted}
+
+
+def _case_inputs(inputs):
+    vision = {k: v for k, v in inputs.vision.items() if k not in ("schema_version", "model_version", "case_id")}
+    return {"vision_output": vision, "triage_note": inputs.note}
+
+
+def check_rule(text, cited, applied, inputs):
+    """(sub-type, supported passage ids, reason) for the rule part of a claim."""
+    missing = [pid for pid in cited if pid not in inputs.corpus]
+    if missing:
+        return 3, [], f"Cites passages that do not exist: {', '.join(missing)}."
+    candidates = list(dict.fromkeys(cited))
+    if inputs.retriever is not None:
+        candidates += [pid for pid, score in inputs.retriever(text, TOP_K) if score >= inputs.tau and pid not in candidates]
+    if not candidates:
+        return 3, [], "No passage is a candidate."
+    if inputs.judge is None:
+        raise ValueError("Rule claims need a judge.")
+    verdicts = inputs.judge(text, [{"id": pid, **inputs.corpus[pid]} for pid in candidates], _case_inputs(inputs), applied)
+    stated = [pid for pid, (verdict, _) in verdicts.items() if verdict == "supported"]
+    if not stated:
+        return 3, [], "No candidate passage states this rule."
+    fits = [pid for pid in stated if not applied or verdicts[pid][1]]
+    if not fits:
+        return 4, stated, "A passage states the rule, but its scope does not fit this patient."
+    return None, fits, "Supported by the corpus."
+
+
+# --- attribution -----------------------------------------------------------------------------
+
+def _norm(text):
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _overlaps(quote, span, note):
+    note_n, quote_n, span_n = _norm(note), _norm(quote), _norm(span)
+    q = note_n.find(quote_n)
+    s = note_n.find(span_n)
+    return q >= 0 and s >= 0 and q < s + len(span_n) and s < q + len(quote_n)
+
+
+def _backs(source, trace, note):
+    """True if a declared source supports part of this claim."""
+    if source["type"] == "vision":
+        return any(u["type"] == "vision" and u["field"] == source["field"] for u in trace.used)
+    if source["type"] == "note":
+        return any(u["type"] == "note" and _overlaps(source["quote"], u["span"], note) for u in trace.used)
+    return source["id"] in trace.supported_passages
+
+
+def attribute(traces, declared, note, own_sources=True):
+    """Sub-types 6 and 7 and the incomplete flag, for the claims of one entry, which share its sources.
+
+    A claim needs a declared source for each part it rests on. A part left uncovered while the entry
+    declares a source that supports nothing in it is mis-attributed (7): the wrong source was given.
+    Otherwise an uncovered rule is uncited (6), and an uncovered vision or note part is incomplete,
+    which still counts as clean. A declared source that supports nothing is charged to a claim even
+    when every claim is covered.
+
+    Blocking factors have no sources of their own and inherit their decision's rule_ids
+    (own_sources False), so a passage they do not use is not held against them.
+    """
+    orphans = [s for s in declared if not any(_backs(s, t, note) for t in traces)] if own_sources else []
+    charged = set()
+    for t in traces:
+        if t.subtype is not None:
+            continue
+        needs = {u["type"] for u in t.used} | ({"passage"} if t._rule_part else set())
+        unmet = {kind for kind in needs if not any(s["type"] == kind and _backs(s, t, note) for s in declared)}
+        if t.kind == "citation":
+            unmet.discard("passage")
+        if unmet and orphans:
+            t.subtype, t.reason = 7, "A declared source supports nothing in this entry, and this claim lacks a supporting one."
+            charged.update(id(s) for s in orphans)
+        elif "passage" in unmet:
+            t.subtype, t.reason = 6, "The rule is in the corpus, but no passage the entry cites supports it."
+        elif unmet:
+            t.incomplete = True
+    content_errors = any(t.subtype in CONTENT_FALSE for t in traces)
+    for s in orphans:
+        if id(s) in charged or content_errors:  # an unsupported source most likely belongs to the false claim
+            continue
+        clean = [t for t in traces if t.subtype is None]
+        if clean:
+            clean[0].subtype, clean[0].reason = 7, f"Declared source {s.get('field') or s.get('id') or 'note quote'} supports nothing in this entry."
+            clean[0].incomplete = False
+    for t in traces:
+        t.traceable = t.subtype is None
+        t.subtype_name = SUBTYPES.get(t.subtype)
+        t.content_false = t.subtype in CONTENT_FALSE
+        t.declared_ok = t.subtype != 7
+
+
+# --- one claim -----------------------------------------------------------------------------
+
+def _number_claim(claim, inputs):
+    """A regex number no extracted claim covered: any input with that number and a compatible unit.
+
+    A number with no unit only matches inputs without one, such as scores, so "6" cannot match 6.1 mmol/L.
+    """
+    def fits(true, true_unit):
+        return (claim.unit is not None or true_unit is None) and number_matches(claim.value, claim.unit, float(true), true_unit)
+
+    for subject in VISION_UNITS:
+        true = _vision_value(inputs.vision, subject)
+        if isinstance(true, (int, float)) and not isinstance(true, bool) and fits(true, VISION_UNITS[subject]):
+            return None, [{"type": "vision", "field": subject}], [], f"Matches {subject}."
+    for fact in inputs.facts:
+        if fact.type == "number" and fits(fact.value, fact.unit):
+            return None, [{"type": "note", "key": fact.key, "span": fact.span}], [], f"Matches the note's {fact.key}."
+    cited = [s["id"] for s in claim.declared_sources if s["type"] == "passage" and s["id"] in inputs.corpus]
+    pattern = re.compile(rf"(?<![\d.]){re.escape(claim.value)}(?![\d]|\.\d)")
+    for pid in cited:
+        if pattern.search(inputs.corpus[pid]["text"]):
+            return None, [], [pid], f"A number stated in {pid}."
+    return 1, [], [], "This number is in no input and no cited passage."
+
+
+def trace_claim(claim, inputs):
+    """Content check of one claim (sub-types 1-5). Attribution needs the whole entry: see trace_all."""
+    subtype, used, supported, reason, rule_part = None, [], [], "", False
+    cited = [s["id"] for s in claim.declared_sources if s["type"] == "passage"]
+    if claim.kind == "number":
+        subtype, used, supported, reason = _number_claim(claim, inputs)
+    elif claim.kind in ("vision", "patient"):
+        subtype, used, reason = _subject_check(claim.subject, claim.value, claim.unit, inputs)
+    elif claim.kind == "absence":
+        subtype, used, reason = check_absence(claim.subject, inputs)
+    elif claim.kind == "comparison":
+        subtype, used, reason, rule_part = check_comparison(claim.comparison, inputs)
+    elif claim.kind in ("rule", "citation"):
+        rule_part = True
+    else:
+        raise ValueError(f"Unknown claim kind {claim.kind!r}.")
+
+    if rule_part and (subtype is None or subtype == 5):
+        # Rule content comes before the derivation in the sub-type order.
+        rule_subtype, supported, rule_reason = check_rule(claim.text, cited, claim.applies_to_patient, inputs)
+        if rule_subtype is not None:
+            subtype, reason = rule_subtype, rule_reason
+        elif subtype is None:
+            reason = rule_reason
+    substitution = None
+    if subtype in (1, 2) and claim.kind in ("vision", "patient") and claim.subject and not claim.subject.startswith("other:"):
+        substitution = {"subject": claim.subject, "value": claim.value, "unit": claim.unit}
+    trace = Trace(claim_id=claim.id, field=claim.field, kind=claim.kind, traceable=subtype is None, subtype=subtype,
+                  subtype_name=SUBTYPES.get(subtype), content_false=subtype in CONTENT_FALSE, reason=reason, used=used,
+                  supported_passages=supported, substitution=substitution)
+    trace._rule_part = rule_part
+    return trace
+
+
+def trace_all(claims, inputs):
+    """Trace every claim, then settle attribution entry by entry. Returns traces in claim order."""
+    traces = [trace_claim(claim, inputs) for claim in claims]
+    groups = {}
+    for claim, trace in zip(claims, traces):
+        groups.setdefault((claim.field, claim.entry), (claim.declared_sources, []))[1].append(trace)
+    for (field_name, _), (declared, group) in groups.items():
+        attribute(group, declared, inputs.note, own_sources=not field_name.endswith(".blocking_factors"))
+    return traces

@@ -1,0 +1,119 @@
+{
+ "note": "fx03_haemorrhage_present.txt",
+ "written_by": "hand, 4 November 2026",
+ "facts": [
+  {
+   "key": "age",
+   "type": "number",
+   "value": 59,
+   "unit": "years",
+   "span": "59-year-old"
+  },
+  {
+   "key": "sex",
+   "type": "text",
+   "value": "male",
+   "span": "man"
+  },
+  {
+   "key": "onset_witnessed",
+   "type": "bool",
+   "value": true,
+   "span": "Witnessed sudden severe headache"
+  },
+  {
+   "key": "onset_clock",
+   "type": "time",
+   "value": "10:00",
+   "span": "at 10:00"
+  },
+  {
+   "key": "deficits",
+   "type": "text",
+   "value": "sudden severe headache, left arm and leg weakness, vomited once",
+   "span": "Witnessed sudden severe headache followed by left arm and leg weakness at 10:00 while gardening; vomited once in the ambulance."
+  },
+  {
+   "key": "referral",
+   "type": "text",
+   "value": "ambulance",
+   "span": "in the ambulance"
+  },
+  {
+   "key": "onset_to_imaging",
+   "type": "number",
+   "value": 120,
+   "unit": "min",
+   "span": "Time from symptom onset to imaging: 2 h 0 min."
+  },
+  {
+   "key": "nihss",
+   "type": "number",
+   "value": 12,
+   "span": "NIHSS on arrival: 12."
+  },
+  {
+   "key": "premorbid_mrs",
+   "type": "number",
+   "value": 0,
+   "span": "Pre-stroke mRS: 0 (fully independent)."
+  },
+  {
+   "key": "medications",
+   "type": "text",
+   "value": "amlodipine, poor adherence",
+   "span": "Medications: amlodipine (reports poor adherence)."
+  },
+  {
+   "key": "anticoagulant",
+   "type": "bool",
+   "value": false,
+   "span": "No anticoagulant or antiplatelet use."
+  },
+  {
+   "key": "antiplatelet",
+   "type": "bool",
+   "value": false,
+   "span": "No anticoagulant or antiplatelet use."
+  },
+  {
+   "key": "hypertension",
+   "type": "bool",
+   "value": true,
+   "span": "History: hypertension, poorly controlled."
+  },
+  {
+   "key": "recent_surgery",
+   "type": "bool",
+   "value": false,
+   "span": "No recent surgery or head trauma."
+  },
+  {
+   "key": "head_trauma",
+   "type": "bool",
+   "value": false,
+   "span": "No recent surgery or head trauma."
+  },
+  {
+   "key": "bp_systolic",
+   "type": "number",
+   "value": 212,
+   "unit": "mmHg",
+   "span": "BP 212/118 mmHg"
+  },
+  {
+   "key": "bp_diastolic",
+   "type": "number",
+   "value": 118,
+   "unit": "mmHg",
+   "span": "BP 212/118 mmHg"
+  },
+  {
+   "key": "glucose",
+   "type": "number",
+   "value": 6.8,
+   "unit": "mmol/L",
+   "span": "capillary glucose 6.8 mmol/L"
+  }
+ ]
+}

@@ -17,6 +17,7 @@ SCHEMAS_DIR = _resource_dir("schemas")
 FIXTURES_DIR = _resource_dir("fixtures")
 FIXTURE_NOTES_DIR = FIXTURES_DIR / "notes"
 SPLITS_DIR = _resource_dir("splits")
+PROMPTS_DIR = _resource_dir("prompts")
 
 # Contract (plan §6)
 VISION_SCHEMA_VERSION = "0.1"

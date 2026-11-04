@@ -1,0 +1,131 @@
+{
+ "note": "fx05_borderline_onset.txt",
+ "written_by": "hand, 4 November 2026",
+ "facts": [
+  {
+   "key": "age",
+   "type": "number",
+   "value": 82,
+   "unit": "years",
+   "span": "82-year-old"
+  },
+  {
+   "key": "sex",
+   "type": "text",
+   "value": "male",
+   "span": "man"
+  },
+  {
+   "key": "lkw_clock",
+   "type": "time",
+   "value": "22:00",
+   "span": "Went to bed well at 22:00"
+  },
+  {
+   "key": "found_clock",
+   "type": "time",
+   "value": "06:30",
+   "span": "woke at 06:30"
+  },
+  {
+   "key": "deficits",
+   "type": "text",
+   "value": "unable to move right arm, slurred halting speech",
+   "span": "unable to move his right arm and with slurred, halting speech"
+  },
+  {
+   "key": "wake_up_stroke",
+   "type": "bool",
+   "value": true,
+   "span": "Wake-up stroke"
+  },
+  {
+   "key": "onset_witnessed",
+   "type": "bool",
+   "value": false,
+   "span": "onset not witnessed"
+  },
+  {
+   "key": "lkw_to_imaging",
+   "type": "number",
+   "value": 600,
+   "unit": "min",
+   "span": "Time from last known well to imaging: 10 h 0 min."
+  },
+  {
+   "key": "nihss",
+   "type": "number",
+   "value": 11,
+   "span": "NIHSS on arrival: 11."
+  },
+  {
+   "key": "premorbid_mrs",
+   "type": "number",
+   "value": 1,
+   "span": "Pre-stroke mRS: 1 (no significant disability; manages all usual activities)."
+  },
+  {
+   "key": "medications",
+   "type": "text",
+   "value": "aspirin 75 mg daily, ramipril",
+   "span": "Medications: aspirin 75 mg daily, ramipril."
+  },
+  {
+   "key": "antiplatelet",
+   "type": "bool",
+   "value": true,
+   "span": "aspirin 75 mg daily"
+  },
+  {
+   "key": "anticoagulant",
+   "type": "bool",
+   "value": false,
+   "span": "No anticoagulant use."
+  },
+  {
+   "key": "hypertension",
+   "type": "bool",
+   "value": true,
+   "span": "History: hypertension"
+  },
+  {
+   "key": "chronic_kidney_disease",
+   "type": "bool",
+   "value": true,
+   "span": "chronic kidney disease stage 3"
+  },
+  {
+   "key": "recent_surgery",
+   "type": "bool",
+   "value": false,
+   "span": "No recent surgery or bleeding."
+  },
+  {
+   "key": "recent_bleeding",
+   "type": "bool",
+   "value": false,
+   "span": "No recent surgery or bleeding."
+  },
+  {
+   "key": "bp_systolic",
+   "type": "number",
+   "value": 162,
+   "unit": "mmHg",
+   "span": "BP 162/90 mmHg"
+  },
+  {
+   "key": "bp_diastolic",
+   "type": "number",
+   "value": 90,
+   "unit": "mmHg",
+   "span": "BP 162/90 mmHg"
+  },
+  {
+   "key": "glucose",
+   "type": "number",
+   "value": 6.5,
+   "unit": "mmol/L",
+   "span": "capillary glucose 6.5 mmol/L"
+  }
+ ]
+}
