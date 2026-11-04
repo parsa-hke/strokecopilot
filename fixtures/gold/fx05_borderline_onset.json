@@ -1,0 +1,142 @@
+{
+ "case_id": "fixture-fx05",
+ "model": "gold-handwritten",
+ "prompt_version": "reasoner_v0",
+ "thrombolysis": {
+  "recommend": false,
+  "rule_ids": [
+   "AHA2026-4.6.1-within-4.5h",
+   "AHA2026-4.6.3-wake-up-perfusion"
+  ],
+  "blocking_factors": [
+   "Time from last known well to imaging is 10 h, beyond the 4.5 h window.",
+   "The patient is eligible for thrombectomy, so the wake-up and extended-window thrombolysis recommendations do not apply."
+  ]
+ },
+ "thrombectomy": {
+  "recommend": true,
+  "rule_ids": [
+   "DAWN-inclusion-mismatch-groups",
+   "AHA2026-4.7.2-late-window-trials"
+  ],
+  "blocking_factors": []
+ },
+ "rationale": [
+  {
+   "claim": "This is a wake-up stroke.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Wake-up stroke; onset not witnessed."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Time from last known well to imaging is 10 h.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Time from last known well to imaging: 10 h 0 min."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The patient is 82 years old.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "82-year-old man."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The NIHSS on arrival is 11.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "NIHSS on arrival: 11."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Core volume is 15.0 mL.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "core_ml"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Core 15.0 mL is below the DAWN limit of 21 mL for patients aged 80 or over.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "core_ml"
+    },
+    {
+     "type": "passage",
+     "id": "DAWN-inclusion-mismatch-groups"
+    }
+   ],
+   "derived": true
+  },
+  {
+   "claim": "NIHSS 11 meets the DAWN requirement of 10 or more.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "NIHSS on arrival: 11."
+    },
+    {
+     "type": "passage",
+     "id": "DAWN-inclusion-mismatch-groups"
+    }
+   ],
+   "derived": true
+  },
+  {
+   "claim": "Mismatch volume 14.5 mL is below the DEFUSE-3 minimum of 15 mL.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "mismatch_volume_ml"
+    },
+    {
+     "type": "passage",
+     "id": "DEFUSE3-inclusion-imaging"
+    }
+   ],
+   "derived": true
+  },
+  {
+   "claim": "The guideline cites DAWN and DEFUSE-3 as the trials that showed benefit from thrombectomy beyond 6 hours.",
+   "sources": [
+    {
+     "type": "passage",
+     "id": "AHA2026-4.7.2-late-window-trials"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The occlusion is in M1.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "occlusion_site"
+    }
+   ],
+   "derived": false
+  }
+ ],
+ "uncertainties": [
+  "ASPECTS is not available.",
+  "The imaging pipeline reported a motion artefact."
+ ]
+}

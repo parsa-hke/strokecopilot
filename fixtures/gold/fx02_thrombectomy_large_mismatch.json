@@ -1,0 +1,146 @@
+{
+ "case_id": "fixture-fx02",
+ "model": "gold-handwritten",
+ "prompt_version": "reasoner_v0",
+ "thrombolysis": {
+  "recommend": false,
+  "rule_ids": [
+   "AHA2026-4.6.1-within-4.5h",
+   "AHA2026-4.6.3-wake-up-perfusion"
+  ],
+  "blocking_factors": [
+   "Time from last known well to imaging is 9 h, beyond the 4.5 h window.",
+   "The patient is eligible for thrombectomy, so extended-window thrombolysis does not apply."
+  ]
+ },
+ "thrombectomy": {
+  "recommend": true,
+  "rule_ids": [
+   "AHA2026-4.7.2-6-24h-aspects-6-10"
+  ],
+  "blocking_factors": []
+ },
+ "rationale": [
+  {
+   "claim": "Onset was not witnessed.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Onset not witnessed."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Time from last known well to imaging is 9 h.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Time from last known well to imaging: 9 h 0 min."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "9 h from last known well is beyond the 4.5 h thrombolysis window.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Time from last known well to imaging: 9 h 0 min."
+    },
+    {
+     "type": "passage",
+     "id": "AHA2026-4.6.1-within-4.5h"
+    }
+   ],
+   "derived": true
+  },
+  {
+   "claim": "The occlusion is in M1.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "occlusion_site"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "ASPECTS is 8.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "aspects"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The NIHSS on arrival is 16.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "NIHSS on arrival: 16."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Pre-stroke mRS is 0.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Pre-stroke mRS: 0 (fully independent)."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Thrombectomy is recommended for an ICA or M1 occlusion 6 to 24 hours from onset with NIHSS 6 or more, pre-stroke mRS 0 or 1 and ASPECTS 6 or more.",
+   "sources": [
+    {
+     "type": "passage",
+     "id": "AHA2026-4.7.2-6-24h-aspects-6-10"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Core volume is 18.0 mL.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "core_ml"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Core 18.0 mL is below the DEFUSE-3 limit of 70 mL.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "core_ml"
+    },
+    {
+     "type": "passage",
+     "id": "DEFUSE3-inclusion-imaging"
+    }
+   ],
+   "derived": true
+  },
+  {
+   "claim": "Extended-window thrombolysis applies only to patients who cannot have thrombectomy.",
+   "sources": [
+    {
+     "type": "passage",
+     "id": "AHA2026-4.6.3-wake-up-perfusion"
+    }
+   ],
+   "derived": false
+  }
+ ],
+ "uncertainties": [
+  "Significant mass effect is not reported."
+ ]
+}

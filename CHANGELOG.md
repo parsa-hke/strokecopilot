@@ -1,5 +1,76 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (EXP-9 reasoner on the fixtures)
+- **EXP-9 ran on Colab** (`claude-sonnet-5-5`, effort high, commit `592fceb`): five fixtures, twice each.
+  - **Result:** 0 format failures, and all 18 judged decisions match the expected ones. fx01's thrombectomy accepts either answer; it was no in run 1.
+  - **Cost and speed:** every call read the cached system prompt (105,590 tokens read, none written). Each call used about 433 uncached input and 3,391 output tokens and took 20 s. The run cost about $0.37.
+  - **Claude read run 1 of fx01, fx04 and fx05;** the other seven outputs have not been read.
+    - fx04 recommends thrombectomy on ASPECTS 3–5 despite the 110 mL core, so it passes the pre-2026 trap, and it names mass effect as unknown.
+    - fx05 rests thrombectomy on the DAWN group for age 80 and over, and flags the DEFUSE-3 near-miss.
+    - **A likely real hallucination:** fx05 lists the ASPECTS 6–10 recommendation among its thrombectomy `rule_ids` while saying ASPECTS is null, so the rule is misapplied. The verifier should catch it.
+  - Entries bundle up to six sources.
+- §7 `reasoner/run.py` task ticked.
+- **Notion sync:**
+  - done: Experiments → EXP-9 row (Done).
+
+## 2026-11-04 — Claude Code session (NLP B: verifier run and judge bake-off notebook)
+- **`nlp/verifier/run.py`:**
+  - `verify()` runs extraction then tracing.
+  - `run_seeded()` traces the 5 gold outputs and the 70 seeds once per judge model, on the same extracted claims.
+  - **Caches** are saved to the run folder after every new entry, so a stopped run resumes without paying twice:
+    - extraction: per distinct text, so seeds that change only sources or a rule ID reuse the gold extraction;
+    - judge verdicts: per claim and passage, so an unchanged claim in 14 seeded copies is judged once;
+    - retrieval: per claim text.
+  - **τ:** the run judges every top-5 retrieved passage (τ = −1). `replay()` then scores τ from −1 to 0.9 from the caches alone, with no API calls.
+- **`40_nlpB_verifier.ipynb`** (Colab, CPU):
+  - `MODE='dummy'` (EXP-10): fx02's gold output and its 14 seeds, with a Haiku judge.
+  - `MODE='run'` (EXP-11): all 75 outputs, with `claude-haiku-5-5` then `claude-opus-5-5` as judge. The extractor is `claude-sonnet-5-5` at effort medium; that is my choice, held fixed so only the judge varies.
+  - It prints strict recall per sub-type and the false-flag rate for each τ, and the τ with the best lowest recall among those with false flags ≤ 0.10.
+  - **Estimates, unmeasured:** dummy about 10 minutes and $0.50; run about 2 hours and $7–20.
+- **Notebook test:** run locally with Colab, git, pip and the API faked, and real bge retrieval.
+  - In dummy and run modes, it made 12 and 60 extractor calls and 25 and 119 unique judge calls per judge model.
+  - A resume after a stop made no new calls, and no key or token was printed or kept.
+  - The fake extractor's recall numbers mean nothing.
+- **Not measured yet:** real recall, false flags, τ and cost.
+- pytest: 319 passed.
+- **Notion sync:**
+  - pending: Experiments rows for EXP-10 and EXP-11 after the runs; a Decisions row for the judge model and τ after EXP-11.
+
+## 2026-11-04 — Claude Code session (NLP B: seeded errors)
+- **Gold outputs** (`fixtures/gold/fx0N_*.json`): one clean recommendation per fixture, written by hand in the verifier's style, with one fact or one comparison per entry and every source cited.
+  - A test checks each in code: schema; every note quote verbatim; every passage ID in the corpus; every number matches the vision JSON, the fact sheet or a cited passage; decisions match the expected ones.
+  - The test cannot check whether a rule claim matches its passage. Only the judge, or a person, can.
+- **Seeds** (`fixtures/seeded_errors.json`): 70 hand-written seeds, 2 per sub-type per fixture. Each is one edit to a gold output, labelled with its sub-type and the entry it touches. By sub-type:
+  - 1: a changed vision or note number.
+  - 2: a fact no input gives (INR, platelets, a warning, ASPECTS for a null field).
+  - 3: a reversed or loosened rule, or a cited passage ID that does not exist.
+  - 4: a rule applied outside its scope.
+  - 5: a reversed comparison.
+  - 6: a true rule stated with only a non-passage source.
+  - 7: a true claim cited to the wrong field or quote.
+  - A test checks that each seed changes exactly the labelled entry and leaves the decisions alone.
+- **`nlp/verifier/seeded_errors.py`:**
+  - `apply()` and `seeded_set()` build the seeded outputs.
+  - `score()` reports recall per sub-type, both strict (that sub-type in the labelled entry) and lenient (any sub-type there), with missed seed IDs.
+  - It also reports the false-flag rate on the gold outputs and flags outside the labelled entry, and checks them against the bar in `docs/HALLUCINATION_METRIC.md` §8 (recall ≥ 0.80 for every sub-type, false flags ≤ 0.10).
+- **Not measured yet:** it needs the real extractor and judge. That is the verifier notebook, next.
+- pytest: 313 passed.
+- **Notion sync:** none.
+
+## 2026-11-04 — Claude Code session (EXP-8 reasoner dummy)
+- **EXP-8 ran on Colab** (`claude-sonnet-5-5`, effort high, commit `592fceb`): fx02 twice.
+  - **Result:** 0 format failures, and both runs got the decisions right (thrombolysis no, thrombectomy yes). The API accepted the output schema.
+  - **Cost and speed:** the system prompt is 10,559 tokens, against an estimate of about 6,000; the first call wrote it to the cache and the second read it. Each call used about 426 uncached input and 3,144 output tokens and took 20 s. The two calls cost about $0.09 together, about half the estimate.
+  - **Read through by Claude:**
+    - Every number matches the fixture, every note quote checked is verbatim, and every passage ID exists.
+    - Entries bundle up to four facts, despite the prompt asking for one or two.
+    - One run's uncertainty says the rulebook counts time from last known well; it is the prompt that says so.
+    - One run lists the blood-pressure passage among the thrombectomy `rule_ids`.
+    - These are what the verifier is for; no prompt change yet.
+- **EXP-9 estimate:** 10 calls at this rate is about $0.37 and 4 minutes (estimated from EXP-8).
+- **Notion sync:**
+  - done: Experiments → EXP-8 row (Done).
+
 ## 2026-11-04 — Claude Code session (NLP A: reasoner v1)
 - **`prompts/reasoner_v1.md`:**
   - Explains each vision field: null means unknown, and `penumbra_ml` includes the core.

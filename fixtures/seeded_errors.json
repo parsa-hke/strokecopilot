@@ -1,0 +1,1532 @@
+{
+ "_note": "Hand-written seeded errors (plan §8.4, docs/HALLUCINATION_METRIC.md §8). Each seed is one edit to a gold output in fixtures/gold/ and labels the entry where the verifier should find that sub-type. Never passed to the reasoner.",
+ "seeds": [
+  {
+   "id": "fx01-1a",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 1,
+   "what": "onset-to-imaging time changed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 0,
+     "old": "2 h 30 min.",
+     "new": "3 h 30 min."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 0
+   }
+  },
+  {
+   "id": "fx01-1b",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 1,
+   "what": "NIHSS changed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 3,
+     "old": "is 8.",
+     "new": "is 12."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 3
+   }
+  },
+  {
+   "id": "fx01-2a",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 2,
+   "what": "INR the note never gives",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "The INR is 1.1.",
+      "sources": [
+       {
+        "type": "note",
+        "quote": "INR 1.1"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx01-2b",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 2,
+   "what": "pipeline warning that was not reported",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "The imaging pipeline reported a motion artefact.",
+      "sources": [
+       {
+        "type": "vision",
+        "field": "warnings"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx01-3a",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 3,
+   "what": "non-dominant M2 rule reversed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 7,
+     "old": "gives no benefit for a non-dominant or codominant M2 occlusion",
+     "new": "is recommended for a non-dominant or codominant M2 occlusion"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 7
+   }
+  },
+  {
+   "id": "fx01-3b",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 3,
+   "what": "citation of a passage ID that does not exist",
+   "edits": [
+    {
+     "op": "rule_id",
+     "decision": "thrombolysis",
+     "index": 1,
+     "new": "AHA2026-4.6.2-rec1"
+    }
+   ],
+   "label": {
+    "field": "thrombolysis.rule_ids",
+    "entry": 1
+   }
+  },
+  {
+   "id": "fx01-4a",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 4,
+   "what": "dominant-M2 rule applied though dominance is unknown",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "Thrombectomy is reasonable for this patient under the dominant proximal M2 recommendation.",
+      "sources": [
+       {
+        "type": "passage",
+        "id": "AHA2026-4.7.2-m2-dominant"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx01-4b",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 4,
+   "what": "extended-window rule applied within 4.5 h",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "Extended-window thrombolysis after automated perfusion imaging is reasonable for this patient.",
+      "sources": [
+       {
+        "type": "passage",
+        "id": "AHA2026-4.6.3-wake-up-perfusion"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx01-5a",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 5,
+   "what": "window comparison reversed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 1,
+     "old": "is within the 4.5 h",
+     "new": "is beyond the 4.5 h"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 1
+   }
+  },
+  {
+   "id": "fx01-5b",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 5,
+   "what": "EXTEND comparison reversed",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "The penumbra minus core of 21.8 mL is below the EXTEND minimum of 10 mL.",
+      "sources": [
+       {
+        "type": "vision",
+        "field": "mismatch_volume_ml"
+       },
+       {
+        "type": "passage",
+        "id": "AHA2026-T3-extend"
+       }
+      ],
+      "derived": true
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx01-6a",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 6,
+   "what": "M2 rule left without its passages",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 7,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "occlusion_site"
+      }
+     ],
+     "claim": "The occlusion is in M2. Thrombectomy is reasonable for a dominant proximal M2 occlusion within 6 hours, and gives no benefit for a non-dominant or codominant M2 occlusion."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 7
+   }
+  },
+  {
+   "id": "fx01-6b",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 6,
+   "what": "4.5 h rule left without its passage",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 5,
+     "sources": [
+      {
+       "type": "note",
+       "quote": "NIHSS on arrival: 8."
+      }
+     ],
+     "claim": "The NIHSS on arrival is 8. IV thrombolysis is recommended within 4.5 hours of symptom onset for a disabling deficit, at any NIHSS score."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 5
+   }
+  },
+  {
+   "id": "fx01-7a",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 7,
+   "what": "note fact cited to a vision field",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 0,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "core_ml"
+      }
+     ]
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 0
+   }
+  },
+  {
+   "id": "fx01-7b",
+   "fixture": "fx01_thrombolysis_clear",
+   "subtype": 7,
+   "what": "NIHSS cited to the mRS line",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 3,
+     "sources": [
+      {
+       "type": "note",
+       "quote": "Pre-stroke mRS: 0 (fully independent)."
+      }
+     ]
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 3
+   }
+  },
+  {
+   "id": "fx02-1a",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 1,
+   "what": "core volume changed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 8,
+     "old": "18.0 mL",
+     "new": "28.0 mL"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 8
+   }
+  },
+  {
+   "id": "fx02-1b",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 1,
+   "what": "NIHSS changed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 5,
+     "old": "is 16.",
+     "new": "is 18."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 5
+   }
+  },
+  {
+   "id": "fx02-2a",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 2,
+   "what": "platelet count the note never gives",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "The platelet count is 250,000/mm³.",
+      "sources": [
+       {
+        "type": "note",
+        "quote": "Platelets 250,000"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx02-2b",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 2,
+   "what": "pipeline warning that was not reported",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "The imaging pipeline reported incomplete perfusion coverage.",
+      "sources": [
+       {
+        "type": "vision",
+        "field": "warnings"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx02-3a",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 3,
+   "what": "extended-window exception dropped",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 10,
+     "old": "applies only to patients who cannot have thrombectomy",
+     "new": "applies to all patients 4.5 to 9 hours from last known well, whether or not they can have thrombectomy"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 10
+   }
+  },
+  {
+   "id": "fx02-3b",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 3,
+   "what": "citation of a passage ID that does not exist",
+   "edits": [
+    {
+     "op": "rule_id",
+     "decision": "thrombectomy",
+     "index": 0,
+     "new": "AHA2026-4.7.2-rec2"
+    }
+   ],
+   "label": {
+    "field": "thrombectomy.rule_ids",
+    "entry": 0
+   }
+  },
+  {
+   "id": "fx02-4a",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 4,
+   "what": "extended-window thrombolysis applied to a thrombectomy candidate",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "IV thrombolysis is reasonable for this patient under the 4.5 to 9 hour perfusion recommendation.",
+      "sources": [
+       {
+        "type": "passage",
+        "id": "AHA2026-4.6.3-wake-up-perfusion"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx02-4b",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 4,
+   "what": "M2 rule applied to an M1 occlusion",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "Thrombectomy is reasonable for this patient under the dominant proximal M2 recommendation.",
+      "sources": [
+       {
+        "type": "passage",
+        "id": "AHA2026-4.7.2-m2-dominant"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx02-5a",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 5,
+   "what": "window comparison reversed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 2,
+     "old": "is beyond the 4.5 h",
+     "new": "is within the 4.5 h"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 2
+   }
+  },
+  {
+   "id": "fx02-5b",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 5,
+   "what": "DEFUSE-3 core comparison reversed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 9,
+     "old": "is below the DEFUSE-3 limit",
+     "new": "is above the DEFUSE-3 limit"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 9
+   }
+  },
+  {
+   "id": "fx02-6a",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 6,
+   "what": "extended-window rule left without its passage",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 10,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "occlusion_site"
+      }
+     ],
+     "claim": "The occlusion is in M1. Extended-window thrombolysis applies only to patients who cannot have thrombectomy."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 10
+   }
+  },
+  {
+   "id": "fx02-6b",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 6,
+   "what": "6-24 h rule left without its passage",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 7,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "aspects"
+      }
+     ],
+     "claim": "ASPECTS is 8. Thrombectomy is recommended for an ICA or M1 occlusion 6 to 24 hours from onset with NIHSS 6 or more, pre-stroke mRS 0 or 1 and ASPECTS 6 or more."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 7
+   }
+  },
+  {
+   "id": "fx02-7a",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 7,
+   "what": "ASPECTS cited to the core volume",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 4,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "core_ml"
+      }
+     ]
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 4
+   }
+  },
+  {
+   "id": "fx02-7b",
+   "fixture": "fx02_thrombectomy_large_mismatch",
+   "subtype": 7,
+   "what": "mRS cited to the NIHSS line",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 6,
+     "sources": [
+      {
+       "type": "note",
+       "quote": "NIHSS on arrival: 16."
+      }
+     ]
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 6
+   }
+  },
+  {
+   "id": "fx03-1a",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 1,
+   "what": "haemorrhage probability changed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 1,
+     "old": "0.96",
+     "new": "0.69"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 1
+   }
+  },
+  {
+   "id": "fx03-1b",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 1,
+   "what": "onset-to-imaging time changed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 6,
+     "old": "is 2 h.",
+     "new": "is 3 h."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 6
+   }
+  },
+  {
+   "id": "fx03-2a",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 2,
+   "what": "ASPECTS given for a null field",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "ASPECTS is 7.",
+      "sources": [
+       {
+        "type": "vision",
+        "field": "aspects"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx03-2b",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 2,
+   "what": "INR the note never gives",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "The INR is 1.0.",
+      "sources": [
+       {
+        "type": "note",
+        "quote": "INR 1.0"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx03-3a",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 3,
+   "what": "haemorrhage made a relative contraindication",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 2,
+     "old": "is an absolute contraindication",
+     "new": "is a relative contraindication"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 2
+   }
+  },
+  {
+   "id": "fx03-3b",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 3,
+   "what": "citation of a passage ID that does not exist",
+   "edits": [
+    {
+     "op": "rule_id",
+     "decision": "thrombolysis",
+     "index": 0,
+     "new": "AHA2026-T8-haemorrhage"
+    }
+   ],
+   "label": {
+    "field": "thrombolysis.rule_ids",
+    "entry": 0
+   }
+  },
+  {
+   "id": "fx03-4a",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 4,
+   "what": "0-6 h thrombectomy rule applied with no known occlusion",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "Thrombectomy is recommended for this patient under the 0 to 6 hour recommendation for ICA or M1 occlusion.",
+      "sources": [
+       {
+        "type": "passage",
+        "id": "AHA2026-4.7.2-0-6h-aspects-3-10"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx03-4b",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 4,
+   "what": "4.5 h thrombolysis rule applied despite haemorrhage",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "IV thrombolysis is recommended for this patient within 4.5 hours of symptom onset.",
+      "sources": [
+       {
+        "type": "passage",
+        "id": "AHA2026-4.6.1-within-4.5h"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx03-5a",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 5,
+   "what": "2 h called beyond 4.5 h",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "The time from onset to imaging of 2 h is beyond the 4.5 h thrombolysis window.",
+      "sources": [
+       {
+        "type": "note",
+        "quote": "Time from symptom onset to imaging: 2 h 0 min."
+       },
+       {
+        "type": "passage",
+        "id": "AHA2026-4.6.1-within-4.5h"
+       }
+      ],
+      "derived": true
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx03-5b",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 5,
+   "what": "ratio 2.67 called below 1.8",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "The mismatch ratio of 2.67 is below the DEFUSE-3 minimum of 1.8.",
+      "sources": [
+       {
+        "type": "vision",
+        "field": "mismatch_ratio"
+       },
+       {
+        "type": "passage",
+        "id": "DEFUSE3-inclusion-imaging"
+       }
+      ],
+      "derived": true
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx03-6a",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 6,
+   "what": "haemorrhage rule left without its passage",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 2,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "haemorrhage.present"
+      }
+     ],
+     "claim": "Intracranial haemorrhage is present on CT. Acute intracranial haemorrhage on CT is an absolute contraindication to IV thrombolysis."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 2
+   }
+  },
+  {
+   "id": "fx03-6b",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 6,
+   "what": "0-6 h rule left without its passage",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 5,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "warnings"
+      }
+     ],
+     "claim": "CTA was not acquired. Thrombectomy is recommended for an ICA or M1 occlusion within 6 hours of symptom onset with NIHSS 6 or more, pre-stroke mRS 0 or 1 and ASPECTS 3 to 10."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 5
+   }
+  },
+  {
+   "id": "fx03-7a",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 7,
+   "what": "probability cited to the yes/no field",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 1,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "haemorrhage.present"
+      }
+     ]
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 1
+   }
+  },
+  {
+   "id": "fx03-7b",
+   "fixture": "fx03_haemorrhage_present",
+   "subtype": 7,
+   "what": "blood pressure cited to the NIHSS line",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 7,
+     "sources": [
+      {
+       "type": "note",
+       "quote": "NIHSS on arrival: 12."
+      }
+     ]
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 7
+   }
+  },
+  {
+   "id": "fx04-1a",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 1,
+   "what": "ASPECTS changed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 2,
+     "old": "is 4.",
+     "new": "is 6."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 2
+   }
+  },
+  {
+   "id": "fx04-1b",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 1,
+   "what": "age changed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 3,
+     "old": "71 years",
+     "new": "76 years"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 3
+   }
+  },
+  {
+   "id": "fx04-2a",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 2,
+   "what": "platelet count the note never gives",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "The platelet count is 180,000/mm³.",
+      "sources": [
+       {
+        "type": "note",
+        "quote": "Platelets 180,000"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx04-2b",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 2,
+   "what": "pipeline warning that was not reported",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "The imaging pipeline reported a motion artefact.",
+      "sources": [
+       {
+        "type": "vision",
+        "field": "warnings"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx04-3a",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 3,
+   "what": "age limit removed from the ASPECTS 3-5 rule",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 7,
+     "old": "with ASPECTS 3 to 5, age under 80,",
+     "new": "with ASPECTS 3 to 5 at any age,"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 7
+   }
+  },
+  {
+   "id": "fx04-3b",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 3,
+   "what": "citation of a passage ID that does not exist",
+   "edits": [
+    {
+     "op": "rule_id",
+     "decision": "thrombectomy",
+     "index": 0,
+     "new": "AHA2026-4.7.2-rec3"
+    }
+   ],
+   "label": {
+    "field": "thrombectomy.rule_ids",
+    "entry": 0
+   }
+  },
+  {
+   "id": "fx04-4a",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 4,
+   "what": "DEFUSE-3 applied with a 110 mL core",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "Thrombectomy is recommended for this patient under the DEFUSE-3 imaging criteria.",
+      "sources": [
+       {
+        "type": "passage",
+        "id": "DEFUSE3-inclusion-imaging"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx04-4b",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 4,
+   "what": "extended-window thrombolysis applied to a thrombectomy candidate",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "IV thrombolysis is reasonable for this patient under the 4.5 to 9 hour perfusion recommendation.",
+      "sources": [
+       {
+        "type": "passage",
+        "id": "AHA2026-4.6.3-wake-up-perfusion"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx04-5a",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 5,
+   "what": "window comparison reversed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 1,
+     "old": "is beyond the 4.5 h",
+     "new": "is within the 4.5 h"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 1
+   }
+  },
+  {
+   "id": "fx04-5b",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 5,
+   "what": "DEFUSE-3 core comparison reversed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 9,
+     "old": "is above the DEFUSE-3 limit",
+     "new": "is below the DEFUSE-3 limit"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 9
+   }
+  },
+  {
+   "id": "fx04-6a",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 6,
+   "what": "ASPECTS 3-5 rule left without its passage",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 7,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "occlusion_site"
+      }
+     ],
+     "claim": "The occlusion is in M1. For selected patients with an ICA or M1 occlusion 6 to 24 hours from onset, thrombectomy is recommended with ASPECTS 3 to 5, age under 80, NIHSS 6 or more, pre-stroke mRS 0 or 1 and no significant mass effect."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 7
+   }
+  },
+  {
+   "id": "fx04-6b",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 6,
+   "what": "0-6 h rule stated with no passage",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "ASPECTS is 4. Thrombectomy is recommended for an ICA or M1 occlusion within 6 hours of symptom onset with NIHSS 6 or more, pre-stroke mRS 0 or 1 and ASPECTS 3 to 10.",
+      "sources": [
+       {
+        "type": "vision",
+        "field": "aspects"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx04-7a",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 7,
+   "what": "age cited to the NIHSS line",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 3,
+     "sources": [
+      {
+       "type": "note",
+       "quote": "NIHSS on arrival: 18."
+      }
+     ]
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 3
+   }
+  },
+  {
+   "id": "fx04-7b",
+   "fixture": "fx04_large_core_no_mismatch",
+   "subtype": 7,
+   "what": "core cited to the penumbra field",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 8,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "penumbra_ml"
+      }
+     ]
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 8
+   }
+  },
+  {
+   "id": "fx05-1a",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 1,
+   "what": "core volume changed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 4,
+     "old": "15.0 mL",
+     "new": "13.0 mL"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 4
+   }
+  },
+  {
+   "id": "fx05-1b",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 1,
+   "what": "age changed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 2,
+     "old": "82 years",
+     "new": "78 years"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 2
+   }
+  },
+  {
+   "id": "fx05-2a",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 2,
+   "what": "ASPECTS given for a null field",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "ASPECTS is 7.",
+      "sources": [
+       {
+        "type": "vision",
+        "field": "aspects"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx05-2b",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 2,
+   "what": "INR the note never gives",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "The INR is 1.2.",
+      "sources": [
+       {
+        "type": "note",
+        "quote": "INR 1.2"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx05-3a",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 3,
+   "what": "late-window evidence reversed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 8,
+     "old": "as the trials that showed benefit from thrombectomy beyond 6 hours",
+     "new": "as showing no benefit from thrombectomy beyond 6 hours"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 8
+   }
+  },
+  {
+   "id": "fx05-3b",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 3,
+   "what": "citation of a passage ID that does not exist",
+   "edits": [
+    {
+     "op": "rule_id",
+     "decision": "thrombectomy",
+     "index": 0,
+     "new": "DAWN-inclusion-3"
+    }
+   ],
+   "label": {
+    "field": "thrombectomy.rule_ids",
+    "entry": 0
+   }
+  },
+  {
+   "id": "fx05-4a",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 4,
+   "what": "DAWN under-80 group applied to an 82-year-old",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "Thrombectomy is recommended for this patient under the DAWN group for patients under 80.",
+      "sources": [
+       {
+        "type": "passage",
+        "id": "DAWN-inclusion-mismatch-groups"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx05-4b",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 4,
+   "what": "wake-up thrombolysis applied to a thrombectomy candidate",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "IV thrombolysis is reasonable for this patient as a wake-up stroke within 9 hours of the midpoint of sleep.",
+      "sources": [
+       {
+        "type": "passage",
+        "id": "AHA2026-4.6.3-wake-up-perfusion"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx05-5a",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 5,
+   "what": "DEFUSE-3 mismatch comparison reversed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 7,
+     "old": "is below the DEFUSE-3 minimum",
+     "new": "is above the DEFUSE-3 minimum"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 7
+   }
+  },
+  {
+   "id": "fx05-5b",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 5,
+   "what": "DAWN core comparison reversed",
+   "edits": [
+    {
+     "op": "replace",
+     "entry": 5,
+     "old": "is below the DAWN limit",
+     "new": "is above the DAWN limit"
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 5
+   }
+  },
+  {
+   "id": "fx05-6a",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 6,
+   "what": "late-window rule left without its passage",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 8,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "occlusion_site"
+      }
+     ],
+     "claim": "The occlusion is in M1. The guideline cites DAWN and DEFUSE-3 as the trials that showed benefit from thrombectomy beyond 6 hours."
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 8
+   }
+  },
+  {
+   "id": "fx05-6b",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 6,
+   "what": "DAWN rule stated with no passage",
+   "edits": [
+    {
+     "op": "append",
+     "value": {
+      "claim": "Core volume is 15.0 mL. DAWN required a core under 21 mL for patients aged 80 or over with NIHSS 10 or more.",
+      "sources": [
+       {
+        "type": "vision",
+        "field": "core_ml"
+       }
+      ],
+      "derived": false
+     }
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": "new"
+   }
+  },
+  {
+   "id": "fx05-7a",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 7,
+   "what": "NIHSS cited to the mRS line",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 3,
+     "sources": [
+      {
+       "type": "note",
+       "quote": "Pre-stroke mRS: 1 (no significant disability; manages all usual activities)."
+      }
+     ]
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 3
+   }
+  },
+  {
+   "id": "fx05-7b",
+   "fixture": "fx05_borderline_onset",
+   "subtype": 7,
+   "what": "occlusion cited to the core volume",
+   "edits": [
+    {
+     "op": "set_entry",
+     "entry": 9,
+     "sources": [
+      {
+       "type": "vision",
+       "field": "core_ml"
+      }
+     ]
+    }
+   ],
+   "label": {
+    "field": "rationale",
+    "entry": 9
+   }
+  }
+ ]
+}

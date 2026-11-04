@@ -464,7 +464,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 - [ ] `ingest.py`: guideline PDF + two trial papers → passages with stable IDs; `docs/RULEBOOK.md` generated from the same source — changed by DEC-18: `corpus/RULEBOOK.md` (own words) → `corpus/passages.jsonl`, with checks. Code, tests and 47 passages done 4 Nov 2026: all 43 AHA passages checked against the guideline, off-topic passages added, copy check clean. Ticked once a person has checked the 2 DAWN and 2 DEFUSE-3 passages
 - [x] `index.py`: embed passages; retrieve top-k by query; sanity-check that each fixture's expected rule IDs are retrievable — done 4 Nov 2026. The check (EXP-7, bge-base) found 9 of 15 fixture rules, so the reasoner gets the whole rulebook (DEC-19) and `index.py` serves only the verifier's candidates
 - [ ] `notes/generate.py`: clinical row → triage note (templated with controlled variation), using allowed columns only; test that nothing post-treatment leaks; produce notes for all 149 cases
-- [ ] `reasoner/run.py` v0 with `prompts/reasoner_v1.md`: fixture JSON + note + the whole rulebook (DEC-19) → `recommendation.json`; run on all five fixtures with one model — code, prompt, tests and `31_nlpA_reasoner.ipynb` done 4 Nov 2026 with a fake model; EXP-8 (dummy) and EXP-9 (five fixtures × 2) wait for a Colab run
+- [x] `reasoner/run.py` v0 with `prompts/reasoner_v1.md`: fixture JSON + note + the whole rulebook (DEC-19) → `recommendation.json`; run on all five fixtures with one model — code, prompt, tests and `31_nlpA_reasoner.ipynb` done 4 Nov 2026 with a fake model; EXP-8 (dummy) and EXP-9 (five fixtures × 2, `claude-sonnet-5-5`): 0 format failures, 18/18 judged decisions right, $0.37
 
 **NLP B (verifier & eval)**
 - [x] Write the hallucination metric definition (§8.4) in `docs/` and Notion — before code (`docs/HALLUCINATION_METRIC.md`, approved 3 Nov 2026)
@@ -472,7 +472,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 - [ ] `trace.py`: numeric claims vs vision JSON (after rounding); patient facts vs note; rule claims vs passage text (embedding similarity + NLI or LLM judge — pick one, record it) — LLM judge (`prompts/judge_v1.md`); code, fixture fact sheets and tests done 4 Nov 2026 with a fake judge; τ and the judge model wait for the corpus and seeded errors
 - [x] `metrics.py`: hallucination rate, critical hallucination rate, omission rate; bootstrap CIs (criticality and omissions are filled in once `scenarios.py` exists)
 - [ ] `scenarios.py`: 100–200 synthetic scenarios with expected recommendations derived from the rulebook in code; review the rule code against the corpus
-- [ ] `seeded_errors.py`: plant known fabrications of each sub-type and measure verifier recall and false-flag rate
+- [ ] `seeded_errors.py`: plant known fabrications of each sub-type and measure verifier recall and false-flag rate — seed set and scoring done 4 Nov 2026: 5 hand-written gold outputs (`fixtures/gold/`, checked in code) and 70 hand-written seeds, 2 per sub-type per fixture (`fixtures/seeded_errors.json`); measured by `40_nlpB_verifier.ipynb` (EXP-10 dummy, EXP-11 bake-off), written 4 Nov 2026 and not yet run
 - [ ] Run verifier on the five fixture outputs; `tests/test_claims.py`, `tests/test_trace.py`
 
 **Everyone**

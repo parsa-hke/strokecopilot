@@ -1,0 +1,127 @@
+{
+ "case_id": "fixture-fx01",
+ "model": "gold-handwritten",
+ "prompt_version": "reasoner_v0",
+ "thrombolysis": {
+  "recommend": true,
+  "rule_ids": [
+   "AHA2026-4.6.1-within-4.5h",
+   "AHA2026-4.6.2-agents"
+  ],
+  "blocking_factors": []
+ },
+ "thrombectomy": {
+  "recommend": false,
+  "rule_ids": [
+   "AHA2026-4.7.2-m2-dominant",
+   "AHA2026-4.7.2-distal-no-benefit"
+  ],
+  "blocking_factors": [
+   "M2 dominance is not reported, so the dominant M2 recommendation cannot be applied."
+  ]
+ },
+ "rationale": [
+  {
+   "claim": "Time from symptom onset to imaging is 2 h 30 min.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Time from symptom onset to imaging: 2 h 30 min."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "2 h 30 min from symptom onset is within the 4.5 h thrombolysis window.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Time from symptom onset to imaging: 2 h 30 min."
+    },
+    {
+     "type": "passage",
+     "id": "AHA2026-4.6.1-within-4.5h"
+    }
+   ],
+   "derived": true
+  },
+  {
+   "claim": "No intracranial haemorrhage was detected on CT.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "haemorrhage.present"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The NIHSS on arrival is 8.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "NIHSS on arrival: 8."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The note reports no anticoagulant or antiplatelet use.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "No anticoagulant or antiplatelet use."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "IV thrombolysis is recommended within 4.5 hours of symptom onset for a disabling deficit, at any NIHSS score.",
+   "sources": [
+    {
+     "type": "passage",
+     "id": "AHA2026-4.6.1-within-4.5h"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The occlusion is in M2.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "occlusion_site"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Thrombectomy is reasonable for a dominant proximal M2 occlusion within 6 hours, and gives no benefit for a non-dominant or codominant M2 occlusion.",
+   "sources": [
+    {
+     "type": "passage",
+     "id": "AHA2026-4.7.2-m2-dominant"
+    },
+    {
+     "type": "passage",
+     "id": "AHA2026-4.7.2-distal-no-benefit"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Tenecteplase or alteplase may be used for IV thrombolysis within 4.5 hours.",
+   "sources": [
+    {
+     "type": "passage",
+     "id": "AHA2026-4.6.2-agents"
+    }
+   ],
+   "derived": false
+  }
+ ],
+ "uncertainties": [
+  "M2 dominance is not reported.",
+  "The mismatch ratio is not available because the core is under 1 mL."
+ ]
+}

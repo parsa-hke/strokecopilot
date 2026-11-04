@@ -1,0 +1,135 @@
+{
+ "case_id": "fixture-fx04",
+ "model": "gold-handwritten",
+ "prompt_version": "reasoner_v0",
+ "thrombolysis": {
+  "recommend": false,
+  "rule_ids": [
+   "AHA2026-4.6.1-within-4.5h"
+  ],
+  "blocking_factors": [
+   "Time from symptom onset to imaging is 6 h, beyond the 4.5 h window."
+  ]
+ },
+ "thrombectomy": {
+  "recommend": true,
+  "rule_ids": [
+   "AHA2026-4.7.2-6-24h-aspects-3-5",
+   "AHA2026-4.7.2-0-6h-aspects-3-10"
+  ],
+  "blocking_factors": []
+ },
+ "rationale": [
+  {
+   "claim": "Time from symptom onset to imaging is 6 h.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Time from symptom onset to imaging: 6 h 0 min."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "6 h from symptom onset is beyond the 4.5 h thrombolysis window.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Time from symptom onset to imaging: 6 h 0 min."
+    },
+    {
+     "type": "passage",
+     "id": "AHA2026-4.6.1-within-4.5h"
+    }
+   ],
+   "derived": true
+  },
+  {
+   "claim": "ASPECTS is 4.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "aspects"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The patient is 71 years old.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "71-year-old woman."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Pre-stroke mRS is 0.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Pre-stroke mRS: 0 (fully independent)."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The NIHSS on arrival is 18.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "NIHSS on arrival: 18."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The occlusion is in M1.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "occlusion_site"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "For selected patients with an ICA or M1 occlusion 6 to 24 hours from onset, thrombectomy is recommended with ASPECTS 3 to 5, age under 80, NIHSS 6 or more, pre-stroke mRS 0 or 1 and no significant mass effect.",
+   "sources": [
+    {
+     "type": "passage",
+     "id": "AHA2026-4.7.2-6-24h-aspects-3-5"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Core volume is 110.0 mL.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "core_ml"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Core 110.0 mL is above the DEFUSE-3 limit of 70 mL.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "core_ml"
+    },
+    {
+     "type": "passage",
+     "id": "DEFUSE3-inclusion-imaging"
+    }
+   ],
+   "derived": true
+  }
+ ],
+ "uncertainties": [
+  "Significant mass effect is not reported."
+ ]
+}

@@ -1,0 +1,109 @@
+{
+ "case_id": "fixture-fx03",
+ "model": "gold-handwritten",
+ "prompt_version": "reasoner_v0",
+ "thrombolysis": {
+  "recommend": false,
+  "rule_ids": [
+   "AHA2026-T8-ich"
+  ],
+  "blocking_factors": [
+   "Intracranial haemorrhage is present on CT."
+  ]
+ },
+ "thrombectomy": {
+  "recommend": false,
+  "rule_ids": [
+   "AHA2026-4.7.2-0-6h-aspects-3-10"
+  ],
+  "blocking_factors": [
+   "No ICA or M1 occlusion is shown: the occlusion site is unknown because CTA was not acquired."
+  ]
+ },
+ "rationale": [
+  {
+   "claim": "Intracranial haemorrhage is present on CT.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "haemorrhage.present"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The probability of haemorrhage is 0.96.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "haemorrhage.confidence"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Acute intracranial haemorrhage on CT is an absolute contraindication to IV thrombolysis.",
+   "sources": [
+    {
+     "type": "passage",
+     "id": "AHA2026-T8-ich"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "The occlusion site is unknown.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "occlusion_site"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "CTA was not acquired.",
+   "sources": [
+    {
+     "type": "vision",
+     "field": "warnings"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Thrombectomy is recommended for an ICA or M1 occlusion within 6 hours of symptom onset with NIHSS 6 or more, pre-stroke mRS 0 or 1 and ASPECTS 3 to 10.",
+   "sources": [
+    {
+     "type": "passage",
+     "id": "AHA2026-4.7.2-0-6h-aspects-3-10"
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Time from symptom onset to imaging is 2 h.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "Time from symptom onset to imaging: 2 h 0 min."
+    }
+   ],
+   "derived": false
+  },
+  {
+   "claim": "Blood pressure is 212/118 mmHg.",
+   "sources": [
+    {
+     "type": "note",
+     "quote": "BP 212/118 mmHg"
+    }
+   ],
+   "derived": false
+  }
+ ],
+ "uncertainties": [
+  "ASPECTS is not available.",
+  "The occlusion site is unknown because CTA was not acquired."
+ ]
+}
