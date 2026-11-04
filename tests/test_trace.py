@@ -197,3 +197,57 @@ def test_threshold_found_only_by_retrieval_is_uncited():
 def test_judge_v2_scope_covers_rules_that_do_not_apply():
     system = tr.Judge(lambda *a: {"verdicts": []}).system
     assert tr.JUDGE_PROMPT == "judge_v2" and "does not apply" in system and "{{" not in system
+
+
+@pytest.mark.parametrize("claimed, unit, ok", [("2 h 30 min", None, True), ("2", "h 30 min", True), ("3 h 30 min", None, False), ("150", "min", True)])
+def test_compound_durations_are_one_number(claimed, unit, ok):
+    assert tr.number_matches(claimed, unit, 150, "min") is ok
+
+
+def test_regex_reads_a_compound_time_once():
+    assert cl.numbers("Time from symptom onset to imaging is 2 h 30 min.") == [("150", "min", 38)]
+
+
+def test_warnings_and_unknown_site_support_absence_claims():
+    inputs = _inputs("fx03_haemorrhage_present")
+    assert tr.check_absence("occlusion_site", inputs)[0] is None  # reported as "unknown"
+    assert tr.check_absence("other:cta", inputs, "CTA was not acquired.")[0] is None
+    assert tr._subject_check("other:cta_status", "not acquired", None, inputs, "CTA was not acquired.")[0] is None
+    assert tr.check_absence("other:mri", inputs, "MRI was not acquired.")[0] == 2
+
+
+def _claim(**kw):
+    base = dict(id="rationale[0].0", field="rationale", entry=0, kind="vision", declared_sources=[])
+    return cl.Claim(**{**base, **kw})
+
+
+def test_a_value_given_as_a_bound_is_checked_as_one():
+    inputs = _inputs("fx01_thrombolysis_clear")  # core 0.6 mL
+    held = tr.trace_claim(_claim(text="The core is under 1 mL.", subject="core_ml", value="1", unit="mL"), inputs)
+    assert held.subtype is None
+    broken = tr.trace_claim(_claim(text="The core is above 1 mL.", subject="core_ml", value="1", unit="mL"), inputs)
+    assert broken.subtype == 5
+    plain = tr.trace_claim(_claim(text="The core is 2 mL.", subject="core_ml", value="2", unit="mL"), inputs)
+    assert plain.subtype == 1
+
+
+def test_citations_use_the_passage_treatment_without_a_judge():
+    from strokecopilot.nlp.corpus import ingest
+    inputs = _inputs()
+    inputs.corpus, inputs.judge = ingest.load(), None  # no judge: a judge call would raise
+    ok = _claim(id="thrombectomy.rule_ids[0]", field="thrombectomy.rule_ids", kind="citation", subject="thrombectomy",
+                value="DAWN-inclusion-mismatch-groups", text="Passage DAWN-inclusion-mismatch-groups is a rule about thrombectomy.")
+    assert tr.trace_claim(ok, inputs).subtype is None
+    wrong = _claim(id="thrombolysis.rule_ids[0]", field="thrombolysis.rule_ids", kind="citation", subject="thrombolysis",
+                   value="AHA2026-4.7.2-6-24h-aspects-6-10", text="Passage AHA2026-4.7.2-6-24h-aspects-6-10 is a rule about thrombolysis.")
+    assert tr.trace_claim(wrong, inputs).subtype == 3
+
+
+def test_numbers_in_an_uncited_rule_are_found_through_retrieval():
+    inputs = _inputs()
+    inputs.retriever, inputs.tau = (lambda text, k: [("TEST-EVT-6-24", 0.8)]), 0.5
+    claim = _claim(kind="number", text="Thrombectomy needs NIHSS 6 or more.", value="6", unit=None, origin="regex",
+                   declared_sources=[vision_source("occlusion_site")])
+    assert tr.trace_claim(claim, inputs).subtype is None
+    inputs.tau = 0.9
+    assert tr.trace_claim(claim, inputs).subtype == 1

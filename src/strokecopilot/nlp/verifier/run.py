@@ -149,7 +149,7 @@ def run_seeded(extractor_llm, judges, retriever, out_dir, seeds=None, stems=None
                 {"claims": done[item["id"]], "traces": [t.to_dict() for t in traces]}, indent=1, ensure_ascii=False))
             if n % 10 == 0 or n == len(items):
                 log(f"{name}: {n}/{len(items)} outputs; judge calls {judge.calls}, extractor calls {extractor.calls}")
-        grid = replay(items, done, out, name, corpus)
+        grid = replay(items, done, out, name, corpus, retriever)
         usage = dict(getattr(judge_llm, "usage", {}) or {})
         metrics["judges"][name] = {"failures": failures, "judge_calls": judge.calls, "verdicts_cached": len(cache),
                                    "usage": usage, "cost_usd_estimate": cost_usd(getattr(judge_llm, "model", name), usage),
@@ -161,19 +161,26 @@ def run_seeded(extractor_llm, judges, retriever, out_dir, seeds=None, stems=None
     return metrics
 
 
-def replay(items, claims_by_id, out_dir, judge_name, corpus=None):
-    """Seeded-error scores at every τ in TAU_GRID, from the caches only."""
+def refresh_claims(rec, saved):
+    """The model's extracted claims as saved, plus the regex and citation claims rebuilt with the current code."""
+    llm = [cl.Claim(**c) for c in saved if c.get("origin", "llm") == "llm"]
+    return llm + cl.regex_claims(rec, llm) + cl.citation_claims(rec)
+
+
+def replay(items, claims_by_id, out_dir, judge_name, corpus=None, retriever=None):
+    """Seeded-error scores at every τ in TAU_GRID. Judge verdicts come from the cache only; retrieval comes from the
+    cache, or from `retriever` (no API) for a text not retrieved before."""
     out = Path(out_dir)
     corpus = corpus or ingest.load()
     judge = CachedJudge(None, JsonCache(out / f"judge_{judge_name}_cache.json"), offline=True)
-    retriever = CachedRetriever(None, JsonCache(out / "retrieval_cache.json"), offline=True)
+    retriever = CachedRetriever(retriever, JsonCache(out / "retrieval_cache.json"), offline=retriever is None)
     grid = {}
     for tau in TAU_GRID:
         seeds, clean = [], []
         for item in items:
             if item["id"] not in claims_by_id:
                 continue
-            claims = [cl.Claim(**c) for c in claims_by_id[item["id"]]]
+            claims = refresh_claims(item["rec"], claims_by_id[item["id"]])
             traces = [t.to_dict() for t in tr.trace_all(claims, fixture_inputs(item["fixture"], judge, retriever, tau, corpus))]
             if item["subtype"] is None:
                 clean.append({"fixture": item["fixture"], "traces": traces})
@@ -189,9 +196,10 @@ def _items(stems=None, seeds=None):
     return items + [x for x in se.seeded_set(seeds) if stems is None or x["fixture"] in stems]
 
 
-def rescore(out_dir, judge_names, stems=None, seeds=None, metrics_name="metrics_rescore.json"):
-    """Re-score an earlier run with the current tracing code, from its saved claims and caches only. No API calls:
-    a claim that would need a verdict or a retrieval that is not cached raises KeyError."""
+def rescore(out_dir, judge_names, stems=None, seeds=None, metrics_name="metrics_rescore.json", retriever=None):
+    """Re-score an earlier run with the current tracing code, from its saved model claims and the caches. No API
+    calls: a claim that would need a judge verdict that is not cached raises KeyError. `retriever` (the local
+    embedding model) answers retrievals the cache does not hold."""
     out = Path(out_dir)
     corpus = ingest.load()
     items = _items(stems, seeds)
@@ -204,7 +212,7 @@ def rescore(out_dir, judge_names, stems=None, seeds=None, metrics_name="metrics_
                 claims_by_id[item["id"]] = json.loads(path.read_text())["claims"]
         metrics["judges"][name] = {"failures": [], "judge_calls": 0, "verdicts_cached": len(JsonCache(out / f"judge_{name}_cache.json")),
                                    "usage": {}, "cost_usd_estimate": 0.0, "outputs_rescored": len(claims_by_id),
-                                   "by_tau": replay(items, claims_by_id, out, name, corpus)}
+                                   "by_tau": replay(items, claims_by_id, out, name, corpus, retriever)}
     metrics["extractor"] = {"calls": 0, "usage": {}, "cost_usd_estimate": 0.0}
     (out / metrics_name).write_text(json.dumps(metrics, indent=1))
     return metrics

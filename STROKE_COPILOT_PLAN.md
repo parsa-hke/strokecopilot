@@ -457,7 +457,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 
 **Vision B (haemorrhage)**
 - [x] 2D classifier (pretrained ResNet-50 or EfficientNet-B3) on windowed slices, "any" label; slice AUC — EXP-6 (ResNet-50, 10 epochs, Kaggle T4): validation slice AUC 0.975
-- [x] `aggregate.py`: slice → scan (max and top-k mean); scan AUC; temperature scaling for calibration; reliability diagram — EXP-6: validation scan AUC 0.977, ECE 0.010, sensitivity 0.951 at specificity 0.917 (2,166 scans; threshold set on the same split for 95% sensitivity, so specificity is optimistic)
+- [x] `aggregate.py`: slice → scan (max and top-k mean); scan AUC; temperature scaling for calibration; reliability diagram — EXP-6: top-2 mean chosen (scan AUC 0.9772 vs max 0.9771), Platt calibration chosen over temperature (ECE 0.014 vs 0.131 out of half; the bias undoes the balanced-epoch prevalence shift), validation scan AUC 0.977, ECE 0.010, sensitivity 0.951 at specificity 0.917 (2,166 scans; threshold 0.278 set on the same split for 95% sensitivity, so specificity is optimistic)
 - [x] `infer.py`: scan → `{present, confidence}` — code and tests done 4 Nov 2026; the EXP-6 calibrator plugs in through `calibration.json`
 
 **NLP A (reasoner)**

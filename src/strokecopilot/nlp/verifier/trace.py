@@ -94,8 +94,21 @@ def _decimals(text):
     return len(text.split(".", 1)[1]) if "." in text else 0
 
 
+_COMPOUND = re.compile(r"^\s*(\d+)\s*(?:h|hr|hrs|hours?)\s*(\d+)\s*(?:min|mins|minutes?)\s*$", re.I)
+
+
+def _compound(claimed, claimed_unit):
+    """'2 h 30 min' (as the value, or split across value and unit) -> ('150', 'min'); anything else unchanged."""
+    joined = f"{claimed} {claimed_unit or ''}".strip()
+    match = _COMPOUND.match(str(claimed)) or _COMPOUND.match(joined)
+    if match:
+        return str(int(match.group(1)) * 60 + int(match.group(2))), "min"
+    return claimed, claimed_unit
+
+
 def number_matches(claimed, claimed_unit, true_value, true_unit):
     """True if the true value, in the claim's unit and rounded to its stated precision, equals the claim."""
+    claimed, claimed_unit = _compound(claimed, claimed_unit)
     try:
         claimed_value = float(claimed)
     except (TypeError, ValueError):
@@ -143,6 +156,18 @@ def _vision_field(subject):
 
 # --- checks: each returns (sub-type or None, used sources, reason) -----------------------------
 
+_BOUNDS = (("less than", "<"), ("under", "<"), ("below", "<"), ("at most", "<="), ("more than", ">"), ("over", ">"),
+           ("above", ">"), ("at least", ">="), ("exceeds", ">"), ("exceeding", ">"))
+
+
+def _bound(text, value):
+    """The operator when the text gives the value as a bound ("the core is under 1 mL"), else None."""
+    for word, op in _BOUNDS:
+        if re.search(rf"\b{word}\s+{re.escape(str(value))}(?![\d.])", str(text), re.I):
+            return op
+    return None
+
+
 def check_vision(subject, value, unit, vision):
     true = _vision_value(vision, subject)
     used = [{"type": "vision", "field": _vision_field(subject)}]
@@ -165,7 +190,7 @@ def check_vision(subject, value, unit, vision):
 
 def _number_or_none(text):
     try:
-        return float(text)
+        return float(_compound(text, None)[0])
     except (TypeError, ValueError):
         return None
 
@@ -191,7 +216,20 @@ def check_fact(subject, value, unit, facts):
     return 2, used, "The note does not say this."
 
 
-def check_absence(subject, inputs):
+def _warning_for(text, vision):
+    """The pipeline warning a claim's text restates, if any ("CTA was not acquired" restates "CTA not acquired")."""
+    claimed = _tokens(text)
+    for w in vision.get("warnings", []):
+        if _tokens(w) and _tokens(w) <= claimed:
+            return w
+    return None
+
+
+def check_absence(subject, inputs, text=None):
+    if text and _warning_for(text, inputs.vision):
+        return None, [{"type": "vision", "field": "warnings"}], "A pipeline warning says it is missing."
+    if subject == "occlusion_site" and inputs.vision.get("occlusion_site") == "unknown":
+        return None, [{"type": "vision", "field": "occlusion_site"}], "The occlusion site is reported as unknown."
     if subject in VISION_SUBJECTS:
         if _vision_value(inputs.vision, subject) is None:
             return None, [{"type": "vision", "field": _vision_field(subject)}], "The field is null."
@@ -205,8 +243,10 @@ def check_absence(subject, inputs):
     return 2, [], "Nothing in the inputs says it is missing; the note is silent."
 
 
-def _subject_check(subject, value, unit, inputs):
+def _subject_check(subject, value, unit, inputs, text=None):
     if subject is None or subject.startswith("other:"):
+        if text and _warning_for(text, inputs.vision):
+            return None, [{"type": "vision", "field": "warnings"}], "Restates a pipeline warning."
         return 2, [], "The claim is about something no input covers."
     if subject in VISION_SUBJECTS:
         return check_vision(subject, value, unit, inputs.vision)
@@ -429,7 +469,11 @@ def _number_claim(claim, inputs):
     for pid in cited:
         if pattern.search(inputs.corpus[pid]["text"]):
             return None, [], [pid], f"A number stated in {pid}."
-    return 1, [], [], "This number is in no input and no cited passage."
+    if inputs.retriever is not None:
+        for pid, score in inputs.retriever(claim.text, TOP_K):
+            if score >= inputs.tau and pattern.search(inputs.corpus[pid]["text"]):
+                return None, [], [pid], f"A number stated in {pid}, which the entry does not cite."
+    return 1, [], [], "This number is in no input and no passage."
 
 
 def trace_claim(claim, inputs):
@@ -439,11 +483,26 @@ def trace_claim(claim, inputs):
     if claim.kind == "number":
         subtype, used, supported, reason = _number_claim(claim, inputs)
     elif claim.kind in ("vision", "patient"):
-        subtype, used, reason = _subject_check(claim.subject, claim.value, claim.unit, inputs)
+        subtype, used, reason = _subject_check(claim.subject, claim.value, claim.unit, inputs, claim.text)
+        op = _bound(claim.text, claim.value) if subtype in (None, 1) else None  # a bound is never an equality
+        true = _true_number(claim.subject, inputs) if op else None
+        number = _number_or_none(claim.value) if op else None
+        if true is not None and number is not None:
+            dim, base = _base(number, claim.unit or (VISION_UNITS.get(claim.subject) if claim.subject in VISION_SUBJECTS else None))
+            if dim == true[1]:
+                subtype, reason = (None, "The bound holds with the true value.") if _OPS[op](true[0], base) else (5, f"With the true value, {true[0]:g} {op} {base:g} is false.")
     elif claim.kind == "absence":
-        subtype, used, reason = check_absence(claim.subject, inputs)
+        subtype, used, reason = check_absence(claim.subject, inputs, claim.text)
     elif claim.kind == "comparison":
         subtype, used, reason, rule_part = check_comparison(claim.comparison, inputs)
+    elif claim.kind == "citation" and claim.value in inputs.corpus and "treatment" in inputs.corpus[claim.value]:
+        # The metric's definition (§1): the passage exists and is a rule about that treatment. The rulebook records
+        # each passage's treatment, so no judge is needed.
+        treatment = inputs.corpus[claim.value]["treatment"]
+        if treatment in (claim.subject, "both"):
+            supported, reason = [claim.value], f"{claim.value} is a rule about {claim.subject}."
+        else:
+            subtype, reason = 3, f"{claim.value} is about {treatment}, not {claim.subject}."
     elif claim.kind in ("rule", "citation"):
         rule_part = True
     else:

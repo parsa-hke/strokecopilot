@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (EXP-11 rescore; four more verifier fixes)
+- **EXP-11 rescore** (commit `984a884`, no API calls): the Haiku pass re-scored with comparison thresholds checked in code.
+  - **Bar met at τ ≤ 0.7:** recall 1.0 for sub-types 1, 2, 4 and 7, 0.9 for 3 and 5, 0.8 for 6. False flags 0.095 (10 of 105 gold claims).
+  - **Above τ 0.7**, uncited-rule recall falls, to 0.3 at τ 0.9.
+  - Faulty-derivation recall rose from 0.1 to 0.9.
+- **The remaining flags pointed to four generic bugs, now fixed in code:**
+  - "2 h 30 min" was read as two numbers, behind fx01's four wrong-number flags and the missed fx01-5a.
+  - A value stated as a bound ("the core is under 1 mL") was compared as an equality.
+  - Restating a warning ("CTA was not acquired") and an `unknown` occlusion site were not accepted as absence. That accounts for fx03's three invented-finding flags.
+  - Haiku rejected two valid `rule_ids` (DAWN and the late-window passage). Citations are now checked against the passage's `treatment` field, as `docs/HALLUCINATION_METRIC.md` §1 defines them.
+  - Numbers inside an uncited rule were wrong numbers unless a cited passage held them. A retrieved passage now counts, and the citation gap goes to the rule (6).
+  - All are recorded in `docs/HALLUCINATION_METRIC.md` §9 point 10 for Parsa's OK, with a test each.
+- **Still missed:** fx04-3a ("at any age", a loosened rule), which the Haiku judge let pass.
+- **Rescore changes:**
+  - It now rebuilds the regex and citation claims with the current code, keeping the model's saved claims.
+  - It loads the embedding model for retrievals the cache does not hold. It needs no API key, costs nothing, and may be repeated.
+- pytest: 334 passed.
+- **Notion sync:**
+  - pending: the EXP-11 row after the second rescore and the Opus decision; a Decisions row for the judge model and τ.
+
 ## 2026-11-04 — Claude Code session (EXP-6 Vision B; EXP-11 Haiku pass; comparison thresholds in code)
 - **EXP-6 finished on Kaggle** (ResNet-50, 10 epochs, commit `d7e274f`).
   - **Split:** the validation and test scan bleed rates are 0.4058 and 0.4119, against 0.4085 overall.
@@ -7,7 +27,19 @@
   - **Validation (2,166 scans):** slice AUC 0.975 and scan AUC 0.977. ECE is 0.010. At the threshold set for 95% sensitivity, sensitivity is 0.951 and specificity 0.917. The threshold was set on this same split, so specificity is optimistic.
   - The test split is untouched.
   - The three §7 Vision B tasks are ticked.
-  - **Not yet on Drive:** `best.pt`, `calibration.json`, `config.json`, `metrics.json` and `reliability.png` (DEC-17). The chosen aggregation and calibration method will be recorded once `metrics.json` is there.
+  - **Files on Drive** (`runs/EXP-6_visionB_resnet50/`, DEC-17): `best.pt` (epoch 8), `last.pt`, `calibration.json`, `config.json`, `metrics.json`, `reliability.png`. They hold no IDs, only counts, metrics and the split fingerprint.
+  - **Aggregation**, by validation scan AUC: the top-2 mean (0.9772) was chosen, against max 0.9771, top-3 0.9767 and top-5 0.9749.
+  - **Calibration**, by out-of-half log loss and ECE:
+
+    | Method | Log loss | ECE |
+    |---|---|---|
+    | None | 0.290 | 0.123 |
+    | Temperature | 0.286 | 0.131 |
+    | Platt (chosen) | 0.175 | 0.014 |
+
+    The chosen temperature is 0.99 and the bias −2.07. Balanced epochs train on half bleeds, so raw scores overstate bleeds; the bias corrects that, and temperature scaling alone cannot.
+  - **Training:** 3.6 hours. Validation slice AUC was flat from epoch 3 onwards (0.9746 to 0.9752).
+  - **Operating point:** a threshold of 0.278 calls 43.5% of scans positive.
 - **EXP-11, Haiku pass** (commit `d3666a3`): 75 outputs. Extraction cost about $1.06 (60 calls, 472 s), the judge about $0.10 (113 calls, 702 s).
   - **Strict recall at τ ≤ 0.7:**
 

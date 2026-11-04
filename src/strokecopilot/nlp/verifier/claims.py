@@ -97,6 +97,10 @@ def numbers(text):
     """
     masked = _PASSAGE_ID.sub(lambda m: " " * len(m.group()), text)
     out = []
+    # "2 h 30 min" is one time: report it once, in minutes, and mask it so its parts are not read again.
+    for m in re.finditer(r"(?<![\d.])(\d+)\s*h\s+(\d+)\s*min\b", masked):
+        out.append((str(int(m.group(1)) * 60 + int(m.group(2))), "min", m.start()))
+        masked = masked[:m.start()] + " " * (m.end() - m.start()) + masked[m.end():]
     for match in _NUMBER.finditer(masked):
         if _RANGE_BEFORE.search(masked[: match.start()]):
             continue  # the upper end of a range

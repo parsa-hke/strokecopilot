@@ -141,4 +141,10 @@ The verifier is a model and can be wrong (plan §10).
 6. The seeded-error bar in §8 (recall ≥ 0.80, false flags ≤ 0.10).
 7. Choosing the judge model by seeded-error recall between Haiku 5.5 and Opus 5.5 (§7), because of the budget.
 8. Blocking factors rest on the `rule_ids` of both decisions, own decision first, because a reason against one treatment often rests on the other's rule ("the patient is eligible for thrombectomy"). Found in EXP-10, 4 Nov 2026.
-9. `scope_fits` covers claims that a rule does not apply, and a comparison's rule part is judged without scope (§3c). Found in EXP-10: both had flagged correct gold claims, and the first hid planted faulty derivations under misapplied rule (4 outranks 5).
+9. `scope_fits` covers claims that a rule does not apply, and a comparison's rule part is checked without the judge: its threshold must be stated in a passage (cited: supported; only retrieved: uncited; none: wrong rule) (§3c). Found in EXP-10 and EXP-11: these had flagged correct gold claims and hid planted faulty derivations under sub-types 3 and 4, which outrank 5.
+10. Checks added after EXP-11 (4 Nov 2026), all in code:
+   - "2 h 30 min" is one number;
+   - a value stated as a bound ("the core is under 1 mL") is checked as that inequality;
+   - a claim that restates a pipeline warning ("CTA was not acquired") is supported by it, and an `unknown` occlusion site supports "the occlusion site is unknown";
+   - a decision citation is checked against the passage's `treatment` field (§1), with no judge;
+   - a number in uncited rule text that a retrieved passage states is not a wrong number, because the missing citation is charged to the rule (6).
