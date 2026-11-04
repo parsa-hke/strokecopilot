@@ -173,7 +173,7 @@ strokecopilot/
 ├── prompts/
 │   ├── reasoner_v1.md
 │   ├── claim_extractor_v1.md
-│   └── judge_v1.md                # LLM judge for rule claims (§8.4)
+│   └── judge_v2.md                # LLM judge for rule claims (§8.4); v1 kept for the record
 ├── notebooks/
 │   ├── 00_download_isles24.ipynb  # Phase 0: resumable download to raw/ + md5 (self-contained)
 │   ├── 00_template.ipynb          # install, mount, copy tarball, load one case
@@ -469,7 +469,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 **NLP B (verifier & eval)**
 - [x] Write the hallucination metric definition (§8.4) in `docs/` and Notion — before code (`docs/HALLUCINATION_METRIC.md`, approved 3 Nov 2026)
 - [ ] `claims.py`: rationale → atomic claims (LLM-assisted with `prompts/claim_extractor_v1.md`, plus a rule-based numeric extractor) — code and tests done 4 Nov 2026 with a fake model; ticked after the first real extractor run
-- [ ] `trace.py`: numeric claims vs vision JSON (after rounding); patient facts vs note; rule claims vs passage text (embedding similarity + NLI or LLM judge — pick one, record it) — LLM judge (`prompts/judge_v1.md`); code, fixture fact sheets and tests done 4 Nov 2026 with a fake judge; τ and the judge model wait for the corpus and seeded errors
+- [ ] `trace.py`: numeric claims vs vision JSON (after rounding); patient facts vs note; rule claims vs passage text (embedding similarity + NLI or LLM judge — pick one, record it) — LLM judge (`prompts/judge_v2.md` since EXP-10); code, fixture fact sheets and tests done 4 Nov 2026 with a fake judge; τ and the judge model wait for the corpus and seeded errors
 - [x] `metrics.py`: hallucination rate, critical hallucination rate, omission rate; bootstrap CIs (criticality and omissions are filled in once `scenarios.py` exists)
 - [ ] `scenarios.py`: 100–200 synthetic scenarios with expected recommendations derived from the rulebook in code; review the rule code against the corpus
 - [ ] `seeded_errors.py`: plant known fabrications of each sub-type and measure verifier recall and false-flag rate — seed set and scoring done 4 Nov 2026: 5 hand-written gold outputs (`fixtures/gold/`, checked in code) and 70 hand-written seeds, 2 per sub-type per fixture (`fixtures/seeded_errors.json`); measured by `40_nlpB_verifier.ipynb` (EXP-10 dummy, EXP-11 bake-off), written 4 Nov 2026 and not yet run

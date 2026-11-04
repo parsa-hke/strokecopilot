@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (EXP-10 verifier dummy; two verifier fixes)
+- **EXP-10 ran on Colab** (commit `3456287`): fx02's gold output and its 14 seeds, with a `claude-sonnet-5-5` extractor and a `claude-haiku-5-5` judge.
+  - **Schemas and caches:** both schemas were accepted, there were no failures, and the caches worked. Extraction made 12 calls (the 3 source-only seeds reused the gold extraction) and the judge made 36.
+  - **Cost and speed:** about $0.23 for extraction (9 s per call) and $0.03 for the judge (7.5 s per call).
+  - **Recall at every τ:** strict recall was 1.0 for sub-types 1, 2, 3, 4, 6 and 7 (2 seeds each). For faulty derivation (5) it was 0 strict and 1.0 lenient. 4 of the 22 gold claims were flagged.
+- **Diagnosis, from the traces:** the flags came from the verifier, not the gold output.
+  1. Comparisons went to the judge as rules applied to the patient. "9 h exceeds the 4.5 h window" got `scope_fits` false: the rule's scope does not fit, which is the claim's own point. So it was marked misapplied (4), and because 4 outranks 5, the planted faulty derivations were reported as 4.
+  2. A claim that a rule does not apply ("extended-window thrombolysis does not apply to patients eligible for thrombectomy") also got `scope_fits` false.
+  3. "The patient is eligible for thrombectomy", a thrombolysis blocking factor, inherited only the thrombolysis `rule_ids`, so it was marked uncited (6).
+- **Fixes:**
+  - A comparison's rule part is now judged as a statement only, since the code checks the arithmetic.
+  - `prompts/judge_v2.md` defines `scope_fits` as whether the claim is right about how the rule applies, including that it does not apply. `judge_v1` is kept for the record.
+  - The judge cache key now includes the prompt version.
+  - Blocking factors now rest on both decisions' `rule_ids`.
+  - All three are recorded in `docs/HALLUCINATION_METRIC.md` (§3c, §9 points 8 and 9) for Parsa's OK. New tests cover each.
+- **`40_nlpB_verifier.ipynb` is now staged:**
+  - `MODE='haiku'` (EXP-11): all 75 outputs with the Haiku judge, about 35 minutes and $1.50 (estimated from EXP-10).
+  - `MODE='opus'`: same folder, adding Opus. It reuses the extraction and Haiku verdicts and pays only for Opus, about $5–10 (unmeasured).
+  - Each pass writes its own `config_<mode>.json` and `metrics_<mode>.json`. A local test with fakes confirmed the Opus pass makes no extraction or Haiku calls.
+- pytest: 322 passed.
+- **Notion sync:**
+  - done: Experiments → EXP-10 row.
+
 ## 2026-11-04 — Claude Code session (EXP-9 reasoner on the fixtures)
 - **EXP-9 ran on Colab** (`claude-sonnet-5-5`, effort high, commit `592fceb`): five fixtures, twice each.
   - **Result:** 0 format failures, and all 18 judged decisions match the expected ones. fx01's thrombectomy accepts either answer; it was no in run 1.

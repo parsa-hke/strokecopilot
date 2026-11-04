@@ -46,7 +46,7 @@ The verifier traces every claim on its own, ignoring the model's declared source
    - `contradicted`: the passage states something different;
    - `not_addressed`: the passage says nothing about it.
 
-   For a claim that applies a rule to this patient, the judge also returns `scope_fits`: whether the passage's conditions and exceptions fit this patient's inputs.
+   For a claim that applies a rule to this patient, the judge also returns `scope_fits`: whether the claim is right about how the passage applies to this patient. That includes a claim that a rule does *not* apply ("extended-window thrombolysis does not apply, because thrombectomy is possible"), which fits when the inputs do fall outside the passage (`judge_v2`, 4 Nov 2026). A comparison's rule part is judged as a statement of the rule only, because its application to the patient is the arithmetic, checked in code.
 
    A rule claim is supported if at least one candidate is `supported`, and for an applied claim, also `scope_fits`.
 
@@ -140,3 +140,5 @@ The verifier is a model and can be wrong (plan §10).
 5. Temperature: §8.3 and §8.4 say temperature 0, which the current Claude API rejects. Proposed: temperature 0 where a provider allows it, the provider default otherwise, plus the repeat sample in §6.
 6. The seeded-error bar in §8 (recall ≥ 0.80, false flags ≤ 0.10).
 7. Choosing the judge model by seeded-error recall between Haiku 5.5 and Opus 5.5 (§7), because of the budget.
+8. Blocking factors rest on the `rule_ids` of both decisions, own decision first, because a reason against one treatment often rests on the other's rule ("the patient is eligible for thrombectomy"). Found in EXP-10, 4 Nov 2026.
+9. `scope_fits` covers claims that a rule does not apply, and a comparison's rule part is judged without scope (§3c). Found in EXP-10: both had flagged correct gold claims, and the first hid planted faulty derivations under misapplied rule (4 outranks 5).

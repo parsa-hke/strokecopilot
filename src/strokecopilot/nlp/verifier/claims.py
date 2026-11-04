@@ -80,8 +80,11 @@ def entries(rec):
     """(field, entry index, text, declared sources, derived) for every field that can hold claims."""
     out = [("rationale", i, item["claim"], item["sources"], item["derived"]) for i, item in enumerate(rec["rationale"])]
     for decision in ("thrombolysis", "thrombectomy"):
-        # The schema gives blocking factors no sources; they rest on their decision's rule_ids.
-        cited = [{"type": "passage", "id": pid} for pid in rec[decision]["rule_ids"]]
+        # The schema gives blocking factors no sources. They rest on the rule_ids of both decisions, own decision
+        # first: a reason against one treatment often rests on the other's rule ("eligible for thrombectomy").
+        other = "thrombectomy" if decision == "thrombolysis" else "thrombolysis"
+        ids = list(dict.fromkeys(rec[decision]["rule_ids"] + rec[other]["rule_ids"]))
+        cited = [{"type": "passage", "id": pid} for pid in ids]
         out += [(f"{decision}.blocking_factors", i, text, cited, False) for i, text in enumerate(rec[decision]["blocking_factors"])]
     out += [("uncertainties", i, text, [], False) for i, text in enumerate(rec["uncertainties"])]
     return out

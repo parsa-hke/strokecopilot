@@ -70,12 +70,12 @@ class CachedJudge:
 
     With `offline=True` it never calls the model and a missing verdict is an error (used by the τ replay)."""
 
-    def __init__(self, judge, cache, offline=False):
-        self.judge, self.cache, self.offline, self.calls = judge, cache, offline, 0
+    def __init__(self, judge, cache, offline=False, version=tr.JUDGE_PROMPT):
+        self.judge, self.cache, self.offline, self.calls, self.version = judge, cache, offline, 0, version
 
-    @staticmethod
-    def key(claim_text, pid, case_inputs, applied):
-        return _hash([claim_text, pid, case_inputs, bool(applied)])
+    def key(self, claim_text, pid, case_inputs, applied):
+        # The prompt version is part of the key, so a changed judge prompt never reuses old verdicts.
+        return _hash([getattr(self.judge, "version", None) or self.version, claim_text, pid, case_inputs, bool(applied)])
 
     def __call__(self, claim_text, passages, case_inputs, applied):
         keys = {p["id"]: self.key(claim_text, p["id"], case_inputs, applied) for p in passages}
@@ -118,7 +118,7 @@ def verify(rec, inputs, extractor):
     return claims, tr.trace_all(claims, inputs)
 
 
-def run_seeded(extractor_llm, judges, retriever, out_dir, seeds=None, stems=None, log=print):
+def run_seeded(extractor_llm, judges, retriever, out_dir, seeds=None, stems=None, log=print, metrics_name="metrics.json"):
     """The bake-off: every gold output and every seed, traced once per judge model.
 
     judges: {name: llm callable for tr.Judge}. Writes caches, traces/<judge>/<id>.json and metrics.json, and returns
@@ -159,7 +159,7 @@ def run_seeded(extractor_llm, judges, retriever, out_dir, seeds=None, stems=None
     ex_usage = dict(getattr(extractor_llm, "usage", {}) or {})
     metrics["extractor"] = {"calls": extractor.calls, "usage": ex_usage,
                             "cost_usd_estimate": cost_usd(getattr(extractor_llm, "model", ""), ex_usage)}
-    (out / "metrics.json").write_text(json.dumps(metrics, indent=1))
+    (out / metrics_name).write_text(json.dumps(metrics, indent=1))
     return metrics
 
 

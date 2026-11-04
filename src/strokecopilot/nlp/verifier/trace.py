@@ -27,7 +27,7 @@ from strokecopilot.nlp.verifier.claims import UNOBSERVED_SUBJECTS, VISION_SUBJEC
 SUBTYPES = {1: "wrong_number", 2: "invented_finding", 3: "wrong_rule", 4: "misapplied_rule",
             5: "faulty_derivation", 6: "uncited_rule", 7: "misattributed_source"}
 CONTENT_FALSE = {1, 2, 3, 4, 5}
-JUDGE_PROMPT = "judge_v1"
+JUDGE_PROMPT = "judge_v2"
 TOP_K = 5
 LARGE_VESSEL = {"ICA", "M1", "basilar"}
 
@@ -424,8 +424,10 @@ def trace_claim(claim, inputs):
         raise ValueError(f"Unknown claim kind {claim.kind!r}.")
 
     if rule_part and (subtype is None or subtype == 5):
-        # Rule content comes before the derivation in the sub-type order.
-        rule_subtype, supported, rule_reason = check_rule(claim.text, cited, claim.applies_to_patient, inputs)
+        # Rule content comes before the derivation in the sub-type order. A comparison's application to this patient
+        # is the arithmetic, checked in code above, so its rule part is checked as a statement of the rule only.
+        applied = claim.applies_to_patient and claim.kind != "comparison"
+        rule_subtype, supported, rule_reason = check_rule(claim.text, cited, applied, inputs)
         if rule_subtype is not None:
             subtype, reason = rule_subtype, rule_reason
         elif subtype is None:

@@ -41,7 +41,8 @@ def test_extract_points_back_to_entries():
     assert by_id["rationale[0].1"].subject == "penumbra_ml" and by_id["rationale[1].1"].derived
     assert by_id["thrombectomy.rule_ids[0]"].kind == "citation" and by_id["thrombectomy.rule_ids[0]"].value == "TEST-EVT-6-24"
     blocking = by_id["thrombolysis.blocking_factors[0].0"]
-    assert blocking.declared_sources == [{"type": "passage", "id": "TEST-EXT-IVT"}]
+    # blocking factors rest on both decisions' rule_ids, own decision first
+    assert blocking.declared_sources == [{"type": "passage", "id": "TEST-EXT-IVT"}, {"type": "passage", "id": "TEST-EVT-6-24"}]
     system, user, schema = llm.calls[0]
     assert "{{" not in system and "`core_ml`" in system and "`lkw_to_imaging`" in system and "`mass_effect`" in system
     assert "18.0" in user and "16" in user and schema is cl.EXTRACTOR_SCHEMA

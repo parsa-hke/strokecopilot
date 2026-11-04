@@ -169,3 +169,18 @@ def test_judge_wrapper_uses_the_schema():
     out = judge(R_EVT, [{"id": "TEST-EVT-6-24", **CORPUS["TEST-EVT-6-24"]}], {"triage_note": "n"}, True)
     assert out == {"TEST-EVT-6-24": ("supported", True)}
     assert seen["schema"] is tr.JUDGE_SCHEMA and seen["user"]["applies_to_patient"] is True and "scope" in seen["system"].lower()
+
+
+def test_comparison_rule_part_is_judged_as_a_statement():
+    # "9 h is beyond the 4.5 h window" is about this patient, but the application is the arithmetic, checked in code;
+    # the judge is asked only whether the passage states the 4.5 h window.
+    judge = FakeJudge()
+    _run(inputs=_inputs(judge=judge))
+    applied = {text: a for text, _, a in judge.calls}
+    assert applied["Time from last known well to imaging, 9 h, is beyond the 4.5 h thrombolysis window."] is False
+    assert applied[R_EVT] is True
+
+
+def test_judge_v2_scope_covers_rules_that_do_not_apply():
+    system = tr.Judge(lambda *a: {"verdicts": []}).system
+    assert tr.JUDGE_PROMPT == "judge_v2" and "does not apply" in system and "{{" not in system

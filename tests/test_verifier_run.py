@@ -92,3 +92,10 @@ def test_cached_judge_only_sends_unjudged_passages(tmp_path):
     cj("c", [{"id": "A", "text": ""}], {"x": 1}, True)
     out = cj("c", [{"id": "A", "text": ""}, {"id": "B", "text": ""}], {"x": 1}, True)
     assert seen == [["A"], ["B"]] and out == {"A": ("supported", True), "B": ("supported", True)}
+
+
+def test_judge_cache_key_includes_the_prompt_version(tmp_path):
+    cache = vr.JsonCache(tmp_path / "j.json")
+    a = vr.CachedJudge(None, cache, version="judge_v1").key("c", "P", {}, True)
+    b = vr.CachedJudge(None, cache, version="judge_v2").key("c", "P", {}, True)
+    assert a != b
