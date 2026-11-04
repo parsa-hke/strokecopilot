@@ -456,9 +456,9 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 - [x] `volumes.py`: mask → mL using spacing; mismatch ratio/volume via `contract.schema.derive_mismatch`; occlusion-site lookup from the occlusion mask and Circle of Willis labels (distance limit 5 mm, from EXP-1)
 
 **Vision B (haemorrhage)**
-- [ ] 2D classifier (pretrained ResNet-50 or EfficientNet-B3) on windowed slices, "any" label; slice AUC
-- [ ] `aggregate.py`: slice → scan (max and top-k mean); scan AUC; temperature scaling for calibration; reliability diagram
-- [ ] `infer.py`: scan → `{present, confidence}`
+- [x] 2D classifier (pretrained ResNet-50 or EfficientNet-B3) on windowed slices, "any" label; slice AUC — EXP-6 (ResNet-50, 10 epochs, Kaggle T4): validation slice AUC 0.975
+- [x] `aggregate.py`: slice → scan (max and top-k mean); scan AUC; temperature scaling for calibration; reliability diagram — EXP-6: validation scan AUC 0.977, ECE 0.010, sensitivity 0.951 at specificity 0.917 (2,166 scans; threshold set on the same split for 95% sensitivity, so specificity is optimistic)
+- [x] `infer.py`: scan → `{present, confidence}` — code and tests done 4 Nov 2026; the EXP-6 calibrator plugs in through `calibration.json`
 
 **NLP A (reasoner)**
 - [ ] `ingest.py`: guideline PDF + two trial papers → passages with stable IDs; `docs/RULEBOOK.md` generated from the same source — changed by DEC-18: `corpus/RULEBOOK.md` (own words) → `corpus/passages.jsonl`, with checks. Code, tests and 47 passages done 4 Nov 2026: all 43 AHA passages checked against the guideline, off-topic passages added, copy check clean. Ticked once a person has checked the 2 DAWN and 2 DEFUSE-3 passages

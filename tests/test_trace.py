@@ -10,7 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 from verifier_cases import (  # noqa: E402
-    CLEAN_EXTRACTION, CLEAN_REC, CORPUS, R_EVT, FakeJudge, fake_extractor, operand, passage_source, vision_source,
+    CLEAN_EXTRACTION, CLEAN_REC, CORPUS, R_CORE, R_EVT, R_IVT, FakeJudge, fake_extractor, operand, passage_source, vision_source,
 )
 
 from strokecopilot.config import FIXTURES_DIR  # noqa: E402
@@ -171,14 +171,27 @@ def test_judge_wrapper_uses_the_schema():
     assert seen["schema"] is tr.JUDGE_SCHEMA and seen["user"]["applies_to_patient"] is True and "scope" in seen["system"].lower()
 
 
-def test_comparison_rule_part_is_judged_as_a_statement():
-    # "9 h is beyond the 4.5 h window" is about this patient, but the application is the arithmetic, checked in code;
-    # the judge is asked only whether the passage states the 4.5 h window.
+def test_comparison_rule_part_is_checked_in_code():
+    # The comparison's application is the arithmetic; its rule part is only whether the threshold is in a passage.
     judge = FakeJudge()
-    _run(inputs=_inputs(judge=judge))
-    applied = {text: a for text, _, a in judge.calls}
-    assert applied["Time from last known well to imaging, 9 h, is beyond the 4.5 h thrombolysis window."] is False
-    assert applied[R_EVT] is True
+    traces = _run(inputs=_inputs(judge=judge))
+    assert R_IVT not in [text for text, _, _ in judge.calls] and R_CORE not in [text for text, _, _ in judge.calls]
+    assert traces["rationale[1].1"].supported_passages == ["TEST-IVT-4.5H"]
+
+
+def test_wrong_threshold_is_a_wrong_rule_and_a_wrong_operator_a_faulty_derivation():
+    wrong = _extraction_with("rationale", 1, 1, comparison={"left": operand("lkw_to_imaging", "9", "h"), "op": ">", "right": operand(None, "6", "h", True)})
+    assert _run(extraction=wrong)["rationale[1].1"].subtype == 3
+    flipped = _extraction_with("rationale", 1, 1, comparison={"left": operand("lkw_to_imaging", "9", "h"), "op": "<=", "right": operand(None, "4.5", "h", True)})
+    assert _run(extraction=flipped)["rationale[1].1"].subtype == 5
+
+
+def test_threshold_found_only_by_retrieval_is_uncited():
+    rec = copy.deepcopy(CLEAN_REC)
+    rec["rationale"][3]["sources"] = [vision_source("core_ml")]  # the DEFUSE-3 passage is not cited
+    inputs = _inputs()
+    inputs.retriever = lambda text, k: [("TEST-DEFUSE3", 0.8), ("TEST-IVT-4.5H", 0.7)]
+    assert _run(rec, inputs=inputs)["rationale[3].0"].subtype == 6
 
 
 def test_judge_v2_scope_covers_rules_that_do_not_apply():

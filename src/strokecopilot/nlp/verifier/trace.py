@@ -257,6 +257,32 @@ def check_comparison(comparison, inputs):
     return None, used, "The comparison holds with the true values.", rule_needed
 
 
+def _states_number(text, value):
+    return re.search(rf"(?<![\d.]){re.escape(value)}(?![\d]|\.\d)", text) is not None
+
+
+def check_threshold(claim, inputs):
+    """(sub-type, supported passage ids, reason) for the rule part of a comparison, in code.
+
+    The comparison's application to this patient is the arithmetic (check_comparison). What is left is whether each
+    threshold it takes from a rule is stated in a passage: in a cited one (supported), only in a retrieved one
+    (supported, so attribution marks the rule uncited), or in none (wrong rule)."""
+    values = [op["value"] for op in (claim.comparison["left"], claim.comparison["right"]) if op.get("from_rule") and op.get("value")]
+    cited = list(dict.fromkeys(s["id"] for s in claim.declared_sources if s["type"] == "passage"))
+    missing = [pid for pid in cited if pid not in inputs.corpus]
+    if missing:
+        return 3, [], f"Cites passages that do not exist: {', '.join(missing)}."
+    found = [pid for pid in cited if all(_states_number(inputs.corpus[pid]["text"], v) for v in values)]
+    if found:
+        return None, found, "The threshold is stated in a cited passage."
+    if inputs.retriever is not None:
+        found = [pid for pid, score in inputs.retriever(claim.text, TOP_K) if score >= inputs.tau
+                 and all(_states_number(inputs.corpus[pid]["text"], v) for v in values)]
+        if found:
+            return None, found, "The threshold is stated in a passage the claim does not cite."
+    return 3, [], f"No passage states the threshold {', '.join(values)}."
+
+
 # --- rules ---------------------------------------------------------------------------------
 
 JUDGE_SCHEMA = {
@@ -425,9 +451,11 @@ def trace_claim(claim, inputs):
 
     if rule_part and (subtype is None or subtype == 5):
         # Rule content comes before the derivation in the sub-type order. A comparison's application to this patient
-        # is the arithmetic, checked in code above, so its rule part is checked as a statement of the rule only.
-        applied = claim.applies_to_patient and claim.kind != "comparison"
-        rule_subtype, supported, rule_reason = check_rule(claim.text, cited, applied, inputs)
+        # is the arithmetic, checked in code above; its rule part is only whether the threshold comes from a passage.
+        if claim.kind == "comparison":
+            rule_subtype, supported, rule_reason = check_threshold(claim, inputs)
+        else:
+            rule_subtype, supported, rule_reason = check_rule(claim.text, cited, claim.applies_to_patient, inputs)
         if rule_subtype is not None:
             subtype, reason = rule_subtype, rule_reason
         elif subtype is None:

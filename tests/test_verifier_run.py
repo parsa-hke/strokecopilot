@@ -99,3 +99,10 @@ def test_judge_cache_key_includes_the_prompt_version(tmp_path):
     a = vr.CachedJudge(None, cache, version="judge_v1").key("c", "P", {}, True)
     b = vr.CachedJudge(None, cache, version="judge_v2").key("c", "P", {}, True)
     assert a != b
+
+
+def test_rescore_replays_without_any_model(tmp_path):
+    first, _, _ = _run(tmp_path)
+    again = vr.rescore(tmp_path, ["fake"], stems=[FX02])
+    assert again["judges"]["fake"]["by_tau"] == first["judges"]["fake"]["by_tau"]
+    assert again["judges"]["fake"]["outputs_rescored"] == 15 and (tmp_path / "metrics_rescore.json").exists()

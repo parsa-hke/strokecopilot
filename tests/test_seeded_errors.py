@@ -117,7 +117,8 @@ def test_score_strict_lenient_and_false_flags():
     ]
     clean = [{"fixture": "f", "traces": [t("rationale[0].0"), t("rationale[1].0", 7)]}, {"fixture": "g", "traces": [t("rationale[0].0")]}]
     out = se.score(seeds, clean)
-    assert out["recall"]["wrong_number"] == {"subtype": 1, "n": 2, "strict": 0.5, "lenient": 1.0, "missed": ["b"]}
+    assert out["recall"]["wrong_number"] == {"subtype": 1, "n": 2, "strict": 0.5, "lenient": 1.0, "missed": ["b"], "missed_got": {"b": [5]}}
+    assert out["clean_flags"] == [{"fixture": "f", "claim_id": "rationale[1].0", "subtype": 7}]
     assert out["recall"]["wrong_rule"]["strict"] == 1.0
     assert out["false_flag_rate_claims"] == pytest.approx(1 / 3) and out["clean_outputs_flagged"] == "1/2"
     assert out["flags_outside_label"] == 1 and out["meets_bar"] is False

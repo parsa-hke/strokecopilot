@@ -1,5 +1,52 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (EXP-6 Vision B; EXP-11 Haiku pass; comparison thresholds in code)
+- **EXP-6 finished on Kaggle** (ResNet-50, 10 epochs, commit `d7e274f`).
+  - **Split:** the validation and test scan bleed rates are 0.4058 and 0.4119, against 0.4085 overall.
+  - **Speed:** 156 slices per second, about 18.4 minutes per epoch.
+  - **Validation (2,166 scans):** slice AUC 0.975 and scan AUC 0.977. ECE is 0.010. At the threshold set for 95% sensitivity, sensitivity is 0.951 and specificity 0.917. The threshold was set on this same split, so specificity is optimistic.
+  - The test split is untouched.
+  - The three §7 Vision B tasks are ticked.
+  - **Not yet on Drive:** `best.pt`, `calibration.json`, `config.json`, `metrics.json` and `reliability.png` (DEC-17). The chosen aggregation and calibration method will be recorded once `metrics.json` is there.
+- **EXP-11, Haiku pass** (commit `d3666a3`): 75 outputs. Extraction cost about $1.06 (60 calls, 472 s), the judge about $0.10 (113 calls, 702 s).
+  - **Strict recall at τ ≤ 0.7:**
+
+    | Sub-type | Recall | Missed |
+    |---|---|---|
+    | Wrong number | 1.0 | |
+    | Invented finding | 1.0 | |
+    | Wrong rule | 0.9 | fx04-3a, "at any age" |
+    | Misapplied rule | 1.0 | |
+    | Faulty derivation | 0.1 (lenient 1.0) | |
+    | Uncited rule | 0.8 | |
+    | Misattributed source | 1.0 | |
+
+  - **False flags:** 10 of 105 gold claims (0.095), 3 of 5 gold outputs.
+  - **Higher τ:** uncited-rule recall falls above τ 0.7, to 0.3 at τ 0.9, so τ must stay low.
+- **Diagnosis from the fx02-5a trace:** the comparison's arithmetic was rightly found false (5), but its rule part still went to the judge as the whole claim text. No passage states "9 h is within the 4.5 h window", so the judge returned wrong rule (3), which outranks 5.
+- **Fix:** a comparison's rule part is now a code check that each threshold it takes from a rule is stated in a passage:
+  - in a cited passage: supported;
+  - only in a retrieved one: supported but uncited (6);
+  - in none: wrong rule (3).
+  - No judge call is made for comparisons.
+  - **Known limit:** a threshold attributed to the wrong trial, whose number appears in the cited passage, is not caught.
+  - New tests cover a wrong threshold (3), a reversed operator (5) and a threshold found only through retrieval (6).
+- **Diagnosis output:** `score()` now lists the flagged gold claims and the sub-types a missed seed got instead. The notebook prints both.
+- **`MODE='rescore'`:** re-scores a run from its saved claims and caches with the current code, with no API calls and no key. Tested locally with no new calls.
+- pytest: 325 passed.
+- **Notion sync:**
+  - done: Experiments → EXP-6 (Done, scan AUC 0.977).
+  - pending: EXP-11 row after the rescore and the Opus pass.
+
+## 2026-11-04 — Claude Code session (stale Colab session guard)
+- **The first EXP-11 attempt stopped before any API call:** `run_seeded() got an unexpected keyword argument 'metrics_name'`. It ran in the same Colab session as EXP-10, so the old package was still imported, and pip treats the same version (0.0.1) as already installed.
+- **Fix in `31_nlpA_reasoner` and `40_nlpB_verifier`:**
+  - The install cell now stops with a plain message if the session has already imported `strokecopilot`.
+  - After the normal install, it force-reinstalls the pinned commit without dependencies.
+  - Tested locally: the guard fires in a reused session; dummy, haiku, opus and resume all pass after a restart.
+- **Workaround until this is pushed:** Runtime → Disconnect and delete runtime, then Run all.
+- **Notion sync:** none.
+
 ## 2026-11-04 — Claude Code session (EXP-10 verifier dummy; two verifier fixes)
 - **EXP-10 ran on Colab** (commit `3456287`): fx02's gold output and its 14 seeds, with a `claude-sonnet-5-5` extractor and a `claude-haiku-5-5` judge.
   - **Schemas and caches:** both schemas were accepted, there were no failures, and the caches worked. Extraction made 12 calls (the 3 source-only seeds reused the gold extraction) and the judge made 36.

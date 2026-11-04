@@ -92,11 +92,11 @@ def location(claim_id):
 
 
 def judge_seed(traces, label, subtype):
-    """(strict hit, lenient hit, flags outside the labelled entry) for one seeded output's traces."""
+    """(strict hit, lenient hit, flags outside the labelled entry, sub-types found in the labelled entry)."""
     at = f"{label['field']}[{label['entry']}]"
     here = [_get(t, "subtype") for t in traces if location(_get(t, "claim_id")) == at]
     elsewhere = sum(1 for t in traces if location(_get(t, "claim_id")) != at and _get(t, "subtype") is not None)
-    return subtype in here, any(s is not None for s in here), elsewhere
+    return subtype in here, any(s is not None for s in here), elsewhere, sorted({s for s in here if s is not None})
 
 
 def score(seed_results, clean_results):
@@ -104,27 +104,31 @@ def score(seed_results, clean_results):
 
     Returns recall per sub-type (strict and lenient, with counts), the false-flag rates on the gold outputs, and
     flags outside the labelled entry."""
-    by = defaultdict(lambda: {"n": 0, "strict": 0, "lenient": 0, "missed": []})
+    by = defaultdict(lambda: {"n": 0, "strict": 0, "lenient": 0, "missed": [], "missed_got": {}})
     outside = 0
     for r in seed_results:
-        strict, lenient, elsewhere = judge_seed(r["traces"], r["label"], r["subtype"])
+        strict, lenient, elsewhere, got = judge_seed(r["traces"], r["label"], r["subtype"])
         row = by[r["subtype"]]
         row["n"] += 1
         row["strict"] += strict
         row["lenient"] += lenient
         if not strict:
             row["missed"].append(r["id"])
+            row["missed_got"][r["id"]] = got
         outside += elsewhere
     recall = {}
     for st in sorted(by):
         row = by[st]
         recall[SUBTYPES[st]] = {"subtype": st, "n": row["n"], "strict": row["strict"] / row["n"],
-                                "lenient": row["lenient"] / row["n"], "missed": row["missed"]}
+                                "lenient": row["lenient"] / row["n"], "missed": row["missed"], "missed_got": row["missed_got"]}
     claims = sum(len(r["traces"]) for r in clean_results)
     flagged = sum(1 for r in clean_results for t in r["traces"] if _get(t, "subtype") is not None)
     outputs_flagged = sum(1 for r in clean_results if any(_get(t, "subtype") is not None for t in r["traces"]))
+    clean_flags = [{"fixture": r["fixture"], "claim_id": _get(t, "claim_id"), "subtype": _get(t, "subtype")}
+                   for r in clean_results for t in r["traces"] if _get(t, "subtype") is not None]
     return {
         "recall": recall,
+        "clean_flags": clean_flags,
         "false_flag_rate_claims": flagged / claims if claims else None,
         "clean_claims": claims,
         "clean_outputs_flagged": f"{outputs_flagged}/{len(clean_results)}",

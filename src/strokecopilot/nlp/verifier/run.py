@@ -128,9 +128,7 @@ def run_seeded(extractor_llm, judges, retriever, out_dir, seeds=None, stems=None
     corpus = ingest.load()
     extractor = CachedExtractor(extractor_llm, JsonCache(out / "extraction_cache.json"))
     retrieval = JsonCache(out / "retrieval_cache.json")
-    items = [{"id": f"{s[:4]}-gold", "fixture": s, "subtype": None, "rec": se.load_gold(s), "label": None}
-             for s in (stems or se.gold_stems())]
-    items += [x for x in se.seeded_set(seeds) if stems is None or x["fixture"] in stems]
+    items = _items(stems, seeds)
     metrics = {"outputs": len(items), "judges": {}}
     for name, judge_llm in judges.items():
         cache = JsonCache(out / f"judge_{name}_cache.json")
@@ -183,3 +181,30 @@ def replay(items, claims_by_id, out_dir, judge_name, corpus=None):
                 seeds.append({"id": item["id"], "subtype": item["subtype"], "label": item["label"], "traces": traces})
         grid[str(tau)] = se.score(seeds, clean)
     return grid
+
+
+def _items(stems=None, seeds=None):
+    items = [{"id": f"{s[:4]}-gold", "fixture": s, "subtype": None, "rec": se.load_gold(s), "label": None}
+             for s in (stems or se.gold_stems())]
+    return items + [x for x in se.seeded_set(seeds) if stems is None or x["fixture"] in stems]
+
+
+def rescore(out_dir, judge_names, stems=None, seeds=None, metrics_name="metrics_rescore.json"):
+    """Re-score an earlier run with the current tracing code, from its saved claims and caches only. No API calls:
+    a claim that would need a verdict or a retrieval that is not cached raises KeyError."""
+    out = Path(out_dir)
+    corpus = ingest.load()
+    items = _items(stems, seeds)
+    metrics = {"outputs": len(items), "rescored": True, "judges": {}}
+    for name in judge_names:
+        claims_by_id = {}
+        for item in items:
+            path = out / "traces" / name / f"{item['id']}.json"
+            if path.exists():
+                claims_by_id[item["id"]] = json.loads(path.read_text())["claims"]
+        metrics["judges"][name] = {"failures": [], "judge_calls": 0, "verdicts_cached": len(JsonCache(out / f"judge_{name}_cache.json")),
+                                   "usage": {}, "cost_usd_estimate": 0.0, "outputs_rescored": len(claims_by_id),
+                                   "by_tau": replay(items, claims_by_id, out, name, corpus)}
+    metrics["extractor"] = {"calls": 0, "usage": {}, "cost_usd_estimate": 0.0}
+    (out / metrics_name).write_text(json.dumps(metrics, indent=1))
+    return metrics
