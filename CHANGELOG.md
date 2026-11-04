@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (Phase 2, task 3: EXP-2 dummy result)
+- **EXP-2 dummy ran to the end** at `703871e` on a Tesla T4 runtime with 2 CPUs and 12.7 GB RAM.
+  - Colab's PyTorch 2.11.0+cu130 was kept, not replaced.
+  - Fingerprinting and preprocessing fit in memory.
+  - torch.compile ran, our `splits_final.json` was used (103 training and 26 validation cases), and resuming from the checkpoint worked.
+  - Prediction and scoring worked.
+  - Plan: patch 96 × 128 × 112, batch 4.
+- **Epochs took 664, 509 and 570 s.** The first and third include compiling. Timings: fetch 86 s, convert 69 s, preprocess 143 s, training plus validation 1,920 s.
+- **Most likely limited by data augmentation on 2 CPUs**, not by the GPU. That is an inference, not measured. At about 510 s, 250 epochs would take about 35 hours on a T4, too long for one fold and impossible for five.
+- Fold-0 Dice was 0.247 after 3 epochs. It is not a result, but it is already above the threshold baseline's fold-0 Dice of 0.123.
+- **Change:** data-augmentation workers are now CPUs minus 1, from 2 to 12. The dummy run can be repeated under a new experiment ID: EXP-4, on an L4 or A100, will size EXP-3. Tested on synthetic data only.
+- **Notion sync:**
+  - done: EXP-2 → Done, with its timings; EXP-4 row (Planned).
+
 ## 2026-11-04 — Claude Code session (Phase 2, task 3: nnU-Net set-up)
 - **Code:** added `vision/perfusion/nnunet_wrapper.py`, pinned to nnU-Net v2 2.8.1 after reading its trainer and command-line code. It:
   - converts development cases only to six channels: NCCT, CBF, CBV, MTT, Tmax with negative values set to 0, and a Tmax-valid mask. The label is the whole final infarct.
