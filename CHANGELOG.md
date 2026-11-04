@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (Phase 2, task 3: nnU-Net set-up)
+- **Code:** added `vision/perfusion/nnunet_wrapper.py`, pinned to nnU-Net v2 2.8.1 after reading its trainer and command-line code. It:
+  - converts development cases only to six channels: NCCT, CBF, CBV, MTT, Tmax with negative values set to 0, and a Tmax-valid mask. The label is the whole final infarct.
+  - writes our five folds as `splits_final.json`;
+  - adds a trainer, `nnUNetTrainer_StrokeCopilot`, whose epochs, iterations and checkpoint interval come from the environment so a run can resume across Colab sessions;
+  - parses epoch times from nnU-Net's logs, and scores the validation predictions with `evaluate.py`.
+- **Notebook:** added `notebooks/10_visionA_nnunet.ipynb`.
+  - The dummy mode (EXP-2) trains 2 epochs, resumes for a third, then predicts and scores fold 0, to measure epoch time and check that checkpoints load on Colab's PyTorch.
+  - The train mode (EXP-3) needs its epoch count set from EXP-2. It checkpoints to Drive and refuses to resume if a session plans a different network.
+- **Tested on synthetic data only**, with Colab, git, pip, nvidia-smi and nnU-Net's command line faked: both modes, a train session that stops after preprocessing and is rerun, a refused rerun of a finished run, and no token or held-out ID in any output.
+- **Not tested at all:** real nnU-Net, real PyTorch and GPU behaviour, and real epoch time. nnU-Net 2.8.1 excludes PyTorch 2.9, so pip may replace Colab's PyTorch; the notebook prints the version before and after.
+- Tests: `test_nnunet_wrapper.py`. pytest: 221 passed.
+- **Notion sync:**
+  - done: EXP-2 and EXP-3 rows (Planned).
+
 ## 2026-11-04 — Claude Code session (Phase 2: EXP-1 results)
 - **EXP-1 ran on Colab** at `bf86e15` with all 129 development cases, at 0.21 s per case. Results are in `runs/EXP-1_thresholds_baseline/`.
 - **Threshold core vs final infarct:**
@@ -14,9 +29,16 @@
   - basilar-nearest ones sit 17–51 mm away, except one under 3 mm;
   - 5 mm gives 13 ICA, 1 basilar and 115 `unknown` of 129, the `unknown` cases including 72 nearest an MCA label, 7 ambiguous and 2 empty.
 - **Consequence:** about 89% of real cases will have `unknown` occlusion site, so most real-case thrombectomy decisions will be undetermined (§9).
+- **11b ran at `869e47f` and EXP-1 is accepted.** The low Dice comes from the data, not from a bug that the checks can see:
+  - the infarct is on the affected side in almost every case (median share 1.0);
+  - only half of it lies inside Tmax > 6 s, and its median rCBF is 0.65;
+  - small infarcts score near zero, while the largest third has a median Dice of 0.24.
+  - The 30% cut-off is kept. Details are in `docs/DATA.md` under "Perfusion and the final infarct".
+- **MCA-nearest occlusions:** 20 of 72 overlap the M1 label. They stay `unknown` under the approved rule.
+- §7: the `thresholds.py` and `volumes.py` tasks are ticked.
 - pytest: 214 passed.
 - **Notion sync:**
-  - done: EXP-1 row → Done, with headline numbers.
+  - done: EXP-1 row → Done, with headline numbers and the check result.
   - pending: the Decisions rows listed in the entry below.
 
 ## 2026-11-03 — Claude Code session (Phase 2 start: metric definition, threshold baseline code)

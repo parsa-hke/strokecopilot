@@ -126,6 +126,25 @@ What this means:
 - **Some infarct has no usable perfusion input.** Counting only -30 as no data, the share of an infarct with Tmax has a median of 99.4% and p5 of 80.9%, and is under 90% in 15 of 127 cases. Counting only Tmax of 0 or more, it is a median of 95.3% and p5 of 65.1%. `sub-stroke0094` has none. Vision A cannot learn or be fairly scored on tissue it has no input for, so training and metrics need to take this into account in Phase 2.
 - **Many Tmax values are negative, and they are not small.** Beyond -30, a median of 16% (p95 28%) of remaining voxels are below zero, typically from -28 to -0.7 with a median of -14 s, which has no physical meaning as a delay. 43% lie on soft tissue (20–60 HU) and 8% on CSF-like values, so about half lie on neither. A median of 4% (p95 16%) of an infarct lies on them. The cause is unknown; failed perfusion fits are a guess, and -30 may be the lower limit of the same values rather than a separate fill value. **Recommendation for Vision A:** treat all negative Tmax as no reliable data. Tmax > 6 s itself is unaffected, but tissue with a failed fit cannot count as penumbra, so `penumbra_ml` can undercount there.
 
+### Perfusion and the final infarct
+
+Measured on 3–4 November 2026 with `11_visionA_thresholds.ipynb` (EXP-1) and `11b_visionA_threshold_check.ipynb`, on the 129 development cases. Results are in `StrokeCopilot/runs/EXP-1_thresholds_baseline/`.
+
+| | p5 | p25 | p50 | p75 | p95 |
+|---|---:|---:|---:|---:|---:|
+| Share of the infarct inside Tmax > 6 s | 0.06 | 0.23 | 0.50 | 0.70 | 0.88 |
+| rCBF inside the infarct (case median) | 0.31 | 0.47 | 0.65 | 0.82 | 1.11 |
+| Share of the infarct on the side with more Tmax > 6 s | 0.22 | 0.98 | 1.00 | 1.00 | 1.00 |
+| Dice of Tmax > 6 s against the infarct | 0.00 | 0.02 | 0.08 | 0.19 | 0.51 |
+
+What this means:
+
+- **The baseline has no hemisphere or alignment bug that these checks can see.** The infarct lies on the side the baseline calls affected in almost every case. Only 6 cases have most of it on the other side.
+- **Half of a typical final infarct had only mildly reduced flow at admission.** The median rCBF inside it is 0.65, and only half of it lies inside Tmax > 6 s. With a follow-up mask drawn 2–9 days later after reperfusion, a threshold on acute CBF cannot find it. Possible causes are infarct growth before reperfusion, oedema on follow-up imaging and small registration offsets. They cannot be told apart from these data.
+- **Small infarcts score near zero.** In the smallest third (up to 6.3 mL, median 3.1 mL) the median Dice is 0.001, while the threshold core is a median 8.8 mL. In the largest third (median 76 mL) the median Dice is 0.24, and the core underestimates the infarct (median core 19 mL).
+- **The clinical cut-off is kept at 30%.** Looser cut-offs raise the mean Dice a little (0.149 at 45%) but overestimate more volumes. The baseline is the clinical standard, not a tuned model.
+- **Occlusions nearest an MCA label:** 20 of 72 overlap the label, which TopCoW defines as M1, and 34 lie within 1.5 mm of it. Without a reference occlusion site this cannot be validated, so the approved rule keeps them `unknown`.
+
 ### Clinical data
 
 Surveyed on 2 November 2026 with `01b_clinical_isles24.ipynb`, in aggregate only. The results are in `StrokeCopilot/artifacts/isles24_clinical/`. Extraction took 129 s on Colab. Note tags are enforced in `src/strokecopilot/data/clinical_columns.py`.

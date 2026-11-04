@@ -447,9 +447,9 @@ Acceptance: `slim/isles24_slim_v1.tar` and the RSNA shards are ready, `isles24.p
 Goal: every box in the diagram does *something*, measured, even if badly.
 
 **Vision A (perfusion)**
-- [ ] `thresholds.py`: core = rCBF < 30% of contralateral, penumbra = Tmax > 6 s; compute volumes; evaluate Dice of thresholded core vs final infarct per fold — this is the clinical-standard baseline
+- [x] `thresholds.py`: core = rCBF < 30% of contralateral, penumbra = Tmax > 6 s; compute volumes; evaluate Dice of thresholded core vs final infarct per fold — this is the clinical-standard baseline (EXP-1: Dice 0.111 ± 0.031, abs volume error 25.2 mL; `docs/DATA.md`)
 - [ ] nnU-Net v2 dataset conversion (perfusion maps as channels, final infarct as label); train fold 0 with reduced epochs; checkpoint/resume to Drive; report Dice
-- [ ] `volumes.py`: mask → mL using spacing; mismatch ratio/volume via `contract.schema.derive_mismatch`; occlusion-site lookup from the occlusion mask and Circle of Willis labels
+- [x] `volumes.py`: mask → mL using spacing; mismatch ratio/volume via `contract.schema.derive_mismatch`; occlusion-site lookup from the occlusion mask and Circle of Willis labels (distance limit 5 mm, from EXP-1)
 
 **Vision B (haemorrhage)**
 - [ ] 2D classifier (pretrained ResNet-50 or EfficientNet-B3) on windowed slices, "any" label; slice AUC
