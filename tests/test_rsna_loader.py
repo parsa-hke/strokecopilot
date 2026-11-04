@@ -183,3 +183,13 @@ def test_offsets_from_a_local_copy_read_the_attached_file(unpacked, tmp_path):
     reader = rsna.ShardReader(str(attached), offsets=offsets)
     assert abs(int(reader.read("ID_0")[0, 0, 0]) - 40) <= 2
     reader.close()
+
+
+def test_shard_reader_survives_pickling(shards):
+    import pickle
+
+    reader = rsna.ShardReader(shards[0][0])
+    copy = pickle.loads(pickle.dumps(reader))
+    assert copy.read("ID_1").shape == reader.read("ID_1").shape and copy._fd != reader._fd
+    reader.close()
+    copy.close()

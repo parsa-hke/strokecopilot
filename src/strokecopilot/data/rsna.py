@@ -90,6 +90,12 @@ class ShardReader:
                 if m.isfile() and m.name.endswith(".jpg") and not os.path.basename(m.name).startswith("._")  # macOS metadata
             }
 
+    def __getstate__(self):  # a worker process opens its own file handle
+        return {"path": self.path, "offsets": self.offsets}
+
+    def __setstate__(self, state):
+        self.__init__(state["path"], state["offsets"])
+
     def __contains__(self, image_id):
         return image_id in self.offsets
 

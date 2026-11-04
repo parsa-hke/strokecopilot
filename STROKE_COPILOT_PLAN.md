@@ -186,7 +186,7 @@ strokecopilot/
 │   ├── 02a_rsna_kaggle_timing.ipynb  # Phase 0: runs on Kaggle; times full RSNA for DEC-17 (self-contained)
 │   ├── 10_visionA_nnunet.ipynb
 │   ├── 11_visionA_thresholds.ipynb
-│   ├── 20_visionB_train.ipynb
+│   ├── 20_visionB_train.ipynb     # runs on Kaggle: RSNA split, slice classifier, scan calibration
 │   ├── 30_nlpA_corpus.ipynb
 │   ├── 31_nlpA_reasoner.ipynb
 │   ├── 40_nlpB_verifier.ipynb

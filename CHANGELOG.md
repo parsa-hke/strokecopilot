@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (Phase 2: RSNA split and Vision B code)
+- **RSNA split** (`data/rsna_split.py`): seed 20261103, patients ranked by a SHA-256 hash of seed and ID and cut 80/10/10, as agreed. The cut is made separately for patients with and without a bleed. In a simulation at the real counts (18,938 patients, 21,744 scans), a plain hash cut missed the 1.5-point bleed-rate check in 35% of seeds, and the stratified cut never did. The split is rebuilt each Kaggle session and never saved. A fingerprint hash confirms it is unchanged. The test split raises unless `ALLOW_RSNA_TEST=1`, so it stays closed until the final Vision B model is chosen (recommendation, needs Parsa's OK).
+- **Vision B code:**
+  - `model.py`: timm ResNet-50 or EfficientNet-B3, one logit, normalised on the GPU.
+  - `train.py`: balanced epochs (every training positive plus as many fresh negatives), flip, rotation, scale and brightness augmentation, AMP, `last.pt` and `best.pt` checkpoints, resume, and a time budget so a Kaggle session ends on a checkpoint. It also has speed probes for the data loader and the GPU.
+  - `aggregate.py`: scan score by max or top-k mean, picked by validation scan AUC. Calibration fits temperature and temperature plus bias; the one with the lower out-of-half log loss is kept. Temperature alone cannot undo the balanced training prior. Also reliability bins and diagram, ECE, and a threshold for 95% scan sensitivity.
+  - `infer.py`: slice probabilities → the contract's `{present, confidence}`.
+  - `data/rsna.py`: `ShardReader` can now be pickled, so spawned workers open their own file handle.
+- **Notebook** `20_visionB_train.ipynb` (Kaggle). Dummy mode is EXP-5: split check, loader and GPU speed for both models, 150 real training steps, and aggregation and calibration on a 300-scan validation sample. Train mode is set from the dummy's numbers. Both modes ran on synthetic shards with Kaggle, git, pip and nvidia-smi stubbed, on CPU: no token or ID in any output, expected files only. The harness loosened the bleed-rate tolerance, because it had 12 validation patients.
+- **Not yet run on Kaggle or a GPU:** real speeds, GPU memory, timm weight download and resuming from an attached earlier version are untested.
+- pytest: 239 passed (CPU torch and timm installed in the local venv; the Vision B training tests skip without them).
+- **Notion sync:**
+  - done: EXP-5 row (Planned).
+  - pending: Decisions rows for the LLM judge, embedding model, RSNA split (now with stratification and the closed test split) and temperature wording.
+
 ## 2026-11-04 — Claude Code session (Phase 2, task 3: EXP-2 dummy result)
 - **EXP-2 dummy ran to the end** at `703871e` on a Tesla T4 runtime with 2 CPUs and 12.7 GB RAM.
   - Colab's PyTorch 2.11.0+cu130 was kept, not replaced.
