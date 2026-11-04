@@ -1,5 +1,36 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (EXP-11 Opus pass)
+- **The Opus pass ran** (commit `3c07e9a`): 60 judge calls on the same extracted claims, about $1.30 ($0.022 per call). Every other verdict came from the caches.
+- **Results with the final code, τ ≤ 0.7:**
+
+  | | Haiku 5.5 | Opus 5.5 |
+  |---|---|---|
+  | Lowest strict recall | 0.80 (uncited rule) | 0.80 (uncited rule) |
+  | Wrong rule | 0.9 | 0.9 |
+  | Other five sub-types | 1.0 | 1.0 |
+  | False flags on gold | 0.010 | 0.019 |
+
+  - Opus's extra false flag: fx05's "extended-window thrombolysis does not apply" judged misapplied.
+  - Both judges miss the same three seeds, fx04-3a, fx03-6b and fx04-6b, so the misses come from the verifier (candidate selection and retrieval), not the judge model.
+- **DEC-20 (Parsa):** the judge is `claude-haiku-5-5` at effort medium with `judge_v2`, and τ = 0.6, following the protocol in `docs/HALLUCINATION_METRIC.md` §7 (the cheaper judge that meets the bar). Recall is flat from −1 to 0.7 and falls at 0.75, so 0.6 leaves a margin.
+  - Recorded in plan §2, the metric doc §7, and code: `trace.JUDGE_MODEL`, `JUDGE_EFFORT` and `TAU`, the default τ of `Inputs`, and `claims.EXTRACTOR_MODEL` and `EXTRACTOR_EFFORT`.
+  - §7 `trace.py` and `seeded_errors.py` tasks ticked.
+- **Notion sync:**
+  - done: Experiments → EXP-11 row (Done); Decisions → DEC-20 row.
+
+## 2026-11-04 — Claude Code session (EXP-11 second rescore)
+- **Second rescore** (commit `3c07e9a`, no API calls):
+  - **Strict recall, Haiku judge, τ ≤ 0.7:** 1.0 for wrong number, invented finding, misapplied rule, faulty derivation and misattributed source; 0.9 for wrong rule; 0.8 for uncited rule.
+  - **False flags:** 0.010, one gold claim of about 100: fx01's "the core is under 1 mL" in an uncertainty.
+  - **Above τ 0.7:** uncited-rule recall falls, to 0.3 at τ 0.9.
+- **Still missed:**
+  - fx04-3a ("at any age"): the Haiku judge accepted a loosened rule.
+  - fx03-6b and fx04-6b: both state the 0–6 h ICA/M1 rule with no passage and came out as wrong rule (3) rather than uncited (6). The likely cause, not checked, is EXP-7's weakness: the right ICA/M1 row may fall outside the top 5 retrieved.
+- §7 `claims.py` task ticked: the real extractor ran on 75 outputs with no failures.
+- **Notion sync:**
+  - pending: the EXP-11 row and a Decisions row for the judge model and τ.
+
 ## 2026-11-04 — Claude Code session (EXP-11 rescore; four more verifier fixes)
 - **EXP-11 rescore** (commit `984a884`, no API calls): the Haiku pass re-scored with comparison thresholds checked in code.
   - **Bar met at τ ≤ 0.7:** recall 1.0 for sub-types 1, 2, 4 and 7, 0.9 for 3 and 5, 0.8 for 6. False flags 0.095 (10 of 105 gold claims).

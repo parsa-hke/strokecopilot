@@ -21,6 +21,8 @@ from strokecopilot.config import PROMPTS_DIR
 from strokecopilot.nlp.notes.facts import FACT_KEYS
 
 EXTRACTOR_PROMPT = "claim_extractor_v1"
+EXTRACTOR_MODEL = "claude-sonnet-5-5"  # with effort medium; held fixed in the EXP-11 bake-off
+EXTRACTOR_EFFORT = "medium"
 
 VISION_SUBJECTS = {
     "haemorrhage.present": "intracranial haemorrhage on plain CT (true or false)",

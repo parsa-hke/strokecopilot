@@ -28,6 +28,11 @@ SUBTYPES = {1: "wrong_number", 2: "invented_finding", 3: "wrong_rule", 4: "misap
             5: "faulty_derivation", 6: "uncited_rule", 7: "misattributed_source"}
 CONTENT_FALSE = {1, 2, 3, 4, 5}
 JUDGE_PROMPT = "judge_v2"
+# DEC-20 (EXP-11 bake-off, 4 Nov 2026): the cheaper judge that meets the seeded-error bar, and the similarity a retrieved
+# passage needs before the judge sees it. The claim extractor is claims.EXTRACTOR_MODEL.
+JUDGE_MODEL = "claude-haiku-5-5"
+JUDGE_EFFORT = "medium"
+TAU = 0.6
 TOP_K = 5
 LARGE_VESSEL = {"ICA", "M1", "basilar"}
 
@@ -58,7 +63,7 @@ class Inputs:
     corpus: dict  # passage id -> {"text", "source", "section", ...}
     judge: object = None  # callable(claim_text, passages, case_inputs, applied) -> {id: (verdict, scope_fits)}
     retriever: object = None  # callable(text, k) -> [(passage id, similarity)]
-    tau: float = 0.0
+    tau: float = TAU
 
 
 @dataclass

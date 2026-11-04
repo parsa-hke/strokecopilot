@@ -118,7 +118,7 @@ Recorded in every verifier run's `config.json`:
 
 - claim extractor: model, `claim_extractor_vN`;
 - judge: model, `judge_vN` prompt, effort level. One judge call per claim, with all its candidate passages. The model is chosen in Phase 2 by seeded-error recall: `claude-haiku-5-5` and `claude-opus-5-5` run on the same seeded set, and the cheaper one that meets the §8 bar is used, recorded in a Decisions row. The API budget is about $100, and an Opus judge for the full Phase 3 table is estimated, not measured, to cost more than that;
-- embedding model and τ;
+- embedding model and τ. Since DEC-20 (4 Nov 2026, EXP-11): judge `claude-haiku-5-5` at effort medium with `judge_v2`, claim extractor `claude-sonnet-5-5` at effort medium, τ = 0.6;
 - corpus version (`passages.jsonl` sha256);
 - rulebook version (git commit of `scenarios.py`).
 

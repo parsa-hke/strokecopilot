@@ -95,6 +95,7 @@ These are recorded in the Notion Decisions log. Do not change them without a new
 | DEC-15 | `haemorrhage.confidence` means the calibrated probability that a haemorrhage is present | Decided |
 | DEC-16 | Vision B uses all labelled RSNA data, with no subset | Decided |
 | DEC-17 | Vision B preprocesses once to 320 px JPEG tar shards on Kaggle, then trains there, as an exception to DEC-3; only checkpoints and metrics move to Drive | Decided |
+| DEC-20 | The verifier's judge is `claude-haiku-5-5` (effort medium, `judge_v2`) with τ = 0.6; the claim extractor is `claude-sonnet-5-5` (effort medium). Chosen by the EXP-11 bake-off: both judges reach the seeded-error bar with the same recall, Haiku with fewer false flags (0.010 vs 0.019) at about a twentieth of the cost per call | Decided — Parsa, 4 Nov 2026 |
 | DEC-19 | The reasoner gets the whole rulebook in its prompt, not retrieved passages. Retrieval stays only for the verifier's candidate passages (`BAAI/bge-base-en-v1.5`). Experiment arm 1 becomes with vs without the rulebook. Reason: EXP-7 found top-k retrieval missed 6 of 15 key fixture rules, because embeddings cannot tell apart rule rows that differ only in numbers. The rulebook is about 4,600 tokens, so sending it whole is cheap | Decided — Parsa, 4 Nov 2026 |
 | DEC-18 | The corpus is a rulebook in our own words, one passage per criterion, each pointing to its source, section, recommendation and page. It keeps the numeric criteria as facts and copies no wording. The reasoner and judge see only our text; the PDFs stay on Drive for checking. Reason: AHA allows no reproduction without permission, and NEJM reserves text and data mining and AI use (`docs/DATA_USE.md`). The sources in DEC-2 are unchanged | Decided — Parsa, 4 Nov 2026 |
 
@@ -468,11 +469,11 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 
 **NLP B (verifier & eval)**
 - [x] Write the hallucination metric definition (§8.4) in `docs/` and Notion — before code (`docs/HALLUCINATION_METRIC.md`, approved 3 Nov 2026)
-- [ ] `claims.py`: rationale → atomic claims (LLM-assisted with `prompts/claim_extractor_v1.md`, plus a rule-based numeric extractor) — code and tests done 4 Nov 2026 with a fake model; ticked after the first real extractor run
-- [ ] `trace.py`: numeric claims vs vision JSON (after rounding); patient facts vs note; rule claims vs passage text (embedding similarity + NLI or LLM judge — pick one, record it) — LLM judge (`prompts/judge_v2.md` since EXP-10); code, fixture fact sheets and tests done 4 Nov 2026 with a fake judge; τ and the judge model wait for the corpus and seeded errors
+- [x] `claims.py`: rationale → atomic claims (LLM-assisted with `prompts/claim_extractor_v1.md`, plus a rule-based numeric extractor) — code and tests done 4 Nov 2026; real extractor (`claude-sonnet-5-5`) run in EXP-10 and EXP-11 on 75 outputs with no failures
+- [x] `trace.py`: numeric claims vs vision JSON (after rounding); patient facts vs note; rule claims vs passage text (embedding similarity + NLI or LLM judge — done 4 Nov 2026: LLM judge (`prompts/judge_v2.md`), `claude-haiku-5-5` with τ = 0.6 (DEC-20, from the EXP-11 bake-off)
 - [x] `metrics.py`: hallucination rate, critical hallucination rate, omission rate; bootstrap CIs (criticality and omissions are filled in once `scenarios.py` exists)
 - [ ] `scenarios.py`: 100–200 synthetic scenarios with expected recommendations derived from the rulebook in code; review the rule code against the corpus
-- [ ] `seeded_errors.py`: plant known fabrications of each sub-type and measure verifier recall and false-flag rate — seed set and scoring done 4 Nov 2026: 5 hand-written gold outputs (`fixtures/gold/`, checked in code) and 70 hand-written seeds, 2 per sub-type per fixture (`fixtures/seeded_errors.json`); measured by `40_nlpB_verifier.ipynb` (EXP-10 dummy, EXP-11 bake-off), written 4 Nov 2026 and not yet run
+- [x] `seeded_errors.py`: plant known fabrications of each sub-type and measure verifier recall and false-flag rate — done 4 Nov 2026 (EXP-11): 5 gold outputs and 70 seeds; Haiku judge, τ ≤ 0.7: strict recall 1.0 on five sub-types, 0.9 wrong rule, 0.8 uncited rule, false flags 0.010; bar met
 - [ ] Run verifier on the five fixture outputs; `tests/test_claims.py`, `tests/test_trace.py`
 
 **Everyone**
