@@ -474,7 +474,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 - [x] `metrics.py`: hallucination rate, critical hallucination rate, omission rate; bootstrap CIs (criticality and omissions are filled in once `scenarios.py` exists)
 - [ ] `scenarios.py`: 100–200 synthetic scenarios with expected recommendations derived from the rulebook in code; review the rule code against the corpus
 - [x] `seeded_errors.py`: plant known fabrications of each sub-type and measure verifier recall and false-flag rate — done 4 Nov 2026 (EXP-11): 5 gold outputs and 70 seeds; Haiku judge, τ ≤ 0.7: strict recall 1.0 on five sub-types, 0.9 wrong rule, 0.8 uncited rule, false flags 0.010; bar met
-- [ ] Run verifier on the five fixture outputs; `tests/test_claims.py`, `tests/test_trace.py`
+- [ ] Run verifier on the five fixture outputs; `tests/test_claims.py`, `tests/test_trace.py` — tests done; the run is `50_end_to_end.ipynb` (EXP-12, `pipeline/end_to_end.py`), written 4 Nov 2026 and not yet run
 
 **Everyone**
 - [ ] Every run above has an Experiments row and a `runs/EXP-*` folder with `metrics.json`

@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (end to end, fixture mode)
+- **`pipeline/end_to_end.py`**, `run_fixtures()`: runs fixture → reasoner (`reasoner_v1`, whole rulebook) → recommendation → verifier (Sonnet extractor, code checks, bge retrieval, Haiku judge, τ = 0.6) → `metrics.summarise()`.
+  - A reasoner format failure is counted and not verified.
+  - It saves outputs, traces and calls, with caches so a stopped run resumes, and writes `config.json` and `metrics.json` with per-fixture flagged claims, usage and cost.
+  - Criticality and omissions stay None until `scenarios.py` exists.
+- **`50_end_to_end.ipynb`** (Colab, CPU, EXP-12): the Phase 2 acceptance notebook. It prints each flagged claim with its sub-type, then the hallucination, content and attribution rates, decision correctness and format failures.
+  - **Estimate, from EXP-8 to EXP-11 rates:** about $0.40 and 10 minutes.
+  - **Tested locally** with Colab, git, pip and the API faked (gold outputs as the reasoner), and real bge retrieval: it runs, refuses to overwrite a finished run, and keeps no key. The fake extractor's rates mean nothing.
+- `tests/test_end_to_end.py`: every stage with fake models, and a reasoner format failure.
+- pytest: 336 passed.
+- **Notion sync:**
+  - pending: Experiments row for EXP-12 after the run.
+
 ## 2026-11-04 — Claude Code session (EXP-11 Opus pass)
 - **The Opus pass ran** (commit `3c07e9a`): 60 judge calls on the same extracted claims, about $1.30 ($0.022 per call). Every other verdict came from the caches.
 - **Results with the final code, τ ≤ 0.7:**

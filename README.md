@@ -73,7 +73,7 @@ Badges point at the notebooks once they exist.
 | `31_nlpA_reasoner` | Phase 2: reasoner on the five fixtures; dummy mode (EXP-8) checks schema, caching and cost first, run mode is EXP-9 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/31_nlpA_reasoner.ipynb) |
 | `40_nlpB_verifier` | Phase 2: verifier on the seeded errors; judge bake-off (Haiku vs Opus) and τ; dummy mode (EXP-10) first, run mode is EXP-11 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/40_nlpB_verifier.ipynb) |
 | `41_nlpB_model_comparison` | NLP B: hallucination table | Not written yet (Phase 2 or later) |
-| `50_end_to_end` | Full pipeline | Not written yet (Phase 2 or later) |
+| `50_end_to_end` | Phase 2 acceptance: fixture → reasoner → verifier → hallucination rate (EXP-12); real cases in Phase 4 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/50_end_to_end.ipynb) |
 
 ## Repository layout
 
