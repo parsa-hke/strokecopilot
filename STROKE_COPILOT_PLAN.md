@@ -40,7 +40,7 @@ Eligibility therefore depends on three things at once:
 2. Facts about the patient — time since onset (or last known well), age, NIHSS score, anticoagulant use, prior disability.
 3. Published rules — the 2026 AHA/ASA guideline and the trial criteria.
 
-Clinicians do this under time pressure. Our system does the imaging part with vision models, the reasoning part with a retrieval-grounded language model, and then audits the language model's output claim by claim.
+Clinicians do this under time pressure. Our system does the imaging part with vision models, the reasoning part with a language model grounded in a guideline rulebook, and then audits the language model's output claim by claim.
 
 ### 1.2 The system in one diagram
 
@@ -50,7 +50,7 @@ Clinicians do this under time pressure. Our system does the imaging part with vi
    CT perfusion ──► [Vision A: core / penumbra] ──┘                         │
                                                                             ▼
    triage note (generated from clinical variables) ──────────────► [NLP A: reasoner] ──► recommendation + rationale
-   guideline corpus (AHA/ASA, DAWN, DEFUSE-3) ──── retrieval ────┘                              │
+   guideline rulebook (AHA/ASA, DAWN, DEFUSE-3) ── whole ────────┘                              │
                                                                                                 ▼
                                                                   [NLP B: verifier] ──► every claim traced or flagged
 ```
@@ -95,6 +95,7 @@ These are recorded in the Notion Decisions log. Do not change them without a new
 | DEC-15 | `haemorrhage.confidence` means the calibrated probability that a haemorrhage is present | Decided |
 | DEC-16 | Vision B uses all labelled RSNA data, with no subset | Decided |
 | DEC-17 | Vision B preprocesses once to 320 px JPEG tar shards on Kaggle, then trains there, as an exception to DEC-3; only checkpoints and metrics move to Drive | Decided |
+| DEC-19 | The reasoner gets the whole rulebook in its prompt, not retrieved passages. Retrieval stays only for the verifier's candidate passages (`BAAI/bge-base-en-v1.5`). Experiment arm 1 becomes with vs without the rulebook. Reason: EXP-7 found top-k retrieval missed 6 of 15 key fixture rules, because embeddings cannot tell apart rule rows that differ only in numbers. The rulebook is about 4,600 tokens, so sending it whole is cheap | Decided — Parsa, 4 Nov 2026 |
 | DEC-18 | The corpus is a rulebook in our own words, one passage per criterion, each pointing to its source, section, recommendation and page. It keeps the numeric criteria as facts and copies no wording. The reasoner and judge see only our text; the PDFs stay on Drive for checking. Reason: AHA allows no reproduction without permission, and NEJM reserves text and data mining and AI use (`docs/DATA_USE.md`). The sources in DEC-2 are unchanged | Decided — Parsa, 4 Nov 2026 |
 
 ---
@@ -137,7 +138,7 @@ strokecopilot/
 │   ├── nlp/
 │   │   ├── corpus/                # NLP A
 │   │   │   ├── ingest.py          # corpus/RULEBOOK.md → passages.jsonl, with checks (DEC-18)
-│   │   │   └── index.py           # embeddings + retrieval
+│   │   │   └── index.py           # embeddings; candidate passages for the verifier (DEC-19)
 │   │   ├── notes/
 │   │   │   └── generate.py        # clinical variables → triage note (templated)
 │   │   ├── reasoner/
@@ -287,7 +288,7 @@ Kaggle token, Hugging Face token, LLM API keys: Colab Secrets panel only. The pa
 - Each passage gets a stable ID: the source, the section and a short slug, like `AHA2026-4.6.1-within-4.5h`, `AHA2026-T8-ich` (Table 8) or `DEFUSE3-inclusion-core`. The reasoner cites IDs; the verifier resolves them. An ID never changes once a passage is checked.
 - The source is `corpus/RULEBOOK.md`, in the repo: humans read and review it, and `ingest.py` builds `corpus/passages.jsonl` from it, so people and the models read the same text. The corpus version is the sha256 of `passages.jsonl`.
 - Each passage has a status: `draft`, `checked` (a team member compared it with the PDF) or `reviewed` (a clinician read it). Evaluation runs need every passage at least `checked`.
-- The rulebook also holds guideline passages outside the two decisions (for example blood pressure and glucose management), so retrieval has to choose and is not handed only the relevant rules.
+- The rulebook also holds guideline passages outside the two decisions (for example blood pressure and glucose management), so the reasoner has to pick the rules that apply (DEC-19) rather than being handed only those.
 
 ### 5.4 Slim format (v1)
 
@@ -461,9 +462,9 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 
 **NLP A (reasoner)**
 - [ ] `ingest.py`: guideline PDF + two trial papers → passages with stable IDs; `docs/RULEBOOK.md` generated from the same source — changed by DEC-18: `corpus/RULEBOOK.md` (own words) → `corpus/passages.jsonl`, with checks. Code, tests and 47 passages done 4 Nov 2026: all 43 AHA passages checked against the guideline, off-topic passages added, copy check clean. Ticked once a person has checked the 2 DAWN and 2 DEFUSE-3 passages
-- [ ] `index.py`: embed passages; retrieve top-k by query; sanity-check that each fixture's expected rule IDs are retrievable
+- [x] `index.py`: embed passages; retrieve top-k by query; sanity-check that each fixture's expected rule IDs are retrievable — done 4 Nov 2026. The check (EXP-7, bge-base) found 9 of 15 fixture rules, so the reasoner gets the whole rulebook (DEC-19) and `index.py` serves only the verifier's candidates
 - [ ] `notes/generate.py`: clinical row → triage note (templated with controlled variation), using allowed columns only; test that nothing post-treatment leaks; produce notes for all 149 cases
-- [ ] `reasoner/run.py` v0 with `prompts/reasoner_v1.md`: fixture JSON + note + retrieved passages → `recommendation.json`; run on all five fixtures with one model
+- [ ] `reasoner/run.py` v0 with `prompts/reasoner_v1.md`: fixture JSON + note + the whole rulebook (DEC-19) → `recommendation.json`; run on all five fixtures with one model
 
 **NLP B (verifier & eval)**
 - [x] Write the hallucination metric definition (§8.4) in `docs/` and Notion — before code (`docs/HALLUCINATION_METRIC.md`, approved 3 Nov 2026)
@@ -500,7 +501,7 @@ Goal: each component made good; real vision outputs replace fixtures; the multi-
 - [ ] Switch reasoner inputs from fixtures to real `vision_output.json` + generated notes
 - [ ] Prompt v2 informed by Phase 2 verifier findings (what did the model get wrong?)
 - [ ] `providers.py`: at least three models — one frontier API model, one open mid-size model (e.g. Llama-class via HF or API), one small medical model. Exact list → Decisions row
-- [ ] Run all three on all fixtures, the synthetic scenarios and a sample of real cases, with and without retrieval; outputs to `runs/`
+- [ ] Run all three on all fixtures, the synthetic scenarios and a sample of real cases, with and without the rulebook; outputs to `runs/`
 
 **NLP B**
 - [ ] `41_nlpB_model_comparison.ipynb`: the hallucination table — per model, per scenario, with CIs
@@ -515,7 +516,7 @@ Goal: end-to-end on held-out cases; error propagation analysis; demo.
 
 - [ ] Unlock held-out cases (`ALLOW_HELDOUT=1` in Phase 4 notebooks only); never retrain after this
 - [ ] `pipeline/end_to_end.py` on all ~20 held-out cases × 3 models, with predicted vision values and with ground-truth (oracle) values
-- [ ] Error propagation: for each wrong recommendation, was the cause vision error, retrieval error, reasoning error, or verifier miss? Table + examples
+- [ ] Error propagation: for each wrong recommendation, was the cause vision error, reasoning error, or verifier miss? Table + examples
 - [ ] Sensitivity analysis: perturb `core_ml` by ±20% and see which recommendations flip — shows how much vision accuracy matters clinically
 - [ ] `demo/app.py`: pick a case → show maps + masks → show note → show recommendation with each claim clickable, linking to the vision field or the passage; flagged claims in red; "research prototype, not for clinical use" banner on every screen
 - [ ] Export figures to `artifacts/figures/`
@@ -570,12 +571,12 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 
 **Corpus ingestion (DEC-18).** `corpus/RULEBOOK.md` holds one passage per criterion, written in our own words (§5.3). `ingest.py` parses it into `corpus/passages.jsonl`. Each passage is `{id, source, section, pointer, page, treatment, must_have, status, text}`. The build fails on a duplicate or malformed ID, a missing field, an unknown source or status, or a passage over 120 words. A test checks that `passages.jsonl` matches the source. `ingest.py` also has a copy check that never sends anything to an LLM: run locally against the PDF text, it reports each passage that shares 12 or more consecutive words with the source. It prints passage IDs and counts only, never the matching text.
 
-**Retrieval.** Embedding index (a sentence-embedding model from HF; record which). Query = structured summary of the vision JSON + note. Return top-k passages with IDs. Also always include a small fixed set of "must-have" passages (thrombolysis window, haemorrhage contraindication, DEFUSE-3 and DAWN inclusion criteria) so the reasoner can never claim it was not shown the key rule.
+**Rulebook in the prompt (DEC-19).** The reasoner gets every passage, with its ID and pointer, in the cached part of the prompt (`ingest.prompt_block()`, about 4,600 tokens), so it can never miss a rule because retrieval failed. Top-k retrieval was planned and tested first (EXP-7, `BAAI/bge-base-en-v1.5`). Two decision queries with the top 8 each found 9 of the 15 rules the fixtures rest on. The best variant found 13, by returning up to 35 of the 47 passages. The model ranks the right family of rules first but cannot order rows that differ only in their numbers (window, ASPECTS, mRS). `index.py` keeps the embeddings for the verifier, whose candidate passages need only the right family, because the judge reads the numbers. The `must_have` flag stays in the rulebook but has no role while the whole rulebook is sent.
 
 **Triage note generation.** `notes/generate.py` turns the ISLES'24 clinical row into a short ED-style note: age, sex, onset or last-known-well time (from onset to door + door to imaging, and referral type for wake-up), admission NIHSS, anticoagulation and INR, pre-stroke mRS, relevant comorbidities. **Never use post-treatment or treatment-revealing columns:** door to groin, time of intervention, door to first series, door to recanalisation, mTICI, and NIHSS or mRS after admission, except premorbid mRS. The dataset paper classes some of these as baseline, but they reveal that thrombectomy happened. Templated with a few phrasings per field so the reasoner does not overfit to one format. Tags are in `data/clinical_columns.py`. A missing field must be stated as not recorded: at least 61 cases have no onset time (`docs/DATA.md`). The note is an *input*; we are not learning from it. Every fact in the note is traceable back to a clinical column, which is what lets the verifier check patient-fact claims.
 
 **Reasoner.** Prompt (`prompts/reasoner_vN.md`) instructs the model to:
-1. Read the vision JSON, the note, and the retrieved passages.
+1. Read the vision JSON, the note, and the rulebook.
 2. Decide thrombolysis and thrombectomy separately.
 3. Return `recommendation.json` (§6.4) with every rationale claim carrying its `sources` and `derived` flag.
 4. Quote numbers exactly as given; treat `null` as unknown; list uncertainties.
@@ -627,9 +628,9 @@ Providers: thin wrappers with identical signatures for each model; temperature 0
 
 **Verifier validity.** Plant known fabrications of each sub-type in otherwise clean rationales (`seeded_errors.py`) and report recall per sub-type, plus the false-flag rate on clean rationales. This gives ground truth without depending on the size of the human sample.
 
-**Models compared.** Minimum three: one frontier API model, one open mid-size model, one small medical model. Same prompt version, same retrieval, same inputs, temperature 0 where allowed (§8.3). Exact list → Decisions row.
+**Models compared.** Minimum three: one frontier API model, one open mid-size model, one small medical model. Same prompt version, same rulebook, same inputs, temperature 0 where allowed (§8.3). Exact list → Decisions row.
 
-**Experimental arms.** (1) With vs without retrieval: does grounding reduce hallucination? (2) Ground-truth vs predicted vision values: how much do vision errors change decisions and claims? Arm 1 runs on synthetic scenarios and sampled training cases; arm 2 runs on real cases, with held-out cases only in Phase 4.
+**Experimental arms.** (1) With vs without the rulebook (DEC-19; planned as with vs without retrieval in DEC-11): does grounding reduce hallucination? (2) Ground-truth vs predicted vision values: how much do vision errors change decisions and claims? Arm 1 runs on synthetic scenarios and sampled training cases; arm 2 runs on real cases, with held-out cases only in Phase 4.
 
 ### 8.5 Demo
 
@@ -644,8 +645,8 @@ Gradio app in `demo/app.py`, runnable from Colab. Case picker → maps and masks
 | Core/final infarct segmentation | ISLES'24, 5 folds | Dice, volume error (mL), threshold-crossing rate | mean ± std over folds |
 | Threshold baseline | same | same | same; compared to learned model |
 | Haemorrhage detection | RSNA ICH val; ISLES'24 NCCT | slice/scan AUC, sensitivity at operating point, ECE, FPR on ISLES | single table |
-| Retrieval | fixtures + sampled cases | recall of expected rule IDs @k | single number per k |
-| Reasoner + verifier (primary) | 100–200 synthetic scenarios | hallucination rate, critical rate, omission rate, attribution accuracy, recommendation correctness | per model × scenario, with case-level CIs; with vs without retrieval |
+| Retrieval (verifier candidates only, DEC-19) | fixtures + seeded errors | recall of the true passage in the top 5 above τ | single number |
+| Reasoner + verifier (primary) | 100–200 synthetic scenarios | hallucination rate, critical rate, omission rate, attribution accuracy, recommendation correctness | per model × scenario, with case-level CIs; with vs without the rulebook |
 | Reasoner + verifier (realism) | fixtures; sampled train cases; held-out cases | same | per model, with CIs; compared with synthetic results |
 | Verifier validity | ~100 adjudicated claims; seeded errors | κ (human–human), agreement (verifier–human); recall per sub-type, false-flag rate | numbers + small table |
 | End-to-end | ~20 held-out cases × 3 models, predicted vs ground-truth vision values | recommendation correctness vs rule-derived ground truth; error-propagation table | table + examples |
@@ -703,7 +704,7 @@ Format, length and dates: _fill in once professors confirm._
 2. Related work — perfusion-based infarct prediction, haemorrhage detection, clinical LLMs and hallucination, grounded generation / fact-checking
 3. Data — ISLES'24, RSNA ICH, corpus; preprocessing; splits; data-use terms
 4. System — architecture, the contract, each component (§8)
-5. Experiments — vision results, retrieval, hallucination table, adjudication, end-to-end, sensitivity
+5. Experiments — vision results, the retrieval test (EXP-7), hallucination table, adjudication, end-to-end, sensitivity
 6. Discussion — error propagation, what the hallucination table says, limitations (final infarct ≠ core, reperfused-only cohort, small N, synthetic notes and scenarios, no ASPECTS input, verifier validity)
 7. Ethics and safety — prototype only; de-identified data; failure modes that would matter clinically
 8. Conclusion and future work

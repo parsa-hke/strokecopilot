@@ -175,6 +175,17 @@ def must_have(path=PASSAGES):
             if json.loads(line)["must_have"]]
 
 
+def prompt_block(path=PASSAGES):
+    """The whole rulebook for the reasoner's prompt (DEC-19): one line per passage with its ID and pointer.
+
+    Bookkeeping fields (status, must_have) are left out; the source document is named so citations can be checked."""
+    lines = []
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        rec = json.loads(line)
+        lines.append(f"[{rec['id']}] {rec['topic']} | {rec['source']}, {rec['pointer']}\n{rec['text']}")
+    return "\n\n".join(lines)
+
+
 def unchecked(passages):
     """IDs still in draft. Evaluation runs need this to be empty."""
     return [p.id for p in passages if p.status == "draft"]

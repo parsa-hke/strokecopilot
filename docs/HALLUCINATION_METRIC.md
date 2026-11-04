@@ -40,7 +40,7 @@ The verifier traces every claim on its own, ignoring the model's declared source
 - **Negations** ("no anticoagulant use") must match a stated negative in the fact sheet. If the note is silent on something, nothing supports a claim either way.
 
 **(c) Corpus passage.** A passage in `passages.jsonl`, checked in two steps.
-1. **Candidates:** the passages the claim cites, plus the top 5 corpus passages by embedding similarity to the claim (`BAAI/bge-base-en-v1.5`, the retrieval model). A passage above a similarity threshold τ, set on the fixtures and seeded errors in Phase 2 and recorded, is a candidate.
+1. **Candidates:** the passages the claim cites, plus the top 5 corpus passages by embedding similarity to the claim (`BAAI/bge-base-en-v1.5`; the reasoner itself gets the whole rulebook, DEC-19). A passage above a similarity threshold τ, set on the fixtures and seeded errors in Phase 2 and recorded, is a candidate.
 2. **Judgement:** an LLM judge (decided 3 November 2026; model and prompt version in §7) reads the claim, the candidate passage and the case inputs, and returns a structured verdict:
    - `supported`: the passage states this rule;
    - `contradicted`: the passage states something different;
@@ -92,7 +92,7 @@ Both use the rulebook in code (`scenarios.py`). For a case, it returns each deci
 
 ## 6. Metrics
 
-Reported per model × scenario type, and per model overall, for each arm (with and without retrieval; ground-truth and predicted vision values).
+Reported per model × scenario type, and per model overall, for each arm (with and without the rulebook, DEC-19; ground-truth and predicted vision values).
 
 | Metric | Numerator | Denominator |
 |---|---|---|

@@ -18,6 +18,7 @@ dev = ["pytest>=7"]
 rsna = ["numpy", "pandas", "pydicom>=2.3", "opencv-python-headless"]
 isles = ["numpy", "pandas", "openpyxl", "nibabel", "scipy", "matplotlib"]
 corpus = ["pypdf"]  # only for the local copy check
+retrieval = ["numpy", "sentence-transformers"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/strokecopilot"]

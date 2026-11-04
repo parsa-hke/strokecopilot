@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (corpus: retrieval test, DEC-19)
+- **EXP-7, the retrieval check, ran locally** with `BAAI/bge-base-en-v1.5` and sentence-transformers 6.2.0 on the Mac CPU, in about 50 s including the model download.
+  - **Setup:** two decision queries, each the vision JSON in words plus the note, top 8 each.
+  - **Result:** 9 of the 15 rules the fixtures rest on (`fixtures/expected_rules.json`) were found. 5 were never returned, including the main ICA/M1 thrombectomy rows for fx02 and fx04.
+  - **Variants:** the best of 12 query and passage formats found 11; four focused queries found 11; whole-section expansion found 13, but only by returning 26–35 of the 47 passages.
+  - **Why:** bge ranks the right family of rules first but cannot order rows that differ only in their numbers.
+  - Files are in `runs/EXP-7_retrieval_check/` (not committed).
+- **DEC-19 (Parsa):** the reasoner gets the whole rulebook, about 4,600 tokens, in the cached part of its prompt (`ingest.prompt_block()`).
+  - Retrieval stays only for the verifier's candidate passages.
+  - Experiment arm 1 becomes with vs without the rulebook.
+  - Updated: plan §1, §2, §3, §5.3, §7, §8.3, §8.4, §9 and §12; `docs/HALLUCINATION_METRIC.md`; README.
+- **`nlp/corpus/index.py` now serves only the verifier:** `Embedder` (loaded on first use, bge query instruction) and `Index.search(text, k)`, which fits `trace.Inputs.retriever`. The per-case queries and the must-have logic were removed. The `must_have` flag stays in the rulebook but has no role while the whole rulebook is sent.
+- New extra: `retrieval` (`sentence-transformers`), installed in `.venv`.
+- §7 `index.py` ticked.
+- pytest: 294 passed.
+- **Notion sync:**
+  - done: Experiments → EXP-7 row (Done); Decisions → DEC-19 row, which also records the embedding model.
+  - pending: Decisions rows for the LLM judge, RSNA split and temperature wording.
+
 ## 2026-11-04 — Claude Code session (corpus: AHA passages checked)
 - **AHA passages checked against the guideline** at Parsa's request. Claude read the text Drive extracted from `aha_asa_2026_ais.pdf`; the text was kept outside the repo, and no wording was copied.
   - All 43 AHA passages are now `checked`, with page, recommendation number, COR and LOE.

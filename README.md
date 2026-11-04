@@ -2,7 +2,7 @@
 
 MAAI 901 (Deep Learning for Visual Data) + MAAI 902 (NLP & LLMs) group project, MSc Applied AI, UOWD.
 
-Vision models read the stroke CT (haemorrhage on plain CT; core and penumbra on CT perfusion), a retrieval-grounded language model reasons over those findings, a triage note and the AHA/ASA guideline plus the DAWN and DEFUSE-3 trials, and a verifier checks every claim in its rationale against its sources. The research output is a hallucination-rate comparison across language models on a clinical decision task with known inputs.
+Vision models read the stroke CT (haemorrhage on plain CT; core and penumbra on CT perfusion), a language model reasons over those findings, a triage note and the AHA/ASA guideline plus the DAWN and DEFUSE-3 trials, and a verifier checks every claim in its rationale against its sources. The research output is a hallucination-rate comparison across language models on a clinical decision task with known inputs.
 
 **Research prototype — not for clinical use.**
 
@@ -15,7 +15,7 @@ plain CT ──► Vision B (haemorrhage) ──┐
                                       ├──► vision_output.json ──┐
 CT perfusion ──► Vision A (core/penumbra) ┘                      ▼
 triage note ─────────────────────────────────────────► NLP A: reasoner ──► recommendation.json
-guideline corpus ──── retrieval ──────────────────────┘                          │
+guideline rulebook (whole) ───────────────────────────┘                          │
                                                                                  ▼
                                                            NLP B: verifier ──► every claim traced or flagged
 ```
@@ -69,7 +69,7 @@ Badges point at the notebooks once they exist.
 | `11_visionA_thresholds` | Phase 2: threshold baseline (EXP-1) and occlusion-to-label distances | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/11_visionA_thresholds.ipynb) |
 | `11b_visionA_threshold_check` | Phase 2: checks the low EXP-1 Dice (infarct vs Tmax > 6 s, rCBF, MCA overlap) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/11b_visionA_threshold_check.ipynb) |
 | `20_visionB_train` | Phase 2: RSNA patient split and Vision B slice classifier with scan calibration; dummy mode (EXP-5) measures speed first | Upload to Kaggle; this only runs there |
-| `30_nlpA_corpus` | NLP A: corpus ingestion and retrieval | Not written yet (Phase 2 or later) |
+| `30_nlpA_corpus` | NLP A: corpus ingestion and retrieval | Not needed: the corpus is built in the repo (`python -m strokecopilot.nlp.corpus.ingest build`, DEC-18) and sent whole (DEC-19) |
 | `31_nlpA_reasoner` | NLP A: reasoner | Not written yet (Phase 2 or later) |
 | `40_nlpB_verifier` | NLP B: verifier | Not written yet (Phase 2 or later) |
 | `41_nlpB_model_comparison` | NLP B: hallucination table | Not written yet (Phase 2 or later) |
