@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (Phase 2: EXP-1 results)
+- **EXP-1 ran on Colab** at `bf86e15` with all 129 development cases, at 0.21 s per case. Results are in `runs/EXP-1_thresholds_baseline/`.
+- **Threshold core vs final infarct:**
+  - Dice 0.111 ± 0.031 over folds; the pooled median is 0.027.
+  - Absolute volume error 25.2 ± 5.0 mL. The median error is -4.2 mL, and the core underestimates large infarcts (p5 -106 mL).
+  - The predicted core falls on the other side of a cut-off from the reference in 35, 29, 23 and 17 of 129 cases at 21, 31, 51 and 70 mL.
+  - Dropping the Tmax > 6 s restriction changes little (Dice 0.117).
+  - Penumbra matches native Tmax > 6 s to a median of 2.8 mL, as in Phase 1.
+- **Not accepted yet:** a Dice this low needs checking for a bug before it stands. Added `thresholds.diagnose_case`, with a test, and `notebooks/11b_visionA_threshold_check.ipynb`. The notebook measures how much infarct lies inside Tmax > 6 s and on the side called affected, the rCBF inside the infarct, and Dice at rCBF 20–45%. Tested on synthetic data only.
+- **Occlusion distance limit set to 5 mm** from the EXP-1 distances:
+  - ICA-nearest occlusions sit at a median 0 mm (p95 6.0 mm);
+  - basilar-nearest ones sit 17–51 mm away, except one under 3 mm;
+  - 5 mm gives 13 ICA, 1 basilar and 115 `unknown` of 129, the `unknown` cases including 72 nearest an MCA label, 7 ambiguous and 2 empty.
+- **Consequence:** about 89% of real cases will have `unknown` occlusion site, so most real-case thrombectomy decisions will be undetermined (§9).
+- pytest: 214 passed.
+- **Notion sync:**
+  - done: EXP-1 row → Done, with headline numbers.
+  - pending: the Decisions rows listed in the entry below.
+
 ## 2026-11-03 — Claude Code session (Phase 2 start: metric definition, threshold baseline code)
 - **Phase 2 set-up, agreed with Parsa:**
   - **LLMs:** the frontier model is Claude, with about $100 of API credits. The open and medical models are to be chosen in Phase 3.

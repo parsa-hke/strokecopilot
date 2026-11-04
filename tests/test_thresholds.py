@@ -101,3 +101,16 @@ def test_montage_writes_png(tmp_path):
     out = tmp_path / "m.png"
     thresholds.montage([case], out)
     assert out.stat().st_size > 1000
+
+
+def test_diagnose_case():
+    cbf, tmax = _maps()
+    infarct = np.zeros(SHAPE, bool)
+    infarct[26:30, 10:14, 8:12] = True
+    arrays = {"cbf": cbf, "tmax": tmax, "ncct": np.where(cbf > 0, 35.0, -1000.0), "infarct": infarct}
+    case = Case(id="sub-stroke9999", arrays=arrays, spacing_mm=SPACING, affine=np.eye(4), clinical={})
+    row = thresholds.diagnose_case(case)
+    assert row["infarct_in_tmax6_share"] == 1.0 and row["infarct_on_affected_side_share"] == 1.0
+    assert row["infarct_rcbf_p50"] == pytest.approx(0.2)
+    assert row["dice_rcbf0.3"] == 1.0 and row["dice_rcbf0.2"] == 0.0  # strict <: nothing below 20%
+    assert row["tmax6_dice"] == pytest.approx(2 * 64 / (960 + 64))

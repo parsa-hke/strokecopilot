@@ -21,7 +21,9 @@ ML_PER_MM3 = 1e-3
 
 LABEL_SITE = {1: "basilar", 4: "ICA", 6: "ICA", 5: "MCA", 7: "MCA"}  # other labels are "other"
 RETURNED_SITES = ("ICA", "basilar")
-# Provisional: set from the development distance survey in 11_visionA_thresholds (plan §8.1).
+# Set from EXP-1 on the 129 development cases: ICA-nearest occlusions sit at a median 0 mm from the
+# label (p95 6.0 mm), basilar-nearest ones at 17-51 mm except one under 3 mm, so nothing lies between
+# about 6 and 17 mm. 5 mm keeps 13 of 15 ICA cases; 10 mm would add the other 2.
 DISTANCE_LIMIT_MM = 5.0
 # Below this share of voxels pointing at one site, the occlusion is ambiguous.
 MIN_SITE_SHARE = 0.75

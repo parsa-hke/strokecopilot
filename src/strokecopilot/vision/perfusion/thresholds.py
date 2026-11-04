@@ -116,3 +116,40 @@ def montage(cases, out_png):
     fig.tight_layout()
     fig.savefig(out_png, dpi=90)
     plt.close(fig)
+
+
+DIAGNOSTIC_RCBF = (0.20, 0.30, 0.38, 0.45)
+
+
+def diagnose_case(case, rcbfs=DIAGNOSTIC_RCBF):
+    """Checks for a low baseline Dice: is the infarct where the perfusion deficit is, and what rCBF it has.
+
+    For one loaded case: the share of the infarct inside Tmax > 6 s and on the side the baseline calls
+    affected, Dice of Tmax > 6 s against the infarct, rCBF percentiles inside the infarct, and Dice and
+    volume at several rCBF cut-offs. The baseline itself stays at 30%; this only shows how sensitive it is.
+    """
+    arrays, spacing = case.arrays, case.spacing_mm
+    masks = threshold_masks(arrays["cbf"], arrays["tmax"], arrays.get("ncct"))
+    infarct, valid, penumbra = arrays["infarct"], masks["valid"], masks["penumbra"]
+    low, high, _ = hemispheres((arrays["ncct"] >= TISSUE_HU[0]) & (arrays["ncct"] <= TISSUE_HU[1]))
+    affected = high if masks["affected_side"] == "right" else low
+    n_infarct = np.count_nonzero(infarct)
+    row = {
+        "case": case.id,
+        "infarct_ml_grid": volumes.mask_ml(infarct, spacing),
+        "infarct_in_tmax6_share": float(np.count_nonzero(infarct & penumbra) / n_infarct) if n_infarct else None,
+        "infarct_on_affected_side_share": float(np.count_nonzero(infarct & affected) / n_infarct) if n_infarct else None,
+        "tmax6_dice": evaluate.dice(penumbra, infarct),
+        "tmax6_ml": volumes.mask_ml(penumbra, spacing),
+    }
+    reference = masks["reference_cbf"]
+    inside = infarct & valid
+    if reference and inside.any():
+        rcbf = arrays["cbf"][inside] / reference
+        row.update({f"infarct_rcbf_p{p}": float(np.percentile(rcbf, p)) for p in (25, 50, 75)})
+    for cut in rcbfs:
+        if reference and reference > 0:
+            core = valid & penumbra & (arrays["cbf"] < cut * reference)
+            row[f"dice_rcbf{cut:g}"] = evaluate.dice(core, infarct)
+            row[f"core_ml_rcbf{cut:g}"] = volumes.mask_ml(core, spacing)
+    return row
