@@ -12,6 +12,7 @@ interval from the environment, so a Colab session can resume a run from Drive wi
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -27,6 +28,10 @@ DATASET_NAME = f"Dataset{DATASET_ID}_ISLES24Perf"
 CONFIGURATION = "3d_fullres"
 PLANS = "nnUNetPlans"
 TRAINER = "nnUNetTrainer_StrokeCopilot"
+FINGERPRINT_EXTRACTOR = "StrokeCopilotFingerprintExtractor"
+# nnU-Net samples 1e8 foreground voxels per channel for its intensity statistics, which peaked at 5.7 GiB on
+# synthetic cases of our size and ran a 12.7 GB Colab runtime out of memory. 1e7 is still about 77,000 per case.
+FOREGROUND_SAMPLES = 10_000_000
 CHANNELS = ("ncct", "cbf", "cbv", "mtt", "tmax", "tmax_valid")
 CHANNEL_NAMES = {"0": "CT", "1": "zscore", "2": "zscore", "3": "zscore", "4": "zscore", "5": "noNorm"}
 FILE_ENDING = ".nii.gz"
@@ -48,6 +53,18 @@ class nnUNetTrainer_StrokeCopilot(nnUNetTrainer):
         self.num_epochs = int(os.environ["SC_NUM_EPOCHS"])
         self.num_iterations_per_epoch = int(os.environ["SC_ITERS_PER_EPOCH"])
         self.save_every = int(os.environ["SC_SAVE_EVERY"])
+'''
+
+
+FINGERPRINT_SOURCE = f'''from nnunetv2.experiment_planning.dataset_fingerprint.fingerprint_extractor import DatasetFingerprintExtractor
+
+
+class StrokeCopilotFingerprintExtractor(DatasetFingerprintExtractor):
+    """nnU-Net's extractor with fewer foreground samples for the intensity statistics, to fit Colab memory."""
+
+    def __init__(self, dataset_name_or_id, num_processes: int = 8, verbose: bool = False):
+        super().__init__(dataset_name_or_id, num_processes, verbose)
+        self.num_foreground_voxels_for_intensitystats = {FOREGROUND_SAMPLES}
 '''
 
 
@@ -122,16 +139,20 @@ def write_splits(preprocessed_root, folds=None):
     return path
 
 
-def install_trainer(package_dir=None):
-    """Put the trainer where nnU-Net looks for trainers: inside its installed package."""
+def install_extensions(package_dir=None):
+    """Put our trainer and fingerprint extractor where nnU-Net looks for them: inside its installed package."""
     if package_dir is None:
         import nnunetv2
 
         package_dir = nnunetv2.__path__[0]
-    path = os.path.join(package_dir, "training", "nnUNetTrainer", "variants", "nnUNetTrainer_StrokeCopilot.py")
-    with open(path, "w") as f:
-        f.write(TRAINER_SOURCE)
-    return path
+    paths = {
+        os.path.join(package_dir, "training", "nnUNetTrainer", "variants", f"{TRAINER}.py"): TRAINER_SOURCE,
+        os.path.join(package_dir, "experiment_planning", "dataset_fingerprint", "strokecopilot_fingerprint.py"): FINGERPRINT_SOURCE,
+    }
+    for path, source in paths.items():
+        with open(path, "w") as f:
+            f.write(source)
+    return list(paths)
 
 
 def environment(raw_root, preprocessed_root, results_root, epochs, iterations, save_every, n_proc=None, n_proc_da=None):
@@ -153,7 +174,7 @@ def environment(raw_root, preprocessed_root, results_root, epochs, iterations, s
 def plan_command(n_proc):
     """Fingerprint, plan and preprocess 3d_fullres with n_proc workers for each step."""
     return ["nnUNetv2_plan_and_preprocess", "-d", str(DATASET_ID), "-c", CONFIGURATION, "--verify_dataset_integrity",
-            "-npfp", str(n_proc), "-np", str(n_proc)]
+            "-fpe", FINGERPRINT_EXTRACTOR, "-npfp", str(n_proc), "-np", str(n_proc)]
 
 
 def memory_gib(meminfo="/proc/meminfo"):
@@ -183,13 +204,23 @@ def train_command(fold, resume):
     return command + (["--c"] if resume else [])
 
 
-def run_streaming(command, env, quiet=("it/s]",)):
-    """Run a command and print its output as it comes, without progress-bar noise. Returns the exit code."""
+_PERCENT = re.compile(r"(\d+)%\|")
+
+
+def run_streaming(command, env, every_percent=10):
+    """Run a command and print its output as it comes. Progress bars print every `every_percent` percent,
+    so long steps stay visible without flooding the notebook. Returns the exit code."""
     process = subprocess.Popen(command, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    last = {}
     for line in process.stdout:
-        if not any(q in line for q in quiet):
-            sys.stdout.write(line)
-            sys.stdout.flush()
+        match = _PERCENT.search(line)
+        if match:
+            label, percent = line[: match.start()].strip(), int(match.group(1))
+            if percent < 100 and percent // every_percent == last.get(label, -1):
+                continue
+            last[label] = percent // every_percent
+        sys.stdout.write(line)
+        sys.stdout.flush()
     return process.wait()
 
 

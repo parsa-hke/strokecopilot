@@ -15,6 +15,17 @@
 - **First EXP-2 attempt on an L4 failed:** the system killed planning with exit code -9 after 6 of 129 cases of fingerprint extraction, almost certainly from running out of memory. nnU-Net starts 8 fresh Python processes by default, and each imports PyTorch. Colab now runs Python 3.13.
   - Fix: fingerprinting and preprocessing use 2 workers (`N_PROC`), and training's data-augmentation workers are capped at 4 (`N_PROC_DA`, up to 12 by default). The notebook prints RAM, and a -9 exit now says it was a memory kill. Tested on synthetic data only.
   - pytest: 222 passed.
+- **Second attempt failed the same way,** on a T4 runtime (12.7 GB RAM; the runtime was not an L4), with 2 workers. Our progress filter had hidden the tqdm lines once they passed 1 it/s, so the output stopped at 4/129, though the kill came later.
+- **Cause, measured locally** with real nnU-Net 2.8.1 (CPU, Python 3.14) on 129 synthetic cases of our size:
+  - nnU-Net's fingerprint step pools 1e8 foreground samples per channel, which peaked at 6.4 GiB.
+  - With our `StrokeCopilotFingerprintExtractor` (1e7 samples), fingerprinting, planning and preprocessing ran to the end, peaking at 4.4 GiB summed over all processes, most of it short-lived worker startup.
+  - The planned 3d_fullres network is patch 96 × 112 × 96, batch 4, at 1.5 mm.
+  - Training setup and the first batch with 4 data workers stayed at 0.6 GiB in the main process.
+- **Fixes:**
+  - `install_extensions` writes the trainer and the extractor into nnU-Net before planning;
+  - progress bars now print every 10% instead of being dropped.
+  - Real GPU training memory and epoch time are still unmeasured.
+- pytest: 223 passed.
 - **Notion sync:**
   - done: EXP-2 and EXP-3 rows (Planned).
 

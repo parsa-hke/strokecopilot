@@ -93,15 +93,19 @@ def test_splits_final_matches_our_folds(tmp_path):
 
 def test_trainer_file_and_environment(tmp_path):
     os.makedirs(tmp_path / "training" / "nnUNetTrainer" / "variants")
-    path = nw.install_trainer(str(tmp_path))
-    source = open(path).read()
-    compile(source, path, "exec")
+    os.makedirs(tmp_path / "experiment_planning" / "dataset_fingerprint")
+    trainer, extractor = nw.install_extensions(str(tmp_path))
+    source = open(trainer).read()
+    compile(source, trainer, "exec")
     assert "class nnUNetTrainer_StrokeCopilot(nnUNetTrainer)" in source
     assert "def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict" in source
+    source = open(extractor).read()
+    compile(source, extractor, "exec")
+    assert f"class {nw.FINGERPRINT_EXTRACTOR}(DatasetFingerprintExtractor)" in source and "= 10000000" in source
     env = nw.environment("/r", "/p", "/x", epochs=50, iterations=250, save_every=5, n_proc=2, n_proc_da=4)
     assert env["SC_NUM_EPOCHS"] == "50" and env["nnUNet_results"] == "/x"
     assert env["nnUNet_def_n_proc"] == "2" and env["nnUNet_n_proc_DA"] == "4"
-    assert nw.plan_command(2)[-4:] == ["-npfp", "2", "-np", "2"]
+    assert nw.plan_command(2)[-6:] == ["-fpe", nw.FINGERPRINT_EXTRACTOR, "-npfp", "2", "-np", "2"]
     assert "out of memory" in nw.explain_exit(-9, "Planning") and "exit code 1" in nw.explain_exit(1, "Planning")
     assert nw.train_command(0, resume=True)[-1] == "--c" and nw.train_command(0, resume=False)[-1] == nw.TRAINER
 
@@ -131,3 +135,11 @@ def test_memory_gib(tmp_path):
     meminfo.write_text("MemTotal:       54525952 kB\nMemFree:  1 kB\nMemAvailable:   41943040 kB\n")
     assert nw.memory_gib(str(meminfo)) == {"total": 52.0, "available": 40.0}
     assert nw.memory_gib(str(tmp_path / "missing")) is None
+
+
+def test_run_streaming_thins_progress_bars(capsys):
+    import sys as _sys
+    script = "import sys\nfor i in range(101): print(f'Extracting: {i}%|##| {i}/100 [00:01<00:01, 9.1it/s]')\nprint('done')"
+    assert nw.run_streaming([_sys.executable, "-c", script], dict(os.environ)) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 12 and lines[-2].startswith("Extracting: 100%") and lines[-1] == "done"
