@@ -1,10 +1,52 @@
 {
-  "_note": "Passages each fixture's decisions rest on, from the expected recommendations in fixtures/README.md. Used in EXP-7 and for evaluation; never passed to the reasoner.",
+  "_note": "Expected decisions and the passages they rest on, from the expected recommendations in fixtures/README.md. For evaluation only; never passed to the reasoner. A null decision means either answer is acceptable (fx01 thrombectomy depends on M2 dominance, which is not reported).",
   "fixtures": {
-    "fx01_thrombolysis_clear": ["AHA2026-4.6.1-within-4.5h", "AHA2026-4.6.2-agents", "AHA2026-4.7.2-m2-dominant", "AHA2026-4.7.2-distal-no-benefit"],
-    "fx02_thrombectomy_large_mismatch": ["AHA2026-4.7.2-6-24h-aspects-6-10", "AHA2026-4.6.3-wake-up-perfusion", "DEFUSE3-inclusion-imaging"],
-    "fx03_haemorrhage_present": ["AHA2026-T8-ich"],
-    "fx04_large_core_no_mismatch": ["AHA2026-4.7.2-0-6h-aspects-3-10", "AHA2026-4.7.2-6-24h-aspects-3-5", "DEFUSE3-inclusion-imaging"],
-    "fx05_borderline_onset": ["DAWN-inclusion-mismatch-groups", "DEFUSE3-inclusion-imaging", "AHA2026-4.6.3-wake-up-perfusion", "AHA2026-4.7.2-late-window-trials"]
+    "fx01_thrombolysis_clear": [
+      "AHA2026-4.6.1-within-4.5h",
+      "AHA2026-4.6.2-agents",
+      "AHA2026-4.7.2-m2-dominant",
+      "AHA2026-4.7.2-distal-no-benefit"
+    ],
+    "fx02_thrombectomy_large_mismatch": [
+      "AHA2026-4.7.2-6-24h-aspects-6-10",
+      "AHA2026-4.6.3-wake-up-perfusion",
+      "DEFUSE3-inclusion-imaging"
+    ],
+    "fx03_haemorrhage_present": [
+      "AHA2026-T8-ich"
+    ],
+    "fx04_large_core_no_mismatch": [
+      "AHA2026-4.7.2-0-6h-aspects-3-10",
+      "AHA2026-4.7.2-6-24h-aspects-3-5",
+      "DEFUSE3-inclusion-imaging"
+    ],
+    "fx05_borderline_onset": [
+      "DAWN-inclusion-mismatch-groups",
+      "DEFUSE3-inclusion-imaging",
+      "AHA2026-4.6.3-wake-up-perfusion",
+      "AHA2026-4.7.2-late-window-trials"
+    ]
+  },
+  "decisions": {
+    "fx01_thrombolysis_clear": {
+      "thrombolysis": true,
+      "thrombectomy": null
+    },
+    "fx02_thrombectomy_large_mismatch": {
+      "thrombolysis": false,
+      "thrombectomy": true
+    },
+    "fx03_haemorrhage_present": {
+      "thrombolysis": false,
+      "thrombectomy": false
+    },
+    "fx04_large_core_no_mismatch": {
+      "thrombolysis": false,
+      "thrombectomy": true
+    },
+    "fx05_borderline_onset": {
+      "thrombolysis": false,
+      "thrombectomy": true
+    }
   }
 }

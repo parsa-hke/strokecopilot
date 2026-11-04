@@ -464,7 +464,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 - [ ] `ingest.py`: guideline PDF + two trial papers → passages with stable IDs; `docs/RULEBOOK.md` generated from the same source — changed by DEC-18: `corpus/RULEBOOK.md` (own words) → `corpus/passages.jsonl`, with checks. Code, tests and 47 passages done 4 Nov 2026: all 43 AHA passages checked against the guideline, off-topic passages added, copy check clean. Ticked once a person has checked the 2 DAWN and 2 DEFUSE-3 passages
 - [x] `index.py`: embed passages; retrieve top-k by query; sanity-check that each fixture's expected rule IDs are retrievable — done 4 Nov 2026. The check (EXP-7, bge-base) found 9 of 15 fixture rules, so the reasoner gets the whole rulebook (DEC-19) and `index.py` serves only the verifier's candidates
 - [ ] `notes/generate.py`: clinical row → triage note (templated with controlled variation), using allowed columns only; test that nothing post-treatment leaks; produce notes for all 149 cases
-- [ ] `reasoner/run.py` v0 with `prompts/reasoner_v1.md`: fixture JSON + note + the whole rulebook (DEC-19) → `recommendation.json`; run on all five fixtures with one model
+- [ ] `reasoner/run.py` v0 with `prompts/reasoner_v1.md`: fixture JSON + note + the whole rulebook (DEC-19) → `recommendation.json`; run on all five fixtures with one model — code, prompt, tests and `31_nlpA_reasoner.ipynb` done 4 Nov 2026 with a fake model; EXP-8 (dummy) and EXP-9 (five fixtures × 2) wait for a Colab run
 
 **NLP B (verifier & eval)**
 - [x] Write the hallucination metric definition (§8.4) in `docs/` and Notion — before code (`docs/HALLUCINATION_METRIC.md`, approved 3 Nov 2026)

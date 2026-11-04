@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (NLP A: reasoner v1)
+- **`prompts/reasoner_v1.md`:**
+  - Explains each vision field: null means unknown, and `penumbra_ml` includes the core.
+  - Treats the note as the only source of patient facts, and the rulebook as the only source of rules, with no outside knowledge.
+  - Decides thrombolysis and thrombectomy separately. Counts time windows from onset, using last known well when onset was not witnessed.
+  - Names the unobservable inputs as uncertainties.
+  - Asks for one or two statements per rationale entry with every source, verbatim note quotes, numbers exactly as given, and the `derived` flag.
+  - The whole rulebook fills `{{RULEBOOK}}` (DEC-19).
+- **`nlp/reasoner/prompt.py`:**
+  - The system prompt holds the instructions and the rulebook, and is the same for every case, so it is cached.
+  - The user message holds the vision JSON (without its bookkeeping fields) and the note.
+  - `api_schema()` is `recommendation.json` without `case_id`, `model` and `prompt_version`, with `oneOf` turned into `anyOf` and with the length and pattern limits the API rejects removed. The full schema is still checked on the assembled output.
+  - Passage IDs are not limited to the corpus, so a model can still invent one. That stays a measurable hallucination (sub-type 3).
+- **`nlp/reasoner/run.py`:**
+  - `recommend()` adds the run fields and validates. A refusal, a reply that is not JSON, or a schema failure is recorded as a failure and never repaired.
+  - `run_fixtures()` writes `config.json` (model, prompt and corpus hashes, passages still draft, commit), `metrics.json` (failures, decisions against `fixtures/expected_rules.json`, usage, estimated cost), `system_prompt.md`, and one file per call holding the user message, raw reply, error and usage.
+- **`providers.py`:** `PRICES` and `cost_usd()`.
+- **`fixtures/expected_rules.json`** gains the expected decisions. fx01's thrombectomy accepts either answer, because it depends on M2 dominance, which is not reported.
+- New extra: `llm` (`anthropic`).
+- **`31_nlpA_reasoner.ipynb`** (Colab, CPU):
+  - `MODE='dummy'` (EXP-8) runs fx02 twice to check that the API accepts the schema, the reply validates, and the second call reads the cache.
+  - `MODE='run'` (EXP-9) runs the five fixtures twice each.
+  - The default model is `claude-sonnet-5-5` at effort high. Cost is estimated, unmeasured, at about $0.10 per call.
+  - The notebook was tested locally with Colab, git, pip and the API faked, in dummy mode, run mode and with one bad reply. No key or token is printed or kept in a variable, and it refuses to overwrite a finished run.
+- **Not yet run against the real API:** schema acceptance, output quality, tokens and cost are all unmeasured.
+- pytest: 302 passed.
+- **Notion sync:**
+  - pending: Experiments rows for EXP-8 and EXP-9, after the runs.
+
 ## 2026-11-04 — Claude Code session (corpus: retrieval test, DEC-19)
 - **EXP-7, the retrieval check, ran locally** with `BAAI/bge-base-en-v1.5` and sentence-transformers 6.2.0 on the Mac CPU, in about 50 s including the model download.
   - **Setup:** two decision queries, each the vision JSON in words plus the note, top 8 each.

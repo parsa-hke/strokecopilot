@@ -17,6 +17,24 @@ import time
 
 DEFAULT_MAX_TOKENS = 16000
 
+# USD per million tokens (input, output) on the Claude API, prompts up to 100K tokens. Cache reads are 0.1x input on
+# Sonnet and Haiku (0.05x on Opus 5.5); 5-minute cache writes are 1.25x input. Check before quoting a cost.
+PRICES = {
+    "claude-opus-5-5": {"input": 4.0, "output": 20.0, "cache_read": 0.20},
+    "claude-sonnet-5-5": {"input": 2.0, "output": 10.0, "cache_read": 0.20},
+    "claude-haiku-5-5": {"input": 0.10, "output": 0.50, "cache_read": 0.01},
+}
+
+
+def cost_usd(model, usage):
+    """Estimated cost of `usage` (a ClaudeJSON.usage dict), or None for an unknown model."""
+    p = PRICES.get(model)
+    if p is None:
+        return None
+    return (usage.get("input_tokens", 0) * p["input"] + usage.get("output_tokens", 0) * p["output"]
+            + usage.get("cache_read_input_tokens", 0) * p["cache_read"]
+            + usage.get("cache_creation_input_tokens", 0) * p["input"] * 1.25) / 1e6
+
 
 class RefusalError(RuntimeError):
     """The model declined the request (stop_reason "refusal")."""

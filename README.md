@@ -70,7 +70,7 @@ Badges point at the notebooks once they exist.
 | `11b_visionA_threshold_check` | Phase 2: checks the low EXP-1 Dice (infarct vs Tmax > 6 s, rCBF, MCA overlap) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/11b_visionA_threshold_check.ipynb) |
 | `20_visionB_train` | Phase 2: RSNA patient split and Vision B slice classifier with scan calibration; dummy mode (EXP-5) measures speed first | Upload to Kaggle; this only runs there |
 | `30_nlpA_corpus` | NLP A: corpus ingestion and retrieval | Not needed: the corpus is built in the repo (`python -m strokecopilot.nlp.corpus.ingest build`, DEC-18) and sent whole (DEC-19) |
-| `31_nlpA_reasoner` | NLP A: reasoner | Not written yet (Phase 2 or later) |
+| `31_nlpA_reasoner` | Phase 2: reasoner on the five fixtures; dummy mode (EXP-8) checks schema, caching and cost first, run mode is EXP-9 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/31_nlpA_reasoner.ipynb) |
 | `40_nlpB_verifier` | NLP B: verifier | Not written yet (Phase 2 or later) |
 | `41_nlpB_model_comparison` | NLP B: hallucination table | Not written yet (Phase 2 or later) |
 | `50_end_to_end` | Full pipeline | Not written yet (Phase 2 or later) |
