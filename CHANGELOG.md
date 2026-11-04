@@ -1,5 +1,61 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (corpus: AHA passages checked)
+- **AHA passages checked against the guideline** at Parsa's request. Claude read the text Drive extracted from `aha_asa_2026_ais.pdf`; the text was kept outside the repo, and no wording was copied.
+  - All 43 AHA passages are now `checked`, with page, recommendation number, COR and LOE.
+  - Corrections:
+    - The thrombectomy windows count from symptom onset.
+    - Tenecteplase 0.4 mg/kg is not recommended, and the alteplase dose is now stated.
+    - "May be considered" or "not well established" wording now matches each COR 2b.
+    - ASPECTS 0–2 and 3–5 apply to "selected" patients.
+- **18 new passages** (now 47 in all), so retrieval has to choose:
+  - more of §4.6.1: early ischaemic change, glucose, antiplatelets, not waiting for labs;
+  - §4.6.5: sickle cell disease, retinal artery occlusion;
+  - §4.3: blood pressure before and after each treatment;
+  - §4.5: glucose;
+  - §4.8: aspirin and antiplatelets after IVT;
+  - the definition of a dominant M2.
+- **Copy check against the guideline text:** no passage shares 12 or more consecutive words. Table 8 has no text layer, so the check cannot cover its 8 passages. They were reworded by hand while reading the page images. The longest runs are 8–10 words: the dose, vessel and glucose-range phrases.
+- **Points checked against plan §8.3** (TRACE-III and onset time are recorded there and added to `docs/CLINICIAN_REVIEW.md` as questions 3 and 7):
+  - Table 3 gives TRACE-III and TIMELESS as "penumbra volume > 15 mL", not "mismatch > 15 mL".
+  - Table 8 is an image, so Parsa downloaded the PDF and Claude read its four pages. Its last group is titled absolute contraindications, so the plan's list stands. The six passages now match the table; for example, the trauma criteria are now defined, and the ARIA entry now includes amyloid immunotherapy. Two passages were added, one for the relative contraindications and one for the conditions where benefit outweighs the risk.
+  - The thrombectomy windows count from symptom onset. We use last known well when onset was not witnessed.
+- Still `draft`: 2 DAWN and 2 DEFUSE-3 (to be checked by a person; NEJM content stays out of AI tools).
+- pytest: 290 passed.
+- **Notion sync:**
+  - pending: Tasks → `ingest.py` in progress (DAWN and DEFUSE-3 checks left).
+
+## 2026-11-04 — Claude Code session (corpus: own-words rulebook, DEC-18)
+- **Licence check** (`docs/DATA_USE.md` → Guideline documents):
+  - AHA allows no reproduction without written permission.
+  - NEJM reserves text and data mining and AI use for DAWN and DEFUSE-3.
+  - Only the DEFUSE-3 PMC author manuscript allows text mining.
+- **DEC-18 (Parsa):** the corpus is a rulebook written in our own words.
+  - One passage per criterion. Numbers are kept as facts and no wording is copied.
+  - Each passage carries a pointer to its source and a status: `draft`, `checked` or `reviewed`.
+  - The PDFs are never sent to an LLM.
+  - Plan §2, §3, §4.2, §5.3, §8.3 and §10 updated.
+  - Open question added for the professors.
+- **`nlp/corpus/ingest.py`:**
+  - Parses `corpus/RULEBOOK.md` into `corpus/passages.jsonl`. Both are committed and ship in the wheel (`config.CORPUS_DIR`).
+  - Fails on bad or duplicate IDs, missing or unknown fields, passages over 120 words, and `checked` passages with no page.
+  - `load()` gives the verifier's `{id: record}`. `version()` is the corpus sha256.
+  - The copy check reads the PDFs locally with pypdf (optional `corpus` extra). It reports passages that share 12 or more consecutive words with their source, printing only IDs and counts.
+- **`corpus/RULEBOOK.md`:** 30 draft passages drafted from plan §8.3 (our text, checked against the guideline on 30 Oct). No PDF was opened.
+  - 14 cover thrombolysis, 11 thrombectomy, 4 DAWN or DEFUSE-3 criteria and 1 bridging.
+  - 6 are must-have.
+  - None has a page, and recommendation numbers are not filled in yet.
+  - The DAWN core range for the third group is written as "31 mL up to under 51 mL". The plan says 31–51; check against the paper.
+  - The DEFUSE-3 clinical criteria (age 18–90, pre-stroke mRS 0–2, NIHSS ≥ 6) are not in plan §8.3. They come from general knowledge and need checking against the PMC manuscript.
+- **Still to do:**
+  - Check every passage against the PDFs and fill in pages and pointers.
+  - Add off-topic guideline passages (blood pressure, glucose, imaging) so retrieval has to choose.
+  - Run the copy check.
+- pytest: 290 passed.
+- **Notion sync:**
+  - done: Decisions → DEC-18 row.
+  - pending: Tasks → `ingest.py` in progress; Decisions rows for the LLM judge, embedding model, RSNA split and temperature wording.
+
 ## 2026-11-04 — Claude Code session (NLP B: claims, tracing, metrics)
 - **Claim extraction** (`nlp/verifier/claims.py`, `prompts/claim_extractor_v1.md`):
   - The LLM splits rationale entries, blocking factors and fact-stating uncertainties into atomic claims. It labels each claim's kind and subject from fixed vocabularies of vision fields, note facts and inputs the pipeline cannot observe (plan §8.3).

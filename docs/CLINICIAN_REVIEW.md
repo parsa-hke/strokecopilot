@@ -56,6 +56,8 @@ Volumes are in mL. Penumbra is the total Tmax > 6 s volume, core included. Misma
 1. Is anything in part 1 wrong, or misleading in practice?
 2. Do you agree with each expected answer in part 2? Case 5 is the one we are least sure of.
 3. Are EXTEND and TRACE-III a reasonable way to put numbers on "salvageable penumbra"?
+   For TRACE-III, the guideline's Table 3 gives "penumbra volume > 15 mL", where penumbra is the total Tmax > 6 s volume. Should our rule read that as total hypoperfused volume > 15 mL, or as hypoperfused volume minus core > 15 mL?
 4. When ASPECTS is unknown, is falling back on DAWN and DEFUSE-3 reasonable?
 5. Does final infarct on follow-up MRI, in patients who all reperfused, seem an acceptable stand-in for core at presentation, given that we report this as a limitation?
 6. Is there a common clinical trap that these five cases miss?
+7. The thrombectomy recommendations count time from symptom onset. Is it right to use last known well as the onset time when onset was not witnessed?

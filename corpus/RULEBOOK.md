@@ -1,0 +1,559 @@
+# Rulebook
+
+The guideline corpus for the Stroke Decision Copilot, written in our own words (DEC-18, plan §5.3). It states the criteria and numbers of the 2026 AHA/ASA guideline and of the DAWN and DEFUSE-3 trials as facts. It copies no wording from them. Every passage points to its source section and page, so it can be checked against the PDF on Drive (`StrokeCopilot/artifacts/guidelines/`). This is a research prototype, not for clinical use.
+
+The reasoner and the verifier read the passages below and nothing else. `python -m strokecopilot.nlp.corpus.ingest build` turns this file into `passages.jsonl`. Commit both files together.
+
+**How to edit.** One passage per criterion, at most 120 words. Each passage has a `###` heading with its ID, then the fields, then the text. The ID never changes once a passage is `checked`. Status:
+- `draft`: written, not yet compared with the source.
+- `checked`: compared with the PDF, with the page filled in. The AHA passages were checked by Claude against the PDF's text on 4 November 2026, at Parsa's request. A team member should still read them against the PDF.
+- `reviewed`: a clinician has read it.
+
+Never paste text from the PDFs, and never give an NEJM PDF to an AI tool (`docs/DATA_USE.md`). DAWN passages are drafted from the guideline's account of the trial and checked by a person who reads the paper. DEFUSE-3 passages may be drafted from the PMC author manuscript.
+
+COR = class of recommendation. LOE = level of evidence. LKW = last known well. LVO = large vessel occlusion.
+
+## Thrombolysis within 4.5 hours
+
+### AHA2026-4.6.1-within-4.5h
+- source: AHA2026
+- section: 4.6.1
+- pointer: §4.6.1 recommendations 1 (COR 1, LOE A) and 2 (COR 1, LOE B-NR)
+- page: e353
+- treatment: thrombolysis
+- must_have: yes
+- status: checked
+
+For adults with acute ischaemic stroke and a disabling deficit who are eligible for IV thrombolysis, earlier treatment gives better function, and this holds at any NIHSS score. When the patient can be treated within 4.5 hours of symptom onset, thrombolysis should begin as soon as it can safely be given; extra imaging such as CT or MR angiography and perfusion should not hold it up.
+
+### AHA2026-4.6.1-mild-nondisabling
+- source: AHA2026
+- section: 4.6.1
+- pointer: §4.6.1 recommendation 8; COR 3 (no benefit), LOE B-R
+- page: e353
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+If the deficit is mild and does not disable the patient (an isolated sensory deficit, for example), IV thrombolysis within 4.5 hours of onset or last known well is not recommended (COR 3, no benefit). It has not beaten dual antiplatelet therapy on functional outcome.
+
+### AHA2026-4.6.1-early-ischaemic-change
+- source: AHA2026
+- section: 4.6.1
+- pointer: §4.6.1 recommendation 7; COR 1, LOE A
+- page: e353
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+Early ischaemic change of mild or moderate extent on the first brain scan does not rule out IV thrombolysis: an otherwise eligible patient should still be treated (COR 1). This does not cover frank hypodensity that explains the presentation.
+
+### AHA2026-4.6.1-glucose
+- source: AHA2026
+- section: 4.6.1
+- pointer: §4.6.1 recommendations 5 (COR 1, LOE B-NR) and 6 (COR 1, LOE C-LD)
+- page: e353
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+Blood glucose must be measured before IV thrombolysis starts, because severe hypoglycaemia or hyperglycaemia can mimic a stroke and needs urgent treatment. If a disabling deficit remains once glucose is back to normal, thrombolysis is recommended (COR 1).
+
+### AHA2026-4.6.1-antiplatelet
+- source: AHA2026
+- section: 4.6.1
+- pointer: §4.6.1 recommendation 9; COR 1, LOE B-NR
+- page: e353
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+Taking one antiplatelet drug or dual antiplatelet therapy does not stop IV thrombolysis in an otherwise eligible patient (COR 1). The risk of symptomatic haemorrhage is somewhat higher than without antiplatelets, but treatment still improves function.
+
+### AHA2026-4.6.1-no-wait-for-labs
+- source: AHA2026
+- section: 4.6.1
+- pointer: §4.6.1 recommendation 10; COR 2a, LOE B-NR
+- page: e353
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+Within 4.5 hours of last known well, it is reasonable to start IV thrombolysis before blood count or coagulation results arrive, unless something suggests they will be abnormal (COR 2a).
+
+### AHA2026-4.6.2-agents
+- source: AHA2026
+- section: 4.6.2
+- pointer: §4.6.2 recommendations 1 (COR 1, LOE A) and 2 (COR 3, no benefit, LOE A)
+- page: e357
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+Within 4.5 hours of symptom onset or last known well, either of two agents is recommended for an eligible adult (COR 1): tenecteplase 0.25 mg/kg up to 25 mg, or alteplase 0.9 mg/kg up to 90 mg. A higher tenecteplase dose of 0.4 mg/kg is not recommended (COR 3, no benefit).
+
+## Thrombolysis in the extended window
+
+### AHA2026-4.6.3-wake-up-perfusion
+- source: AHA2026
+- section: 4.6.3
+- pointer: §4.6.3 recommendation 2; COR 2a, LOE B-R
+- page: e359
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+IV thrombolysis can be beneficial (COR 2a) for a patient who cannot have thrombectomy, if automated perfusion imaging shows salvageable penumbra and either the patient woke with symptoms no more than 9 hours after the midpoint of sleep, or 4.5 to 9 hours have passed since last known well. A patient eligible for thrombectomy is outside this recommendation.
+
+### AHA2026-4.6.3-unknown-onset-mri
+- source: AHA2026
+- section: 4.6.3
+- pointer: §4.6.3 recommendation 1; COR 2a, LOE B-R
+- page: e359
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+When onset time is unknown, IV thrombolysis can be beneficial (COR 2a) if it starts within 4.5 hours of when the symptoms were noticed, and MRI shows a diffusion lesion covering less than a third of the MCA territory with no clear FLAIR change.
+
+### AHA2026-4.6.3-lvo-4.5-24h
+- source: AHA2026
+- section: 4.6.3
+- pointer: §4.6.3 recommendation 3; COR 2b, LOE B-R
+- page: e359
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+A patient with a large vessel occlusion and salvageable penumbra who cannot have thrombectomy, seen 4.5 to 24 hours after symptom onset or last known well, may benefit from IV thrombolysis given under clinicians experienced in it (COR 2b).
+
+### AHA2026-T3-extend
+- source: AHA2026
+- section: Table 3
+- pointer: Table 3, imaging criteria of the extended-window thrombolysis trials (EXTEND row)
+- page: e344
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+The extended-window recommendations give no numbers for salvageable penumbra. Table 3 lists the trial criteria. EXTEND, the trial behind the 4.5 to 9 hour recommendation, required a penumbra-to-core ratio above 1.2, penumbra minus core above 10 mL, and core below 70 mL. Core was tissue under 30% of normal blood flow and penumbra was Tmax over 6 s.
+
+### AHA2026-T3-trace3
+- source: AHA2026
+- section: Table 3
+- pointer: Table 3, imaging criteria of the extended-window thrombolysis trials (TRACE-III and TIMELESS rows)
+- page: e344
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+TRACE-III and TIMELESS, the trials of thrombolysis for large vessel occlusion up to 24 hours, used the same criteria in Table 3: a penumbra-to-core ratio above 1.8, a penumbra volume above 15 mL and a core below 70 mL, with core and penumbra defined as for EXTEND.
+
+## Thrombolysis contraindications
+
+Table 8 sorts situations into three groups: conditions where the benefit of IV thrombolysis generally outweighs the bleeding risk, relative contraindications, and absolute contraindications.
+
+### AHA2026-T8-ich
+- source: AHA2026
+- section: Table 8
+- pointer: Table 8, conditions considered absolute contraindications
+- page: e367
+- treatment: thrombolysis
+- must_have: yes
+- status: checked
+
+Acute intracranial haemorrhage on CT is an absolute contraindication: IV thrombolysis must not be given.
+
+### AHA2026-T8-hypodensity
+- source: AHA2026
+- section: Table 8
+- pointer: Table 8, conditions considered absolute contraindications
+- page: e367
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+IV thrombolysis must not be given when imaging shows extensive areas of clear hypodensity that account for the symptoms. Clear hypodensity means the region is darker than the white matter on the unaffected side. This is an absolute contraindication.
+
+### AHA2026-T8-trauma-surgery
+- source: AHA2026
+- section: Table 8
+- pointer: Table 8, conditions considered absolute contraindications
+- page: e367
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+Absolute contraindications from recent injury or surgery: a moderate or severe traumatic brain injury in the last 14 days (more than 30 minutes unconscious with GCS under 13, or bleeding, contusion or skull fracture on imaging); intracranial or spinal surgery in the last 14 days; and an acute spinal cord injury in the last 3 months.
+
+### AHA2026-T8-other-absolute
+- source: AHA2026
+- section: Table 8
+- pointer: Table 8, conditions considered absolute contraindications
+- page: e367
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+IV thrombolysis must not be given to a patient with an intra-axial intracranial tumour, symptoms of infective endocarditis, or a known or suspected aortic arch dissection. It should also be avoided in patients on amyloid immunotherapy or with amyloid-related imaging abnormalities (ARIA). All of these are absolute contraindications.
+
+### AHA2026-T8-coagulopathy
+- source: AHA2026
+- section: Table 8
+- pointer: Table 8, conditions considered absolute contraindications
+- page: e367
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+Severe coagulopathy or low platelets is an absolute contraindication: a platelet count under 100,000/mm³, an INR above 1.7, an aPTT above 40 s or a PT above 15 s. If the patient has not recently taken warfarin or heparin, thrombolysis may start before the results are back, and is stopped if they come back abnormal.
+
+### AHA2026-T8-doac
+- source: AHA2026
+- section: Table 8
+- pointer: Table 8, conditions that are relative contraindications (DOAC exposure)
+- page: e365
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+A direct oral anticoagulant taken in the last 48 hours is a relative contraindication, not an absolute one. The safety of IV thrombolysis is unknown; it may be considered after weighing benefit and risk for the individual patient, including when the last dose was taken, kidney function, stroke severity, and whether thrombectomy and reversal agents are available.
+
+### AHA2026-T8-relative
+- source: AHA2026
+- section: Table 8
+- pointer: Table 8, conditions that are relative contraindications
+- page: e365–e366
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+Relative contraindications, which call for an individual judgement of benefit and risk, include: a previous intracranial haemorrhage; an ischaemic stroke in the last 3 months; major trauma outside the central nervous system in the last 14 days; major surgery outside it in the last 10 days; gastrointestinal or urinary tract bleeding in the last 21 days; and a moderate or severe brain injury or neurosurgery between 14 days and 3 months ago.
+
+### AHA2026-T8-benefit-greater
+- source: AHA2026
+- section: Table 8
+- pointer: Table 8, conditions in which benefit generally outweighs bleeding risk
+- page: e364
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+For some conditions, the benefit of IV thrombolysis generally outweighs the bleeding risk. They include an extracranial cervical artery dissection within 4.5 hours, an extra-axial intracranial tumour, an unruptured intracranial aneurysm, a remote history of gastrointestinal or urinary tract bleeding or of myocardial infarction, and Moya-Moya disease.
+
+## Thrombolysis in other situations
+
+### AHA2026-4.6.5-sickle-cell
+- source: AHA2026
+- section: 4.6.5
+- pointer: §4.6.5 recommendation 1; COR 2a, LOE B-NR
+- page: e362
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+Sickle cell disease does not stop IV thrombolysis in an eligible adult: it can be beneficial (COR 2a), with no rise in symptomatic haemorrhage or other complications.
+
+### AHA2026-4.6.5-crao
+- source: AHA2026
+- section: 4.6.5
+- pointer: §4.6.5 recommendation 2; COR 2b, LOE C-LD
+- page: e362
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+For acute non-arteritic central retinal artery occlusion with disabling loss of vision, it is uncertain whether IV thrombolysis within 4.5 hours of last known well helps (COR 2b).
+
+## Thrombolysis with thrombectomy
+
+### AHA2026-4.7.1-both
+- source: AHA2026
+- section: 4.7.1
+- pointer: §4.7.1 recommendations 1 and 2; COR 1, LOE A
+- page: e368
+- treatment: both
+- must_have: no
+- status: checked
+
+A patient eligible for both IV thrombolysis and thrombectomy should receive both (COR 1). Thrombolysis is given as fast as possible, and thrombectomy is not held back to watch for a response to it.
+
+## Thrombectomy for ICA or M1 occlusion
+
+All the windows in this group are counted from symptom onset, as the guideline states them.
+
+### AHA2026-4.7.2-0-6h-aspects-3-10
+- source: AHA2026
+- section: 4.7.2
+- pointer: §4.7.2 recommendation 1 and Figure 3; COR 1, LOE A
+- page: e368
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+Thrombectomy is recommended (COR 1) for a proximal anterior large vessel occlusion of the ICA or M1 within 6 hours of symptom onset, with NIHSS 6 or more, pre-stroke mRS 0 or 1 and ASPECTS 3 to 10.
+
+### AHA2026-4.7.2-0-6h-mrs-2
+- source: AHA2026
+- section: 4.7.2
+- pointer: §4.7.2 recommendation 5 and Figure 3; COR 2a, LOE B-NR
+- page: e369
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+For an ICA or M1 occlusion within 6 hours of symptom onset, with NIHSS 6 or more and ASPECTS 6 or more, thrombectomy is reasonable (COR 2a) when pre-stroke mRS is 2.
+
+### AHA2026-4.7.2-0-6h-mrs-3-4
+- source: AHA2026
+- section: 4.7.2
+- pointer: §4.7.2 recommendation 6 and Figure 3; COR 2b, LOE B-NR
+- page: e369
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+For an ICA or M1 occlusion within 6 hours of symptom onset, with NIHSS 6 or more and ASPECTS 6 or more, thrombectomy might be reasonable (COR 2b) when pre-stroke mRS is 3 or 4.
+
+### AHA2026-4.7.2-0-6h-aspects-0-2
+- source: AHA2026
+- section: 4.7.2
+- pointer: §4.7.2 recommendation 4 and Figure 3; COR 2a, LOE B-R
+- page: e369
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+For selected patients with an ICA or M1 occlusion within 6 hours of symptom onset, thrombectomy is reasonable (COR 2a) with ASPECTS 0 to 2, provided the patient is under 80, NIHSS is 6 or more, pre-stroke mRS is 0 or 1 and imaging shows no significant mass effect.
+
+### AHA2026-4.7.2-6-24h-aspects-6-10
+- source: AHA2026
+- section: 4.7.2
+- pointer: §4.7.2 recommendation 2 and Figure 3; COR 1, LOE A
+- page: e368
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+Thrombectomy is recommended (COR 1) for an ICA or M1 occlusion 6 to 24 hours after symptom onset, with NIHSS 6 or more, pre-stroke mRS 0 or 1 and ASPECTS 6 or more.
+
+### AHA2026-4.7.2-6-24h-aspects-3-5
+- source: AHA2026
+- section: 4.7.2
+- pointer: §4.7.2 recommendation 3 and Figure 3; COR 1, LOE A
+- page: e369
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+For selected patients with an ICA or M1 occlusion 6 to 24 hours after symptom onset, thrombectomy is recommended (COR 1) with ASPECTS 3 to 5, provided the patient is under 80, NIHSS is 6 or more, pre-stroke mRS is 0 or 1 and imaging shows no significant mass effect.
+
+### AHA2026-4.7.2-late-window-trials
+- source: AHA2026
+- section: 4.7.2
+- pointer: §4.7.2 supportive text for recommendation 2
+- page: e370
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+The thrombectomy recommendations are framed on ASPECTS rather than perfusion mismatch. The supporting text names DAWN and DEFUSE-3 as the trials that showed benefit beyond 6 hours in patients chosen by imaging of core and penumbra. It adds that later studies found similar outcomes when patients were chosen with non-contrast CT.
+
+## Thrombectomy for other occlusions
+
+### AHA2026-4.7.2-m2-dominant
+- source: AHA2026
+- section: 4.7.2
+- pointer: §4.7.2 recommendation 7; COR 2a, LOE B-NR
+- page: e369
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+For an occlusion of the dominant proximal M2 division of the MCA within 6 hours of symptom onset, with pre-stroke mRS 0 or 1, NIHSS 6 or more and ASPECTS 6 or more, thrombectomy is reasonable (COR 2a), though its benefit is uncertain.
+
+### AHA2026-4.7.2-m2-dominance-definition
+- source: AHA2026
+- section: 4.7.2
+- pointer: §4.7.2 supportive text for recommendation 7
+- page: e371
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+A dominant M2 division is one that supplies half or more of the MCA territory. The term is about the share of territory, not about the left or right hemisphere.
+
+### AHA2026-4.7.2-distal-no-benefit
+- source: AHA2026
+- section: 4.7.2
+- pointer: §4.7.2 recommendation 8; COR 3 (no benefit), LOE A. Also §4.7.4 recommendation 5
+- page: e369
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+Thrombectomy gives no benefit and is not recommended (COR 3, no benefit) for an occlusion of a non-dominant or codominant proximal M2 division, or of the distal MCA, the ACA or the PCA.
+
+### AHA2026-4.7.3-basilar
+- source: AHA2026
+- section: 4.7.3
+- pointer: §4.7.3 recommendation 1; COR 1, LOE A
+- page: e372
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+For a basilar artery occlusion within 24 hours of symptom onset, thrombectomy is recommended (COR 1) when pre-stroke mRS is 0 or 1, NIHSS is 10 or more and PC-ASPECTS is 6 or more.
+
+### AHA2026-4.7.3-basilar-nihss-6-9
+- source: AHA2026
+- section: 4.7.3
+- pointer: §4.7.3 recommendation 2; COR 2b, LOE B-R
+- page: e372
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+For a basilar artery occlusion within 24 hours with NIHSS 6 to 9, pre-stroke mRS 0 or 1 and PC-ASPECTS 6 or more, it is not well established that thrombectomy helps (COR 2b).
+
+## Blood pressure
+
+### AHA2026-4.3-bp-before-ivt
+- source: AHA2026
+- section: 4.3
+- pointer: §4.3 recommendation 5; COR 1, LOE B-NR
+- page: e350
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+If blood pressure is high in a patient otherwise eligible for IV thrombolysis, it should be brought below 185 mm Hg systolic and 110 mm Hg diastolic before thrombolysis starts, to reduce bleeding (COR 1).
+
+### AHA2026-4.3-bp-before-evt
+- source: AHA2026
+- section: 4.3
+- pointer: §4.3 recommendation 6; COR 2a, LOE B-NR
+- page: e350
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+When thrombectomy is planned and no thrombolysis has been given, it is reasonable to keep blood pressure at or below 185/110 mm Hg before the procedure (COR 2a).
+
+### AHA2026-4.3-bp-after-ivt
+- source: AHA2026
+- section: 4.3
+- pointer: §4.3 recommendations 7 (COR 1, LOE B-R) and 8 (COR 3, no benefit, LOE B-R)
+- page: e350
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+After IV thrombolysis, blood pressure should stay below 180/105 mm Hg for at least 24 hours (COR 1). For mild to moderate strokes, aiming lower, at a systolic below 140 mm Hg, does not improve function and is not recommended (COR 3, no benefit).
+
+### AHA2026-4.3-bp-after-evt
+- source: AHA2026
+- section: 4.3
+- pointer: §4.3 recommendations 9 (COR 2a, LOE B-NR) and 10 (COR 3, harm, LOE A)
+- page: e350
+- treatment: thrombectomy
+- must_have: no
+- status: checked
+
+During thrombectomy and for 24 hours afterwards, keeping blood pressure at or below 180/105 mm Hg is reasonable (COR 2a). After successful recanalisation of an anterior occlusion, a systolic target below 140 mm Hg for 72 hours causes harm and is not recommended (COR 3, harm), unless something else calls for it.
+
+## Blood glucose
+
+### AHA2026-4.5-hypoglycaemia
+- source: AHA2026
+- section: 4.5
+- pointer: §4.5 recommendation 1; COR 1, LOE C-LD
+- page: e352
+- treatment: other
+- must_have: no
+- status: checked
+
+Hypoglycaemia, with blood glucose below 60 mg/dL, should be treated in a patient with acute ischaemic stroke (COR 1).
+
+### AHA2026-4.5-hyperglycaemia
+- source: AHA2026
+- section: 4.5
+- pointer: §4.5 recommendations 2 (COR 2a, LOE C-LD) and 3 (COR 3, no benefit, LOE A)
+- page: e352
+- treatment: other
+- must_have: no
+- status: checked
+
+Persistent hyperglycaemia can reasonably be treated to a target of 140 to 180 mg/dL with close monitoring (COR 2a). Tighter control with IV insulin, to 80 to 130 mg/dL, does not improve outcome at 3 months and is not recommended (COR 3, no benefit).
+
+## Antiplatelet treatment
+
+### AHA2026-4.8-aspirin-48h
+- source: AHA2026
+- section: 4.8
+- pointer: §4.8 recommendation 1; COR 1, LOE A
+- page: e376
+- treatment: other
+- must_have: no
+- status: checked
+
+Aspirin started within 48 hours of stroke onset is recommended, because it lowers the risk of death and dependency (COR 1).
+
+### AHA2026-4.8-antiplatelet-after-ivt
+- source: AHA2026
+- section: 4.8
+- pointer: §4.8 recommendation 2; COR 2b, LOE B-NR
+- page: e377
+- treatment: thrombolysis
+- must_have: no
+- status: checked
+
+The risk of antiplatelet drugs in the first 24 hours after IV thrombolysis, with or without thrombectomy, is uncertain. They might be considered when another condition makes them clearly beneficial or makes stopping them clearly risky (COR 2b).
+
+## Trial criteria: DEFUSE-3
+
+### DEFUSE3-inclusion-clinical
+- source: DEFUSE3
+- section: Methods
+- pointer: Methods, eligibility criteria
+- page:
+- treatment: thrombectomy
+- must_have: yes
+- status: draft
+
+DEFUSE-3 enrolled patients aged 18 to 90 with an occlusion of the ICA or the M1 segment of the MCA, NIHSS 6 or more and pre-stroke mRS 0 to 2, who could start thrombectomy 6 to 16 hours after last known well.
+
+### DEFUSE3-inclusion-imaging
+- source: DEFUSE3
+- section: Methods
+- pointer: Methods, imaging eligibility criteria
+- page:
+- treatment: thrombectomy
+- must_have: yes
+- status: draft
+
+DEFUSE-3 required a perfusion profile on CT or MRI: an ischaemic core under 70 mL, a mismatch ratio of 1.8 or more (hypoperfused volume with Tmax over 6 s divided by core), and a mismatch volume of 15 mL or more (hypoperfused volume minus core).
+
+## Trial criteria: DAWN
+
+### DAWN-inclusion-clinical
+- source: DAWN
+- section: Methods
+- pointer: Methods, eligibility criteria
+- page:
+- treatment: thrombectomy
+- must_have: yes
+- status: draft
+
+DAWN enrolled adults with an occlusion of the intracranial ICA or the M1 segment, pre-stroke mRS 0 or 1, who could be treated 6 to 24 hours after last known well and whose deficit was out of proportion to the infarct core (clinical-core mismatch).
+
+### DAWN-inclusion-mismatch-groups
+- source: DAWN
+- section: Methods
+- pointer: Methods, clinical-core mismatch groups
+- page:
+- treatment: thrombectomy
+- must_have: yes
+- status: draft
+
+DAWN defined clinical-core mismatch in three groups. Age 80 or over: NIHSS 10 or more and core under 21 mL. Under 80: NIHSS 10 or more and core under 31 mL. Under 80: NIHSS 20 or more and core from 31 mL up to under 51 mL.

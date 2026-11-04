@@ -36,9 +36,21 @@ The competition's limit on sharing code privately applied only during the compet
 
 ## Guideline documents
 
-- 2026 AHA/ASA guideline, DAWN and DEFUSE-3 papers: licence terms not checked yet. Treat them as copyrighted until then.
-- PDFs stay in `StrokeCopilot/artifacts/guidelines/` on Drive, not in the repo.
-- Check the terms before ingestion in Phase 2, because `docs/RULEBOOK.md` and the corpus would hold passages from them.
+Checked on 4 November 2026.
+
+| Document | Terms | What this means |
+|---|---|---|
+| 2026 AHA/ASA guideline (*Stroke*) | © American Heart Association. Not to be reproduced "in whole or in part" without written permission ([permission guidelines](https://www.heart.org/en/about-us/statements-and-policies/copyright-permission-guidelines)). Educational permission covers at most 10% of the text, with a fee per item ([guideline material](https://www.heart.org/en/about-us/statements-and-policies/guidelines-for-use-of-guidelines-and-statements-material)) | No copied passages |
+| DAWN (NEJM 2018), appendix and protocol | NEJM reserves all rights, including text and data mining and AI training, and bars derivative works made with AI tools, except personal noncommercial use ([NEJM copyright](https://www.nejmgroup.org/legal/copyright-information.htm)) | Not sent to any AI tool; no copied passages |
+| DEFUSE-3 (NEJM 2018) | NEJM terms as above. The PMC author manuscript ([PMC6590673](https://pmc.ncbi.nlm.nih.gov/articles/PMC6590673/)) may be read and text mined under the [PMC copyright notice](https://pmc.ncbi.nlm.nih.gov/about/copyright/) | The PMC manuscript may be used to draft passages |
+
+What we do (DEC-18):
+- The corpus is `corpus/RULEBOOK.md`, a rulebook in our own words: criteria and numbers as facts, with a pointer to the section, recommendation and page. It holds no copied wording, so it can live in the repo and appear in the report.
+- The PDFs stay in `StrokeCopilot/artifacts/guidelines/` on Drive, never in the repo, and are never sent to an LLM. People use them to check passages.
+- Before a run, the copy check compares each passage with the PDF text locally and lists passages that share 12 or more consecutive words.
+- Cite the guideline and both trial papers in the report.
+
+**Open question for the professors:** whether an own-words rulebook derived from the guideline is enough, or whether they expect permission from AHA and NEJM. Ask it with the RSNA no-copies question.
 
 ## Patient data and the demo
 

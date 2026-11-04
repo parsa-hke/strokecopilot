@@ -95,6 +95,7 @@ These are recorded in the Notion Decisions log. Do not change them without a new
 | DEC-15 | `haemorrhage.confidence` means the calibrated probability that a haemorrhage is present | Decided |
 | DEC-16 | Vision B uses all labelled RSNA data, with no subset | Decided |
 | DEC-17 | Vision B preprocesses once to 320 px JPEG tar shards on Kaggle, then trains there, as an exception to DEC-3; only checkpoints and metrics move to Drive | Decided |
+| DEC-18 | The corpus is a rulebook in our own words, one passage per criterion, each pointing to its source, section, recommendation and page. It keeps the numeric criteria as facts and copies no wording. The reasoner and judge see only our text; the PDFs stay on Drive for checking. Reason: AHA allows no reproduction without permission, and NEJM reserves text and data mining and AI use (`docs/DATA_USE.md`). The sources in DEC-2 are unchanged | Decided — Parsa, 4 Nov 2026 |
 
 ---
 
@@ -135,9 +136,8 @@ strokecopilot/
 │   │   └── validate.py            # validate any JSON against schemas/vision_output.json
 │   ├── nlp/
 │   │   ├── corpus/                # NLP A
-│   │   │   ├── ingest.py          # PDF → passages with stable IDs
-│   │   │   ├── index.py           # embeddings + retrieval
-│   │   │   └── passages.jsonl     # (generated) the indexed corpus
+│   │   │   ├── ingest.py          # corpus/RULEBOOK.md → passages.jsonl, with checks (DEC-18)
+│   │   │   └── index.py           # embeddings + retrieval
 │   │   ├── notes/
 │   │   │   └── generate.py        # clinical variables → triage note (templated)
 │   │   ├── reasoner/
@@ -204,7 +204,6 @@ strokecopilot/
     ├── DATA.md                    # exact file layout of ISLES'24 and RSNA as found (filled in Phase 1)
     ├── DATA_USE.md                # what each data source's terms allow, and what that means for us
     ├── CLINICIAN_REVIEW.md        # rulebook and fixture expectations, written for a clinician reviewer
-    ├── RULEBOOK.md                # human-readable summary of the clinical criteria with passage IDs
     └── REPORT_OUTLINE.md
 ```
 
@@ -227,7 +226,7 @@ StrokeCopilot/
   raw/        ISLES'24 archive + md5, RSNA archive — untouched after download
   slim/       isles24_slim_v1.tar — immutable; new version = new file (rsna_slim_v1 lives in private Kaggle datasets, DEC-17)
   runs/       EXP-<id>_<short-name>/  config.json, checkpoints/, metrics.json, logs/
-  artifacts/  guidelines/ (PDFs), figures/ (exported for the report), corpus/ (passages.jsonl)
+  artifacts/  guidelines/ (PDFs, never in the repo), figures/ (exported for the report)
 ```
 
 Teammates: add a shortcut to the shared folder in your own Drive so it mounts under `MyDrive/StrokeCopilot/`.
@@ -284,8 +283,11 @@ Kaggle token, Hugging Face token, LLM API keys: Colab Secrets panel only. The pa
 ### 5.3 Guideline corpus
 
 - 2026 AHA/ASA guideline for the early management of acute ischaemic stroke (*Stroke*, doi:10.1161/STR.0000000000000513, published 26 January 2026; it replaces the 2018 guideline and 2019 update), DAWN trial paper, DEFUSE-3 trial paper. Add others only via a Decisions row.
-- Chunked by criterion, not by page: each passage gets a stable ID like `AHA2026-4.7.2-rec2` (section and recommendation number) or `DEFUSE3-inclusion-4`. The reasoner cites IDs; the verifier resolves them.
-- Stored at `artifacts/corpus/passages.jsonl`; a human-readable summary with the same IDs lives in `docs/RULEBOOK.md`.
+- **Own words (DEC-18).** The corpus is a rulebook we write: one passage per criterion, with numeric criteria kept as facts and no copied wording. Each passage points to its source document, section, recommendation (with COR and LOE) and page, so a reader can check it against the PDF. The PDFs stay on Drive and are never sent to an LLM. DEFUSE-3 passages may be drafted from the PMC author manuscript (PMC6590673), which allows text mining. DAWN passages are drafted from the guideline's description of the trial and checked by a person reading the NEJM paper.
+- Each passage gets a stable ID: the source, the section and a short slug, like `AHA2026-4.6.1-within-4.5h`, `AHA2026-T8-ich` (Table 8) or `DEFUSE3-inclusion-core`. The reasoner cites IDs; the verifier resolves them. An ID never changes once a passage is checked.
+- The source is `corpus/RULEBOOK.md`, in the repo: humans read and review it, and `ingest.py` builds `corpus/passages.jsonl` from it, so people and the models read the same text. The corpus version is the sha256 of `passages.jsonl`.
+- Each passage has a status: `draft`, `checked` (a team member compared it with the PDF) or `reviewed` (a clinician read it). Evaluation runs need every passage at least `checked`.
+- The rulebook also holds guideline passages outside the two decisions (for example blood pressure and glucose management), so retrieval has to choose and is not handed only the relevant rules.
 
 ### 5.4 Slim format (v1)
 
@@ -458,7 +460,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 - [ ] `infer.py`: scan → `{present, confidence}`
 
 **NLP A (reasoner)**
-- [ ] `ingest.py`: guideline PDF + two trial papers → passages with stable IDs; `docs/RULEBOOK.md` generated from the same source
+- [ ] `ingest.py`: guideline PDF + two trial papers → passages with stable IDs; `docs/RULEBOOK.md` generated from the same source — changed by DEC-18: `corpus/RULEBOOK.md` (own words) → `corpus/passages.jsonl`, with checks. Code, tests and 47 passages done 4 Nov 2026: all 43 AHA passages checked against the guideline, off-topic passages added, copy check clean. Ticked once a person has checked the 2 DAWN and 2 DEFUSE-3 passages
 - [ ] `index.py`: embed passages; retrieve top-k by query; sanity-check that each fixture's expected rule IDs are retrievable
 - [ ] `notes/generate.py`: clinical row → triage note (templated with controlled variation), using allowed columns only; test that nothing post-treatment leaks; produce notes for all 149 cases
 - [ ] `reasoner/run.py` v0 with `prompts/reasoner_v1.md`: fixture JSON + note + retrieved passages → `recommendation.json`; run on all five fixtures with one model
@@ -566,7 +568,7 @@ Acceptance: held-out results in Experiments; demo runs from a fresh Colab sessio
 
 ### 8.3 NLP A — corpus, notes, reasoner
 
-**Corpus ingestion.** PDFs → text → passages split at criterion boundaries (not fixed token windows). Each passage: `{id, source, section, text, page}`. IDs are stable strings that survive re-ingestion. `docs/RULEBOOK.md` is generated from the same records so humans and the model read the same thing.
+**Corpus ingestion (DEC-18).** `corpus/RULEBOOK.md` holds one passage per criterion, written in our own words (§5.3). `ingest.py` parses it into `corpus/passages.jsonl`. Each passage is `{id, source, section, pointer, page, treatment, must_have, status, text}`. The build fails on a duplicate or malformed ID, a missing field, an unknown source or status, or a passage over 120 words. A test checks that `passages.jsonl` matches the source. `ingest.py` also has a copy check that never sends anything to an LLM: run locally against the PDF text, it reports each passage that shares 12 or more consecutive words with the source. It prints passage IDs and counts only, never the matching text.
 
 **Retrieval.** Embedding index (a sentence-embedding model from HF; record which). Query = structured summary of the vision JSON + note. Return top-k passages with IDs. Also always include a small fixed set of "must-have" passages (thrombolysis window, haemorrhage contraindication, DEFUSE-3 and DAWN inclusion criteria) so the reasoner can never claim it was not shown the key rule.
 
@@ -587,9 +589,10 @@ Providers: thin wrappers with identical signatures for each model; temperature 0
   - COR 2a: unknown onset, within 4.5 h of symptom recognition, DWI lesion under one-third of the MCA territory and no marked FLAIR change.
   - COR 2b: LVO, salvageable penumbra, 4.5–24 h, and cannot receive thrombectomy.
   - The recommendations give no numeric definition of salvageable penumbra. Table 3 lists the trial criteria; our rule uses them: 4.5–9 h from EXTEND (ratio > 1.2, penumbra − core > 10 mL, core < 70 mL), 4.5–24 h from TRACE-III (ratio > 1.8, mismatch > 15 mL, core < 70 mL). This choice is ours and needs clinician review.
-- Thrombolysis, absolute contraindications (Table 8): acute intracranial haemorrhage on CT, extensive clear hypodensity, moderate to severe head injury or neurosurgery within 14 days, spinal cord injury within 3 months, intra-axial neoplasm, infective endocarditis, severe coagulopathy (platelets < 100,000/mm³, INR > 1.7, aPTT > 40 s, PT > 15 s), aortic arch dissection, ARIA. DOAC within 48 h is a relative contraindication, not an absolute one.
+  - **Found on 4 Nov 2026 (corpus check):** Table 3 gives TRACE-III and TIMELESS as "penumbra volume > 15 mL" with penumbra = Tmax > 6 s, not mismatch > 15 mL. `corpus/RULEBOOK.md` follows the table. Under DEC-7 that reads as `penumbra_ml` > 15. Clinician to confirm which one `scenarios.py` uses.
+- Thrombolysis, absolute contraindications (Table 8, last group, e367; checked 4 Nov 2026). Table 8 also lists relative contraindications and conditions where benefit generally outweighs the risk: acute intracranial haemorrhage on CT, extensive clear hypodensity, moderate to severe head injury or neurosurgery within 14 days, spinal cord injury within 3 months, intra-axial neoplasm, infective endocarditis, severe coagulopathy (platelets < 100,000/mm³, INR > 1.7, aPTT > 40 s, PT > 15 s), aortic arch dissection, ARIA. DOAC within 48 h is a relative contraindication, not an absolute one.
 - Thrombolysis with thrombectomy (§4.7.1): if eligible for both, give both (COR 1), without delaying thrombectomy to watch for a response.
-- Thrombectomy, ICA/M1, NIHSS ≥ 6 (§4.7.2, Figure 3):
+- Thrombectomy, ICA/M1, NIHSS ≥ 6 (§4.7.2, Figure 3). The guideline counts the thrombectomy windows (§4.7.2, §4.7.3) from symptom onset; the thrombolysis ones say onset or last known well. We use last known well as the onset time when onset was not witnessed, which is standard practice but our reading:
 
   | Window | ASPECTS | Pre-stroke mRS | Other | COR |
   |---|---|---|---|---|
@@ -658,12 +661,12 @@ Ground truth for "correct recommendation" is derived mechanically from the groun
 |---|---|---|
 | Professors do not approve the switch | low–medium | Ask this week with the charter page; keep Bias Lens materials until confirmed |
 | ISLES'24 provided mask registration is poor on some cases | low | The paper says masks are already in NCCT space. Spot-check in Phase 1; exclude and record bad cases |
-| Rulebook misreads the guideline | medium | Checked against the primary text; one clinician review; re-check when `ingest.py` builds the corpus |
+| Rulebook misreads the guideline | medium | Checked against the primary text; one clinician review; every passage carries a page pointer and a status, and evaluation needs every passage `checked` |
+| Corpus copies copyrighted wording | low | Own-words rulebook (DEC-18); copy check against the PDFs; PDFs never sent to an LLM |
 | Real cases lack variety: all were reperfused, bleeds are not expected, no ASPECTS | certain | Synthetic scenarios are the primary evaluation; held-out cases are the realism check; state this in the report |
 | Treatment leaks into notes through time or outcome columns | medium | Column allow-list in `notes/generate.py`, tested |
 | nnU-Net too slow on Colab | medium | Reduced epochs, resume across sessions, 2.5D fallback; the threshold baseline is always available |
 | 149 cases is small; noisy Dice | high | Report CIs; lean on volume error; cross-validation; never claim SOTA |
-| Guideline PDFs hard to parse | medium | Manual cleanup of the ~50 key passages is acceptable; record it |
 | Verifier itself hallucinates (LLM judge) | medium | Seeded-error recall; human adjudication sample; rule-based numeric checks that do not use an LLM; report verifier agreement |
 | LLM API cost | medium | About $100 of Claude credits: cached prompts, Batch API, judge model chosen by measured recall and cost, small sample of real cases; one API model only |
 | Full RSNA training exceeds Kaggle limits | medium | Timing test in Phase 0; checkpoint and resume; smaller image size; teammates' own GPU quotas; fall back to a whole-scan subset via a Decisions row |
