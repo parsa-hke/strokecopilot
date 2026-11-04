@@ -166,6 +166,50 @@ _BOUNDS = (("less than", "<"), ("under", "<"), ("below", "<"), ("at most", "<=")
            ("above", ">"), ("at least", ">="), ("exceeds", ">"), ("exceeding", ">"))
 
 
+_UNKNOWN_WORDS = {"null", "none", "unknown", "undefined", "not available", "not known", "not computed", "n/a", "na"}
+_VALUE_BOUND = re.compile(r"^\s*(within|under|below|less than|at most|over|above|more than|at least)\s+(\d+(?:\.\d+)?)\s*$", re.I)
+_VALUE_TAIL = re.compile(r"^\s*(\d+(?:\.\d+)?)\s+or\s+(more|higher|above|greater|less|lower|below|fewer)\s*$", re.I)
+_VALUE_SET = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(?:or|to|-|–)\s*(\d+(?:\.\d+)?)\s*$", re.I)
+_BOUND_OPS = {"within": "<=", "under": "<", "below": "<", "less than": "<", "at most": "<=", "over": ">", "above": ">",
+              "more than": ">", "at least": ">=", "more": ">=", "higher": ">=", "greater": ">=", "less": "<=", "lower": "<=", "fewer": "<="}
+
+
+def _is_unknown(value):
+    return value is None or str(value).strip().lower() in _UNKNOWN_WORDS
+
+
+def value_constraint(value):
+    """A value written as a bound or a set ("6 or more", "within 6", "0 or 1", "3 to 5") -> (test(number), text),
+    else None. The bound is tested in the claim's unit; a set or range includes its ends."""
+    text = str(value or "")
+    m = _VALUE_BOUND.match(text)
+    if m:
+        op, bound = _BOUND_OPS[m.group(1).lower()], float(m.group(2))
+        return (lambda x: _OPS[op](x, bound)), f"{op} {bound:g}"
+    m = _VALUE_TAIL.match(text)
+    if m:
+        op, bound = _BOUND_OPS[m.group(2).lower()], float(m.group(1))
+        return (lambda x: _OPS[op](x, bound)), f"{op} {bound:g}"
+    m = _VALUE_SET.match(text)
+    if m:
+        low, high = sorted((float(m.group(1)), float(m.group(2))))
+        return (lambda x: low <= x <= high), f"{low:g} to {high:g}"
+    return None
+
+
+def _constrained(value, unit, true_value, true_unit):
+    """(holds, description) when the claimed value is a bound or set, else None. Compared in the claim's unit."""
+    found = value_constraint(value)
+    if found is None:
+        return None
+    test, text = found
+    c_dim, c_factor = _unit(unit if unit is not None else true_unit)
+    t_dim, t_factor = _unit(true_unit)
+    if c_dim != t_dim:
+        return False, text
+    return test(true_value * t_factor / c_factor), text
+
+
 def _bound(text, value):
     """The operator when the text gives the value as a bound ("the core is under 1 mL"), else None."""
     for word, op in _BOUNDS:
@@ -177,6 +221,8 @@ def _bound(text, value):
 def check_vision(subject, value, unit, vision):
     true = _vision_value(vision, subject)
     used = [{"type": "vision", "field": _vision_field(subject)}]
+    if true is None and subject != "warnings" and _is_unknown(value):
+        return None, used, f"{subject} is null, and the claim says it is unknown."
     if true is None and subject != "warnings":
         if value is not None and _number_or_none(value) == 0:
             return 1, used, f"{subject} is null (unknown), but the claim gives 0."
@@ -190,6 +236,9 @@ def check_vision(subject, value, unit, vision):
     if isinstance(true, (int, float)):
         if number_matches(value, unit, float(true), VISION_UNITS.get(subject)):
             return None, used, "Matches after rounding."
+        bound = _constrained(value, unit, float(true), VISION_UNITS.get(subject))
+        if bound is not None:
+            return (None, used, f"{subject} {true} is {bound[1]}.") if bound[0] else (5, used, f"{subject} {true} is not {bound[1]}.")
         return 1, used, f"{subject} is {true}."
     return (None, used, "Matches.") if str(value).strip().casefold() == str(true).casefold() else (2, used, f"{subject} is {true}.")
 
@@ -208,9 +257,15 @@ def check_fact(subject, value, unit, facts):
     used = [{"type": "note", "key": subject, "span": fact.span}]
     if fact.type == "not_recorded":
         return 2, used, f"The note says {subject} is not recorded."
+    if value is None or (fact.unit and str(value).strip().lower() == fact.unit.lower()):
+        # No value claimed ("glucose was measured"), or only the unit ("glucose is given in mmol/L"): the note states it.
+        return None, used, f"The note states {subject}."
     if fact.type == "number":
         if number_matches(value, unit, float(fact.value), fact.unit):
             return None, used, "Matches after rounding."
+        bound = _constrained(value, unit, float(fact.value), fact.unit)
+        if bound is not None:
+            return (None, used, f"{subject} {fact.value} is {bound[1]}.") if bound[0] else (5, used, f"{subject} {fact.value} is not {bound[1]}.")
         return 1, used, f"The note gives {fact.value} {fact.unit or ''}".strip() + "."
     if fact.type == "bool":
         return (None, used, "Matches.") if _bool(value) == fact.value else (2, used, f"The note says {subject} is {fact.value}.")
@@ -251,7 +306,7 @@ def check_absence(subject, inputs, text=None):
     if subject in FACT_KEYS:
         return None, [], f"The note does not state {subject}."
     name = _tokens((subject or "").removeprefix("other:").replace("_", " "))
-    if name and not name & _tokens(inputs.note):
+    if name and not name <= _tokens(inputs.note):
         return None, [], "The note does not mention it."
     return 2, [], "The note mentions it, so it is not missing."
 
@@ -430,6 +485,10 @@ def attribute(traces, declared, note, own_sources=True, charge=True):
     (own_sources False), so a passage they do not use is not held against them.
     """
     orphans = [s for s in declared if not any(_backs(s, t, note) for t in traces)] if own_sources and charge else []
+    # A passage the entry cites but no claim uses is charged only to a claim that rests on a rule: a passage is never
+    # the source of a patient or imaging fact, and an unextracted rule sentence often explains it (EXP-12).
+    if not any(t._rule_part for t in traces):
+        orphans = [s for s in orphans if s["type"] != "passage"]
     charged = set()
     for t in traces if charge else []:
         if t.subtype is not None:
@@ -438,7 +497,8 @@ def attribute(traces, declared, note, own_sources=True, charge=True):
         unmet = {kind for kind in needs if not any(s["type"] == kind and _backs(s, t, note) for s in declared)}
         if t.kind == "citation":
             unmet.discard("passage")
-        if unmet and orphans:
+        mine = orphans if t._rule_part else [s for s in orphans if s["type"] != "passage"]
+        if unmet and mine:
             t.subtype, t.reason = 7, "A declared source supports nothing in this entry, and this claim lacks a supporting one."
             charged.update(id(s) for s in orphans)
         elif "passage" in unmet:
@@ -449,7 +509,7 @@ def attribute(traces, declared, note, own_sources=True, charge=True):
     for s in orphans:
         if id(s) in charged or content_errors:  # an unsupported source most likely belongs to the false claim
             continue
-        clean = [t for t in traces if t.subtype is None]
+        clean = [t for t in traces if t.subtype is None and (s["type"] != "passage" or t._rule_part)]
         if clean:
             clean[0].subtype, clean[0].reason = 7, f"Declared source {s.get('field') or s.get('id') or 'note quote'} supports nothing in this entry."
             clean[0].incomplete = False

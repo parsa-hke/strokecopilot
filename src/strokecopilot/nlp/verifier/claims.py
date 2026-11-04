@@ -53,9 +53,9 @@ FIELDS = ("rationale", "thrombolysis.blocking_factors", "thrombectomy.blocking_f
 UNITS = r"mL|ml|cc|hours?|hrs?|h|minutes?|mins?|min|seconds?|s|%|mmHg|mmol/L|mg/dL|years?|y"
 _UNIT_RE = re.compile(rf"^({UNITS})\b")
 _KEYWORD_BEFORE = re.compile(r"(NIHSS|ASPECTS|mRS|INR|ratio|score)\D{0,12}$", re.I)
-_RANGE_BEFORE = re.compile(r"\d\s*[–-]\s*$")
+_RANGE_BEFORE = re.compile(r"\d\s*(?:[–-]|\bto\b)\s*$")
 _PASSAGE_ID = re.compile(r"\b[A-Z][A-Za-z0-9]*-[\w.\-]+")
-_NUMBER = re.compile(r"(?<![\w.§/–-])(\d+(?:\.\d+)?)(?![\w.]*\d)(?!\.\d)(?!\s*[–-]\s*\d)")  # ranges such as 6-10 are rule text
+_NUMBER = re.compile(r"(?<![\w.§/–-])(\d+(?:\.\d+)?)(?![\w.]*\d)(?!\.\d)(?!\s*[–-]\s*\d)(?!\s+to\s+\d)")  # ranges such as 6-10 or 6 to 10 are rule text
 
 
 @dataclass

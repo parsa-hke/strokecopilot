@@ -1,5 +1,52 @@
 # CHANGELOG
 
+## 2026-11-05 — Claude Code session (verifier: five code-side fixes from EXP-12)
+- **Fixes, from the six groups of verifier errors in EXP-12** (recorded in `docs/HALLUCINATION_METRIC.md` §9 point 12, with tests):
+  - Values written as bounds or sets ("6 or more", "within 6 h", "0 or 1", "3 to 5") are checked as such. A false one is a faulty derivation.
+  - "null", "unknown" or "undefined" for a null field is supported.
+  - A note fact claimed without a value, or with only its unit, is supported when the note states it.
+  - "Not given" for a subject outside the fact list needs every word of the subject to be absent from the note, not just one.
+  - "3 to 5" ranges are rule text and are not read as numbers.
+  - An unused cited passage is charged (7) only to claims that rest on a rule.
+- **Left for Phase 3**, because they need prompt changes measured against human adjudication:
+  - trivial statements extracted as claims (extractor prompt v2);
+  - rules in uncertainties with no passage found above τ (candidate selection);
+  - judge errors on conditional and negative applications (judge prompt v3).
+- pytest: 350 passed.
+- **Notion sync:** none until the rescores.
+
+## 2026-11-05 — Claude Code session (EXP-12 rescore and a reading of every flag)
+- **EXP-12 rescore** (commit `56a7534`, no API calls), same 371 claims:
+  - hallucination rate 0.132 (content 0.102), down from 0.235;
+  - attribution accuracy 0.967;
+  - 49 flags.
+- **Claude read all 49 flagged claims** (`flagged_rescore.json`). This is not the human adjudication the plan requires.
+  - **6 clear real errors:**
+    - one invented finding: fx03 "headache and vomiting before the weakness", where the note puts the vomiting in the ambulance, after the weakness;
+    - five citation errors: "eligible for thrombectomy" citing only thrombolysis passages (fx02, fx05); the haemorrhage contraindication without `AHA2026-T8-ich` (fx03); two DEFUSE-3 blocking factors with DEFUSE-3 in no `rule_ids` (fx05).
+  - **3 borderline:**
+    - "the window counts from last known well", our prompt's instruction stated as a rule;
+    - a true 4.5 h rule cited to the haemorrhage passage, which the verifier labelled wrong rule rather than mis-cited;
+    - "labs are not needed for thrombectomy per the rulebook", which the rulebook does not say.
+  - **About 40 verifier errors, in six generic groups:**
+
+    | Group | Count |
+    |---|---|
+    | Null, unit or bound given as the value ("6 or more", "0 or 1", "mmol/L") | 9 |
+    | "Not given" matched on one shared word (`other:` subjects) | 7 |
+    | Judge errors on conditional or negative applications | 5 |
+    | Rules in uncertainties with no passage retrieved above τ | 6 |
+    | Unused passages charged to plain note or vision facts | 6 |
+    | Ranges written "3 to 5" read as single numbers, and trivial non-claims | 7 |
+
+- **What this means:**
+  - On real output, the verifier's false flags are about 11% of claims, above the 0.10 bar. The 0.010 on the gold outputs was optimistic, because they were written in the verifier's style.
+  - By this reading, the reasoner's rate is about 2–2.4%.
+  - The Phase 2 acceptance criterion is still met. The real measure of the verifier is Phase 3's human adjudication.
+- No code changed.
+- **Notion sync:**
+  - done: Experiments → EXP-12 row updated with the rescore and this reading.
+
 ## 2026-11-04 — Claude Code session (three verifier readings from EXP-12; free e2e rescore)
 - **Three changes, approved by Parsa and recorded in `docs/HALLUCINATION_METRIC.md` §9 point 11:**
   - **Silent note:** a claim that the note does not state something is supported when the note is silent. If the note does state it, the claim is still an invented finding. For subjects outside the fact list, "silent" means the note never mentions the subject's words.

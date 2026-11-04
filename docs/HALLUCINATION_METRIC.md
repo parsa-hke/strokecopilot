@@ -152,3 +152,10 @@ The verifier is a model and can be wrong (plan §10).
    - a claim that the note does not state something ("INR and platelets are not reported") is supported when the note is silent on it. §3b's "nothing supports a claim either way" applies to claims for or against a value, not to whether the note mentions it. A claim that something is missing when the note does state it is still an invented finding;
    - uncertainties have no sources in the schema, so their claims are scored for content (sub-types 1–5) but never charged 6 or 7;
    - glucose in mg/dL is compared with the note's mmol/L (1 mmol/L = 18.016 mg/dL).
+12. Code checks added after reading EXP-12's flagged claims (5 Nov 2026):
+   - a value written as a bound or a set ("6 or more", "within 6 h", "0 or 1", "3 to 5") is checked as that bound or set. A false one is a faulty derivation (5);
+   - "null", "unknown" or "undefined" for a null field is supported, like an absence claim;
+   - a note fact claimed with no value ("glucose was measured") or with only its unit is supported when the note states it;
+   - for a subject outside the fact list, the note "mentions" it only if every word of the subject's name appears in the note;
+   - numbers written as ranges with "to" are rule text, like "6-10";
+   - a cited passage that no claim uses is charged (7) only to a claim that rests on a rule, never to a patient or imaging fact.

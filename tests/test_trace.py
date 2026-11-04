@@ -272,3 +272,42 @@ def test_uncertainties_are_scored_for_content_but_not_attribution():
     inputs.judge = FakeJudge(table)
     t = _run(rec, extraction, inputs)["uncertainties[2].0"]
     assert t.subtype is None  # in a rationale entry this would be an uncited rule (6)
+
+
+@pytest.mark.parametrize("value, unit, subtype", [("6 or more", None, None), ("20 or more", None, 5), ("0 or 1", None, None),
+                                                   ("within 6", "h", None), ("within 1", "h", 5), ("12", None, None), ("14", None, 1)])
+def test_values_written_as_bounds_or_sets(value, unit, subtype):
+    inputs = _inputs("fx03_haemorrhage_present")  # NIHSS 12, onset to imaging 2 h, pre-stroke mRS 0
+    subject = "onset_to_imaging" if unit else "nihss"
+    if value == "0 or 1":
+        subject = "premorbid_mrs"
+    assert tr._subject_check(subject, value, unit, inputs)[0] == subtype
+
+
+def test_null_unit_and_absent_values():
+    inputs = _inputs("fx01_thrombolysis_clear")  # mismatch_ratio is null, glucose 7.4 mmol/L
+    assert tr.check_vision("mismatch_ratio", "null", None, inputs.vision)[0] is None
+    assert tr.check_vision("mismatch_ratio", "undefined", None, inputs.vision)[0] is None
+    assert tr.check_vision("mismatch_ratio", "1.5", None, inputs.vision)[0] == 2
+    assert tr.check_fact("glucose", None, None, inputs.facts)[0] is None  # "glucose was measured"
+    assert tr.check_fact("glucose", "mmol/L", None, inputs.facts)[0] is None  # "glucose is given in mmol/L"
+
+
+def test_not_given_needs_every_word_of_the_subject():
+    inputs = _inputs("fx02_thrombectomy_large_mismatch")  # the note says "Time from last known well to imaging"
+    assert tr.check_absence("other:treatment_start_time", inputs)[0] is None
+    assert tr.check_absence("other:imaging_time", inputs)[0] == 2
+
+
+def test_ranges_written_with_to_are_rule_text():
+    assert cl.numbers("ASPECTS 3 to 5 or 0 to 2, and 6 to 10") == []
+    assert cl.numbers("Within 6 to 24 hours, NIHSS 16.") == [("16", None, 28)]
+
+
+def test_an_unused_passage_is_not_charged_to_a_plain_fact():
+    rec = copy.deepcopy(CLEAN_REC)
+    rec["rationale"][2]["sources"].append(passage_source("TEST-DEFUSE3"))  # cited, but the entry states only facts
+    assert all(t.traceable for k, t in _run(rec).items() if k.startswith("rationale[2]"))
+    rec = copy.deepcopy(CLEAN_REC)
+    rec["rationale"][4]["sources"].append(passage_source("TEST-DEFUSE3"))  # cited next to a rule it does not back
+    assert _run(rec)["rationale[4].0"].subtype == 7
