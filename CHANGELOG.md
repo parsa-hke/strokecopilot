@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (EXP-5 Vision B dummy; EXP-6 sized)
+- **EXP-5 ran on Kaggle** (T4, one GPU used, 4 CPUs, commit `0e8740a`):
+  - **Split:** the scan bleed rate is 0.4058 in validation and 0.4119 in test, against 0.4085 overall, well inside the 1.5-point check.
+  - **Speed:** the data loader gives 196, 724 and 895 slices per second with 1, 2 and 4 workers. Training on random images runs at 171 per second for ResNet-50 and 124 for EfficientNet-B3. Real training ran at 158 per second, so the GPU is the limit, not data loading.
+  - **Epoch:** a balanced epoch is 172,618 slices, about 18.2 minutes of training.
+  - The AUCs (slice 0.805, scan 0.730, on a 300-scan sample after 150 steps) only show the pipeline runs; they are not results.
+- **EXP-6 set up in `20_visionB_train.ipynb`, which now opens in train mode:** ResNet-50, 10 epochs, about 3.5 hours (estimate: 18.2 minutes per epoch plus validation, which is unmeasured at full size). ResNet-50 is 38% faster than EfficientNet-B3 on this GPU.
+- **Fix before any real run:** when resuming from an earlier version's attached output, the notebook copied only `last.pt`. If an earlier epoch had been the best, `best.pt` would have been missing and scoring would fail. It now copies both. The resume path was tested on synthetic shards: one version stops after one epoch, its output is attached and the next version resumes.
+- pytest: 239 passed.
+- **Notion sync:**
+  - done: EXP-5 → Done, with speeds; EXP-6 row (Planned).
+  - pending: Decisions rows for the LLM judge, embedding model, RSNA split and temperature wording.
+
 ## 2026-11-04 — Claude Code session (Phase 2: RSNA split and Vision B code)
 - **RSNA split** (`data/rsna_split.py`): seed 20261103, patients ranked by a SHA-256 hash of seed and ID and cut 80/10/10, as agreed. The cut is made separately for patients with and without a bleed. In a simulation at the real counts (18,938 patients, 21,744 scans), a plain hash cut missed the 1.5-point bleed-rate check in 35% of seeds, and the stratified cut never did. The split is rebuilt each Kaggle session and never saved. A fingerprint hash confirms it is unchanged. The test split raises unless `ALLOW_RSNA_TEST=1`, so it stays closed until the final Vision B model is chosen (recommendation, needs Parsa's OK).
 - **Vision B code:**
