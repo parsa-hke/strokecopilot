@@ -98,8 +98,11 @@ def test_trainer_file_and_environment(tmp_path):
     compile(source, path, "exec")
     assert "class nnUNetTrainer_StrokeCopilot(nnUNetTrainer)" in source
     assert "def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict" in source
-    env = nw.environment("/r", "/p", "/x", epochs=50, iterations=250, save_every=5, n_proc_da=8)
-    assert env["SC_NUM_EPOCHS"] == "50" and env["nnUNet_results"] == "/x" and env["nnUNet_n_proc_DA"] == "8"
+    env = nw.environment("/r", "/p", "/x", epochs=50, iterations=250, save_every=5, n_proc=2, n_proc_da=4)
+    assert env["SC_NUM_EPOCHS"] == "50" and env["nnUNet_results"] == "/x"
+    assert env["nnUNet_def_n_proc"] == "2" and env["nnUNet_n_proc_DA"] == "4"
+    assert nw.plan_command(2)[-4:] == ["-npfp", "2", "-np", "2"]
+    assert "out of memory" in nw.explain_exit(-9, "Planning") and "exit code 1" in nw.explain_exit(1, "Planning")
     assert nw.train_command(0, resume=True)[-1] == "--c" and nw.train_command(0, resume=False)[-1] == nw.TRAINER
 
 
@@ -121,3 +124,10 @@ def test_score_predictions(slim, tmp_path):
     rows = nw.score_predictions(str(pred_dir), str(slim), DEV[:2], fold=0, folds=FOLDS)
     assert [r["dice"] for r in rows] == [1.0, 1.0]
     assert rows[0]["dice_reliable"] == 1.0 and 0 < rows[0]["infarct_reliable_share"] < 1
+
+
+def test_memory_gib(tmp_path):
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("MemTotal:       54525952 kB\nMemFree:  1 kB\nMemAvailable:   41943040 kB\n")
+    assert nw.memory_gib(str(meminfo)) == {"total": 52.0, "available": 40.0}
+    assert nw.memory_gib(str(tmp_path / "missing")) is None

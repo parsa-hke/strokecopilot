@@ -134,15 +134,44 @@ def install_trainer(package_dir=None):
     return path
 
 
-def environment(raw_root, preprocessed_root, results_root, epochs, iterations, save_every, n_proc_da=None):
+def environment(raw_root, preprocessed_root, results_root, epochs, iterations, save_every, n_proc=None, n_proc_da=None):
+    """nnU-Net's paths and our trainer's settings. n_proc caps nnU-Net's default worker count, and n_proc_da
+    the training data workers: each worker starts a fresh Python that imports PyTorch, so the defaults of
+    8 and up to 12 ran a Colab L4 runtime out of memory on 4 November 2026 (exit code -9)."""
     env = dict(os.environ)
     env.update({
         "nnUNet_raw": str(raw_root), "nnUNet_preprocessed": str(preprocessed_root), "nnUNet_results": str(results_root),
         "SC_NUM_EPOCHS": str(epochs), "SC_ITERS_PER_EPOCH": str(iterations), "SC_SAVE_EVERY": str(save_every),
     })
+    if n_proc:
+        env["nnUNet_def_n_proc"] = str(n_proc)
     if n_proc_da:
         env["nnUNet_n_proc_DA"] = str(n_proc_da)
     return env
+
+
+def plan_command(n_proc):
+    """Fingerprint, plan and preprocess 3d_fullres with n_proc workers for each step."""
+    return ["nnUNetv2_plan_and_preprocess", "-d", str(DATASET_ID), "-c", CONFIGURATION, "--verify_dataset_integrity",
+            "-npfp", str(n_proc), "-np", str(n_proc)]
+
+
+def memory_gib(meminfo="/proc/meminfo"):
+    """Total and available RAM in GiB on Linux, or None elsewhere."""
+    try:
+        with open(meminfo) as f:
+            values = {line.split(":")[0]: int(line.split()[1]) for line in f if ":" in line}
+    except OSError:
+        return None
+    return {"total": round(values["MemTotal"] / 2**20, 1), "available": round(values["MemAvailable"] / 2**20, 1)}
+
+
+def explain_exit(code, step):
+    """A message for a failed nnU-Net command; -9 means the system killed it, almost always for memory."""
+    if code == -9:
+        return (f"{step} was killed (exit code -9), almost always because the runtime ran out of memory. "
+                f"RAM now: {memory_gib()}. Lower N_PROC or N_PROC_DA in section 1 and Run all again.")
+    return f"{step} failed with exit code {code}. Send the output above."
 
 
 def fold_dir(results_root, fold):
