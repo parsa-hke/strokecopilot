@@ -141,6 +141,8 @@ strokecopilot/
 │   │   │   ├── ingest.py          # corpus/RULEBOOK.md → passages.jsonl, with checks (DEC-18)
 │   │   │   └── index.py           # embeddings; candidate passages for the verifier (DEC-19)
 │   │   ├── notes/
+│   │   │   ├── facts.py           # fact sheets: what a note states, with verbatim spans
+│   │   │   ├── render.py          # facts → note text with controlled variation (scenarios, generate.py)
 │   │   │   └── generate.py        # clinical variables → triage note (templated)
 │   │   ├── reasoner/
 │   │   │   ├── prompt.py          # versioned prompts
@@ -151,6 +153,7 @@ strokecopilot/
 │   │       ├── trace.py           # claim → source (vision field / note / passage) or None
 │   │       ├── metrics.py         # hallucination rate, critical rate, omission rate, CIs
 │   │       ├── adjudicate.py      # export samples for human labelling, agreement stats
+│   │       ├── rules.py           # the rulebook in code: decisions, omissions, criticality
 │   │       ├── scenarios.py       # synthetic scenario matrix with rule-derived expected output
 │   │       └── seeded_errors.py   # plant known fabrications to measure verifier recall
 │   ├── pipeline/
@@ -472,7 +475,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 - [x] `claims.py`: rationale → atomic claims (LLM-assisted with `prompts/claim_extractor_v1.md`, plus a rule-based numeric extractor) — code and tests done 4 Nov 2026; real extractor (`claude-sonnet-5-5`) run in EXP-10 and EXP-11 on 75 outputs with no failures
 - [x] `trace.py`: numeric claims vs vision JSON (after rounding); patient facts vs note; rule claims vs passage text (embedding similarity + NLI or LLM judge — done 4 Nov 2026: LLM judge (`prompts/judge_v2.md`), `claude-haiku-5-5` with τ = 0.6 (DEC-20, from the EXP-11 bake-off)
 - [x] `metrics.py`: hallucination rate, critical hallucination rate, omission rate; bootstrap CIs (criticality and omissions are filled in once `scenarios.py` exists)
-- [ ] `scenarios.py`: 100–200 synthetic scenarios with expected recommendations derived from the rulebook in code; review the rule code against the corpus
+- [x] `scenarios.py`: 100–200 synthetic scenarios with expected recommendations derived from the rulebook in code; review the rule code against the corpus — done 5 Nov 2026: `rules.py` (rulebook in code, omissions, criticality), 150 scenarios (seed 20261105) covering 16 decision routes at least 3 times each; a test checks every rule threshold against its passage. The rule conventions await clinician review
 - [x] `seeded_errors.py`: plant known fabrications of each sub-type and measure verifier recall and false-flag rate — done 4 Nov 2026 (EXP-11): 5 gold outputs and 70 seeds; Haiku judge, τ ≤ 0.7: strict recall 1.0 on five sub-types, 0.9 wrong rule, 0.8 uncited rule, false flags 0.010; bar met
 - [x] Run verifier on the five fixture outputs; `tests/test_claims.py`, `tests/test_trace.py` — EXP-12 (`50_end_to_end.ipynb`, 4 Nov 2026): 371 claims, verifier rate 0.235. Not yet adjudicated, and most flags look like verifier issues on real output (see CHANGELOG)
 

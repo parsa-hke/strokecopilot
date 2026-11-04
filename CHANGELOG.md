@@ -1,5 +1,45 @@
 # CHANGELOG
 
+## 2026-11-05 — Claude Code session (scenarios.py and the rulebook in code)
+- **`nlp/verifier/rules.py`, the rulebook in code:** `decide()` returns each decision as yes, no or undetermined, with the passage IDs, the inputs that decided it, and any unknown or unobservable inputs that left it undetermined (`docs/HALLUCINATION_METRIC.md` §5).
+  - **Thrombectomy** covers ICA/M1 by window, ASPECTS, pre-stroke mRS and age; M2 (dominance unobservable, so undetermined); basilar (PC-ASPECTS unobservable, so undetermined); and DAWN and DEFUSE-3 when ASPECTS is unknown at 6–24 h.
+  - **Thrombolysis** covers haemorrhage, absolute and relative Table 8 contraindications, 4.5 h with a disabling deficit, and the extended window (EXTEND, sleep midpoint, TRACE-III), which applies only when thrombectomy is not an option.
+  - **Conventions** are listed in the module and added to `docs/CLINICIAN_REVIEW.md` as question 8.
+  - It reproduces all ten expected fixture decisions.
+- **Omission checks:** haemorrhage with either treatment recommended; INR above 1.7 or a recent head injury with thrombolysis; beyond 4.5 h with no extended route; core 70 mL or more with thrombectomy on DEFUSE-3 alone; no occlusion with thrombectomy. Unknown inputs that leave a decision undetermined but are not named in `uncertainties` are counted separately.
+- **Criticality:** for a wrong number or invented finding, the claimed value is substituted and the rules are run again; it is critical if a determined decision changes. For wrong rule, misapplied rule and faulty derivation, it is critical if the claim concerns a deciding input or passage. Uncited and mis-attributed claims are never critical.
+- **`nlp/notes/render.py`:** facts to an ED-style note with a few phrasings per field. Every fact's span is verbatim, and silent facts are left out. `notes/generate.py` will reuse it.
+- **`scenarios.py`:** 150 synthetic scenarios from seed 20261105.
+  - Each has a contract-valid vision JSON, a rendered note with its fact sheet, and the rule-derived expected decisions.
+  - Paths are capped per decision pair, with fewer when undetermined, and 16 key routes each have at least 3 scenarios.
+  - Decisions: 85 fully determined; thrombolysis yes 40, thrombectomy yes 32.
+  - `manifest()` gives counts and a hash.
+- **Corpus cross-check (the plan's "review the rule code against the corpus"):** a test checks that every threshold the rules use is stated in the passage they cite, and that every cited passage is about the right treatment.
+- **`pipeline/end_to_end.py`:**
+  - One case runner for fixtures and scenarios.
+  - Criticality and omissions now fill the summary, so the critical and omission rates are no longer None.
+  - The rescore works for both sources and for EXP-12's existing folder.
+  - Notebook 50 prints the critical and omission rates and each case's omissions.
+- pytest: 389 passed.
+- **Notion sync:**
+  - pending: Tasks → `scenarios.py` done.
+
+## 2026-11-05 — Claude Code session (rescores after the five fixes)
+- **EXP-12 rescore** (commit `83085b4`, no API calls):
+  - 351 claims (fewer, because ranges like "3 to 5" are no longer read as numbers);
+  - hallucination rate 0.080 (content 0.060), against 0.235 at first and 0.132 after the first rescore;
+  - attribution accuracy 0.979; 28 flags.
+- **EXP-11 rescore** (same commit): seeded recall is unchanged. Lowest strict recall is 0.80 (uncited rule) and false flags are 0.010, so the bar is still met at τ ≤ 0.7. The fixes made the verifier more lenient without losing a planted error.
+- **Claude's reading of the 28 flags** (not human adjudication):
+  - all 9 real reasoner errors found earlier (6 clear, 3 borderline) are still flagged;
+  - about 19 are verifier errors, nearly all in the three groups left for Phase 3:
+    - rules in uncertainties with no passage retrieved;
+    - judge errors on conditional or negative applications;
+    - meta-statements extracted as claims.
+  - So, by this reading, the verifier falsely flags about 5% of real claims, and the reasoner's rate is about 2–2.5%.
+- **Notion sync:**
+  - done: Experiments → EXP-12 row (value 0.080 and this reading).
+
 ## 2026-11-05 — Claude Code session (verifier: five code-side fixes from EXP-12)
 - **Fixes, from the six groups of verifier errors in EXP-12** (recorded in `docs/HALLUCINATION_METRIC.md` §9 point 12, with tests):
   - Values written as bounds or sets ("6 or more", "within 6 h", "0 or 1", "3 to 5") are checked as such. A false one is a faulty derivation.

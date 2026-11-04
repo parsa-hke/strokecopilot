@@ -30,7 +30,7 @@ class Fake:
         self.calls += 1
         self.usage["requests"] += 1
         if self.role == "reasoner":
-            stem = self.notes[json.loads(user)["note"]]
+            stem = self.notes.get(json.loads(user)["note"], "fx03_haemorrhage_present")  # a scenario gets fx03's gold
             if stem == self.fail_on:
                 return {"oops": True}  # fails the schema: a format failure
             return {k: v for k, v in se.load_gold(stem).items() if k not in RUN_FIELDS}
@@ -62,7 +62,7 @@ def test_a_reasoner_format_failure_is_counted_not_verified(tmp_path):
                                retriever, tmp_path, log=lambda *_: None)
     assert metrics["summary"]["format_failure_rate"]["value"] == pytest.approx(1 / 5)
     assert not (tmp_path / "traces" / "fx03_haemorrhage_present.json").exists()
-    row = next(r for r in metrics["per_fixture"] if r["fixture"] == "fx03_haemorrhage_present")
+    row = next(r for r in metrics["per_case"] if r["case"] == "fx03_haemorrhage_present")
     assert row["error"].startswith("format failure")
 
 
@@ -72,4 +72,22 @@ def test_rescore_replays_a_finished_run_without_models(tmp_path):
     assert again["summary"]["claims"] == first["summary"]["claims"]
     assert again["summary"]["hallucination_rate"] == first["summary"]["hallucination_rate"]
     flagged = json.loads((tmp_path / "flagged_rescore.json").read_text())
-    assert len(flagged) == sum(r["hallucinated"] for r in again["per_fixture"]) and {"text", "reason", "kind"} <= set(flagged[0])
+    assert len(flagged) == sum(r["hallucinated"] for r in again["per_case"]) and {"text", "reason", "kind"} <= set(flagged[0])
+
+
+def test_criticality_and_omissions_reach_the_summary(tmp_path):
+    metrics = e2e.run_fixtures(Fake("reasoner"), Fake("extractor"), Fake("judge"), retriever, tmp_path, log=lambda *_: None)
+    s = metrics["summary"]
+    assert s["omission_rate"]["value"] == 0.0  # the gold outputs ignore no hard rule
+    assert s["critical_hallucination_rate"]["denominator"] > 0  # criticality is decided for some claims now
+
+
+def test_scenarios_run_through_the_same_chain(tmp_path):
+    cases = e2e.load_cases("scenarios")[:4]
+    metrics = e2e.run_cases(cases, Fake("reasoner"), Fake("extractor"), Fake("judge"), retriever, tmp_path,
+                            log=lambda *_: None, source="scenarios")
+    assert metrics["summary"]["cases"] == 4
+    config = json.loads((tmp_path / "config.json").read_text())
+    assert config["source"] == "scenarios" and config["scenarios"]["n"] == 150
+    again = e2e.rescore(tmp_path, retriever=retriever, log=lambda *_: None)
+    assert again["source"] == "scenarios" and again["summary"]["cases"] == 4

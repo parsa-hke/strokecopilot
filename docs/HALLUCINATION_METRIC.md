@@ -75,7 +75,7 @@ A claim that traces, and whose declared sources all support it, is **clean**. De
 
 ## 5. Omission and critical hallucination
 
-Both use the rulebook in code (`scenarios.py`). For a case, it returns each decision (`yes`, `no` or `undetermined`) and the criteria that decided it.
+Both use the rulebook in code (`nlp/verifier/rules.py`; the scenarios in `scenarios.py` are generated with it). For a case, it returns each decision (`yes`, `no` or `undetermined`) and the criteria that decided it.
 
 **Omission** (§8.4). A hard rule says an input fact must change a decision, and the recommendation ignores it. This is detected from the decisions alone, independent of the rationale. The first checks, extended in `scenarios.py` with the corpus:
 - haemorrhage present, and thrombolysis recommended;

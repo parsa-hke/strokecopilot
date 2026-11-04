@@ -61,3 +61,10 @@ Volumes are in mL. Penumbra is the total Tmax > 6 s volume, core included. Misma
 5. Does final infarct on follow-up MRI, in patients who all reperfused, seem an acceptable stand-in for core at presentation, given that we report this as a limitation?
 6. Is there a common clinical trap that these five cases miss?
 7. The thrombectomy recommendations count time from symptom onset. Is it right to use last known well as the onset time when onset was not witnessed?
+8. Our rules in code score the synthetic test cases with these conventions. Please mark any you would change:
+   - COR 1 and 2a count as "yes", COR 2b as "undetermined", COR 3 or no applicable recommendation as "no".
+   - NIHSS 6 or more counts as a disabling deficit. Under 6 within 4.5 h is left undetermined.
+   - Table 8 absolute contraindications give "no". Relative ones, including a DOAC within 48 h, give "undetermined".
+   - Times are taken at imaging, since no treatment time is given. "Within 6 h" includes exactly 6 h.
+   - With ASPECTS unknown at 6–24 h, a "yes" needs DAWN or DEFUSE-3 criteria. If neither is met we call it undetermined, not "no", because ASPECTS could still qualify.
+   - Extended-window thrombolysis needs EXTEND criteria at 4.5–9 h (or within 9 h of the midpoint of sleep), and only when thrombectomy is not an option. TRACE-III criteria at 4.5–24 h give "undetermined" (COR 2b).
