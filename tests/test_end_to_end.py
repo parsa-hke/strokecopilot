@@ -64,3 +64,12 @@ def test_a_reasoner_format_failure_is_counted_not_verified(tmp_path):
     assert not (tmp_path / "traces" / "fx03_haemorrhage_present.json").exists()
     row = next(r for r in metrics["per_fixture"] if r["fixture"] == "fx03_haemorrhage_present")
     assert row["error"].startswith("format failure")
+
+
+def test_rescore_replays_a_finished_run_without_models(tmp_path):
+    first = e2e.run_fixtures(Fake("reasoner"), Fake("extractor"), Fake("judge"), retriever, tmp_path, log=lambda *_: None)
+    again = e2e.rescore(tmp_path, retriever=retriever, log=lambda *_: None)
+    assert again["summary"]["claims"] == first["summary"]["claims"]
+    assert again["summary"]["hallucination_rate"] == first["summary"]["hallucination_rate"]
+    flagged = json.loads((tmp_path / "flagged_rescore.json").read_text())
+    assert len(flagged) == sum(r["hallucinated"] for r in again["per_fixture"]) and {"text", "reason", "kind"} <= set(flagged[0])

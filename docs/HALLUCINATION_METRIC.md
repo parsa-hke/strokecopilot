@@ -148,3 +148,7 @@ The verifier is a model and can be wrong (plan §10).
    - a claim that restates a pipeline warning ("CTA was not acquired") is supported by it, and an `unknown` occlusion site supports "the occlusion site is unknown";
    - a decision citation is checked against the passage's `treatment` field (§1), with no judge;
    - a number in uncited rule text that a retrieved passage states is not a wrong number, because the missing citation is charged to the rule (6).
+11. Readings added after EXP-12 (4 Nov 2026), the first run on real reasoner output:
+   - a claim that the note does not state something ("INR and platelets are not reported") is supported when the note is silent on it. §3b's "nothing supports a claim either way" applies to claims for or against a value, not to whether the note mentions it. A claim that something is missing when the note does state it is still an invented finding;
+   - uncertainties have no sources in the schema, so their claims are scored for content (sub-types 1–5) but never charged 6 or 7;
+   - glucose in mg/dL is compared with the note's mmol/L (1 mmol/L = 18.016 mg/dL).

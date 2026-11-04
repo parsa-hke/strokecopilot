@@ -50,7 +50,7 @@ KINDS = ("vision", "patient", "absence", "rule", "comparison")
 OPS = ("<", "<=", ">", ">=", "==", "!=")
 FIELDS = ("rationale", "thrombolysis.blocking_factors", "thrombectomy.blocking_factors", "uncertainties")
 
-UNITS = r"mL|ml|cc|hours?|hrs?|h|minutes?|mins?|min|seconds?|s|%|mmHg|mmol/L|years?|y"
+UNITS = r"mL|ml|cc|hours?|hrs?|h|minutes?|mins?|min|seconds?|s|%|mmHg|mmol/L|mg/dL|years?|y"
 _UNIT_RE = re.compile(rf"^({UNITS})\b")
 _KEYWORD_BEFORE = re.compile(r"(NIHSS|ASPECTS|mRS|INR|ratio|score)\D{0,12}$", re.I)
 _RANGE_BEFORE = re.compile(r"\d\s*[–-]\s*$")

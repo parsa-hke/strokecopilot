@@ -145,7 +145,8 @@ def test_absence_claims():
     inputs = _inputs()
     assert tr.check_absence("mass_effect", inputs)[0] is None
     assert tr.check_absence("core_ml", inputs)[0] == 2
-    assert tr.check_absence("inr", inputs)[0] == 2  # the note is silent on INR
+    assert tr.check_absence("inr", inputs)[0] is None  # "INR is not reported": true, the note is silent on INR
+    assert tr.check_absence("nihss", inputs)[0] == 2  # the note states it
 
 
 def test_judge_sees_cited_and_retrieved_passages():
@@ -213,7 +214,8 @@ def test_warnings_and_unknown_site_support_absence_claims():
     assert tr.check_absence("occlusion_site", inputs)[0] is None  # reported as "unknown"
     assert tr.check_absence("other:cta", inputs, "CTA was not acquired.")[0] is None
     assert tr._subject_check("other:cta_status", "not acquired", None, inputs, "CTA was not acquired.")[0] is None
-    assert tr.check_absence("other:mri", inputs, "MRI was not acquired.")[0] == 2
+    assert tr.check_absence("other:mri", inputs, "MRI was not acquired.")[0] is None  # nothing mentions MRI
+    assert tr.check_absence("other:amlodipine", inputs, "Amlodipine is not reported.")[0] == 2  # the note mentions it
 
 
 def _claim(**kw):
@@ -251,3 +253,22 @@ def test_numbers_in_an_uncited_rule_are_found_through_retrieval():
     assert tr.trace_claim(claim, inputs).subtype is None
     inputs.tau = 0.9
     assert tr.trace_claim(claim, inputs).subtype == 1
+
+
+def test_glucose_converts_between_mmol_and_mg_per_dl():
+    assert tr.number_matches("133", "mg/dL", 7.4, "mmol/L") and not tr.number_matches("150", "mg/dL", 7.4, "mmol/L")
+
+
+def test_uncertainties_are_scored_for_content_but_not_attribution():
+    rec = copy.deepcopy(CLEAN_REC)
+    rec["uncertainties"].append("Thrombectomy is recommended in the 6 to 24 hour window for ICA or M1 occlusion.")
+    extraction = copy.deepcopy(CLEAN_EXTRACTION)
+    extraction["claims"].append({"field": "uncertainties", "entry": 2, "text": rec["uncertainties"][2], "kind": "rule", "subject": None,
+                                 "value": None, "unit": None, "applies_to_patient": False, "comparison": None})
+    inputs = _inputs()
+    inputs.retriever = lambda text, k: [("TEST-EVT-6-24", 0.9)]
+    table = copy.deepcopy(FakeJudge().table)
+    table[rec["uncertainties"][2]] = {"TEST-EVT-6-24": ("supported", None)}
+    inputs.judge = FakeJudge(table)
+    t = _run(rec, extraction, inputs)["uncertainties[2].0"]
+    assert t.subtype is None  # in a rationale entry this would be an uncited rule (6)

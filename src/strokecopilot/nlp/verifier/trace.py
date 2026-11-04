@@ -22,6 +22,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from strokecopilot.config import PROMPTS_DIR
+from strokecopilot.nlp.notes.facts import FACT_KEYS
 from strokecopilot.nlp.verifier.claims import UNOBSERVED_SUBJECTS, VISION_SUBJECTS
 
 SUBTYPES = {1: "wrong_number", 2: "invented_finding", 3: "wrong_rule", 4: "misapplied_rule",
@@ -44,7 +45,7 @@ _UNITS = {
     "h": ("time", 60.0), "hr": ("time", 60.0), "hrs": ("time", 60.0), "hour": ("time", 60.0), "hours": ("time", 60.0),
     "%": ("fraction", 0.01), "fraction": ("fraction", 1.0),
     "y": ("years", 1.0), "year": ("years", 1.0), "years": ("years", 1.0),
-    "mmhg": ("pressure", 1.0), "mmol/l": ("glucose", 1.0),
+    "mmhg": ("pressure", 1.0), "mmol/l": ("glucose", 1.0), "mg/dl": ("glucose", 1 / 18.016),
 }
 VISION_UNITS = {"core_ml": "mL", "penumbra_ml": "mL", "mismatch_volume_ml": "mL", "mismatch_ratio": None,
                 "haemorrhage.confidence": "fraction", "confidence.core": "fraction", "confidence.penumbra": "fraction", "aspects": None}
@@ -245,7 +246,14 @@ def check_absence(subject, inputs, text=None):
         return (None, used, "The note says it is not recorded.") if fact.type == "not_recorded" else (2, used, "The note states it.")
     if subject in UNOBSERVED_SUBJECTS:
         return None, [], "The pipeline cannot observe it."
-    return 2, [], "Nothing in the inputs says it is missing; the note is silent."
+    # The claim is that the note does not give it. A silent note makes that true (§3b is about claims *for or
+    # against* a value, which silence supports neither way).
+    if subject in FACT_KEYS:
+        return None, [], f"The note does not state {subject}."
+    name = _tokens((subject or "").removeprefix("other:").replace("_", " "))
+    if name and not name & _tokens(inputs.note):
+        return None, [], "The note does not mention it."
+    return 2, [], "The note mentions it, so it is not missing."
 
 
 def _subject_check(subject, value, unit, inputs, text=None):
@@ -409,7 +417,7 @@ def _backs(source, trace, note):
     return source["id"] in trace.supported_passages
 
 
-def attribute(traces, declared, note, own_sources=True):
+def attribute(traces, declared, note, own_sources=True, charge=True):
     """Sub-types 6 and 7 and the incomplete flag, for the claims of one entry, which share its sources.
 
     A claim needs a declared source for each part it rests on. A part left uncovered while the entry
@@ -421,9 +429,9 @@ def attribute(traces, declared, note, own_sources=True):
     Blocking factors have no sources of their own and inherit their decision's rule_ids
     (own_sources False), so a passage they do not use is not held against them.
     """
-    orphans = [s for s in declared if not any(_backs(s, t, note) for t in traces)] if own_sources else []
+    orphans = [s for s in declared if not any(_backs(s, t, note) for t in traces)] if own_sources and charge else []
     charged = set()
-    for t in traces:
+    for t in traces if charge else []:
         if t.subtype is not None:
             continue
         needs = {u["type"] for u in t.used} | ({"passage"} if t._rule_part else set())
@@ -541,5 +549,7 @@ def trace_all(claims, inputs):
     for claim, trace in zip(claims, traces):
         groups.setdefault((claim.field, claim.entry), (claim.declared_sources, []))[1].append(trace)
     for (field_name, _), (declared, group) in groups.items():
-        attribute(group, declared, inputs.note, own_sources=not field_name.endswith(".blocking_factors"))
+        # Uncertainties have no sources in the schema, so only their content is scored there (§9).
+        attribute(group, declared, inputs.note, own_sources=not field_name.endswith(".blocking_factors"),
+                  charge=field_name != "uncertainties")
     return traces

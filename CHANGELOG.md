@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## 2026-11-04 — Claude Code session (three verifier readings from EXP-12; free e2e rescore)
+- **Three changes, approved by Parsa and recorded in `docs/HALLUCINATION_METRIC.md` §9 point 11:**
+  - **Silent note:** a claim that the note does not state something is supported when the note is silent. If the note does state it, the claim is still an invented finding. For subjects outside the fact list, "silent" means the note never mentions the subject's words.
+  - **Uncertainties:** their claims are scored for content (sub-types 1–5) but never charged attribution (6, 7), because the schema gives them no sources.
+  - **Glucose:** mg/dL is now convertible to mmol/L; the regex extractor reads mg/dL.
+- **`pipeline/end_to_end.py`:**
+  - `rescore()` re-scores a finished fixture run with the current code. It uses the saved outputs and model claims, rebuilds the regex and citation claims, and takes judge verdicts from the cache only, with no API calls.
+  - Both a run and a rescore now write a compact list of flagged claims (`flagged.json`, `flagged_rescore.json`) with text, kind, subject, value, reason and sources.
+- **`50_end_to_end.ipynb`** has a `rescore` mode: free, no key, and it loads bge for retrievals not in the cache. Tested locally after a faked run: no model calls.
+- **Tests:** silent-note absence (and a note that does mention the subject), uncertainties free of attribution charges, glucose units, and the e2e rescore.
+- pytest: 339 passed.
+- **Notion sync:**
+  - pending: the EXP-12 row after the rescore.
+
+## 2026-11-04 — Claude Code session (EXP-12 end to end: acceptance run)
+- **EXP-12 ran on Colab** (commit `dc79189`): five fixtures through reasoner → verifier, about $0.62.
+  - **Result:** 371 claims, hallucination rate 0.235 (content 0.148), attribution accuracy 0.899, decisions right 1.000, format failures 0.
+  - **Sub-types:** wrong number 9, invented finding 27, wrong rule 15, misapplied 4, uncited 25, misattributed 7.
+  - **The Phase 2 acceptance criterion is met mechanically:** the notebook runs the chain and prints a rate. §7 task "Run verifier on the five fixture outputs" ticked.
+- **The rate is not a result yet.** Reading the flag reasons, most flags look like verifier issues on real output. The gold outputs were written in the verifier's style, so they never exposed these, and their 0.010 false-flag rate does not carry over to real outputs.
+  1. **"X is not reported" against a silent note:** about 20 of the 27 invented findings. When the note is silent, the claim is true. The code followed "silence supports nothing either way", which the doc wrote for claims about a value, not about whether the note mentions it.
+  2. **Rules mentioned in uncertainties:** most of the 25 uncited rules. The schema gives uncertainties no sources, so citing there is impossible.
+  3. **Glucose units:** given in mg/dL to compare with the rulebook's 60 mg/dL; the verifier cannot convert from mmol/L.
+  - The rest (wrong rules with no candidate passage, some wrong numbers) need the claim text to judge.
+- **Notion sync:**
+  - done: Experiments → EXP-12 row (Done, marked not yet adjudicated).
+
 ## 2026-11-04 — Claude Code session (end to end, fixture mode)
 - **`pipeline/end_to_end.py`**, `run_fixtures()`: runs fixture → reasoner (`reasoner_v1`, whole rulebook) → recommendation → verifier (Sonnet extractor, code checks, bge retrieval, Haiku judge, τ = 0.6) → `metrics.summarise()`.
   - A reasoner format failure is counted and not verified.
