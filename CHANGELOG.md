@@ -11,8 +11,14 @@
 - **Most likely limited by data augmentation on 2 CPUs**, not by the GPU. That is an inference, not measured. At about 510 s, 250 epochs would take about 35 hours on a T4, too long for one fold and impossible for five.
 - Fold-0 Dice was 0.247 after 3 epochs. It is not a result, but it is already above the threshold baseline's fold-0 Dice of 0.123.
 - **Change:** data-augmentation workers are now CPUs minus 1, from 2 to 12. The dummy run can be repeated under a new experiment ID: EXP-4, on an L4 or A100, will size EXP-3. Tested on synthetic data only.
+- **EXP-4 dummy on an L4** at `64974be`: 12 CPUs, 53 GB RAM and 11 data workers.
+  - Epochs took 191, 119 and 140 s, the first and third including compile. That is about 4.3 times faster than the T4, which fits the CPU explanation.
+  - Fold-0 Dice was 0.224 after 3 epochs.
+- **EXP-3 sized at 150 epochs:** about 5 hours of training on an L4. The 250 epochs first planned would take about 8.3 hours per fold, and five folds would probably exceed the remaining compute units.
+  - The L4 compute-unit rate has not been checked against Colab yet.
+  - The notebook now defaults to train mode. Tested on synthetic data only.
 - **Notion sync:**
-  - done: EXP-2 → Done, with its timings; EXP-4 row (Planned).
+  - done: EXP-2 and EXP-4 → Done, with their timings; EXP-3 row updated with 150 epochs.
 
 ## 2026-11-04 — Claude Code session (Phase 2, task 3: nnU-Net set-up)
 - **Code:** added `vision/perfusion/nnunet_wrapper.py`, pinned to nnU-Net v2 2.8.1 after reading its trainer and command-line code. It:
