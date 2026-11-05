@@ -341,16 +341,17 @@ def substitute(vision, facts, subject, value, unit):
 
 
 def criticality(trace, claim, vision, facts, verdicts=None):
-    """True, False or None (undetermined) for one hallucinated claim's trace, per §5."""
+    """True, False or None (undetermined) for one claim's trace, per §5 and §6.
+
+    The critical rate's denominator is every claim whose criticality is determined (§6), so a clean claim is False
+    (not critical) whenever the rulebook decides at least one decision for the case, and None otherwise."""
     subtype = trace["subtype"]
-    if subtype is None:
-        return None
-    if subtype in (6, 7):
-        return False
     verdicts = verdicts or decide(case_from(vision, facts))
     determined = {d: v for d, v in verdicts.items() if v.value != UNDETERMINED}
     if not determined:
         return None
+    if subtype is None or subtype in (6, 7):
+        return False
     if subtype in (1, 2):
         sub = trace.get("substitution")
         if not sub:

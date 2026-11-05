@@ -136,3 +136,12 @@ def test_render_spans_are_verbatim_and_not_recorded_is_stated():
     assert sheet.get("inr").type == "not_recorded" and sheet.get("wake_up_stroke").value is True
     c = rules.case_from({"haemorrhage": {"present": False}}, sheet)
     assert c.wake_up and c.sleep_mid_minutes == 600 - 480 / 2 and c.time_basis == "lkw_to_imaging"
+
+
+def test_clean_claims_count_in_the_critical_denominator():
+    vision, facts = _fixture("fx02_thrombectomy_large_mismatch")  # both decisions determined
+    assert rules.criticality({"subtype": None}, {}, vision, facts) is False
+    vision, facts = _fixture("fx01_thrombolysis_clear")  # thrombolysis yes, thrombectomy undetermined: still determined
+    assert rules.criticality({"subtype": None}, {}, vision, facts) is False
+    undetermined = {d: rules.Verdict(rules.UNDETERMINED) for d in ("thrombolysis", "thrombectomy")}
+    assert rules.criticality({"subtype": None}, {}, vision, facts, undetermined) is None

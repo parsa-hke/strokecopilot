@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-11-05 — Claude Code session (EXP-12 rescore with the rulebook in code; critical-rate fix)
+- **EXP-12 rescore** (commit `f4d754f`, no API calls): rate 0.080 (content 0.060) over 351 claims, as before.
+  - No omissions: the reasoner ignored no hard rule.
+  - No uncertainty omissions: it named every unknown that decided an outcome.
+  - Critical rate reported as 0.185.
+- **The 0.185 used the wrong denominator.** `docs/HALLUCINATION_METRIC.md` §6 divides by all claims whose criticality is determined, clean ones included. The code left clean claims undetermined, so 0.185 was the share of flagged claims that are critical.
+  - **Fix:** a clean, uncited or mis-attributed claim is now "not critical" whenever the rulebook decides at least one decision for the case, and undetermined only when both decisions are.
+  - A test covers it. The corrected EXP-12 rate needs one more free rescore.
+- pytest: 390 passed.
+- **Notion sync:** none until the rescore.
+
 ## 2026-11-05 — Claude Code session (scenarios.py and the rulebook in code)
 - **`nlp/verifier/rules.py`, the rulebook in code:** `decide()` returns each decision as yes, no or undetermined, with the passage IDs, the inputs that decided it, and any unknown or unobservable inputs that left it undetermined (`docs/HALLUCINATION_METRIC.md` §5).
   - **Thrombectomy** covers ICA/M1 by window, ASPECTS, pre-stroke mRS and age; M2 (dominance unobservable, so undetermined); basilar (PC-ASPECTS unobservable, so undetermined); and DAWN and DEFUSE-3 when ASPECTS is unknown at 6–24 h.
