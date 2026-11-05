@@ -456,9 +456,9 @@ Acceptance: `slim/isles24_slim_v1.tar` and the RSNA shards are ready, `isles24.p
 
 **Deferred, not done (DEC-6).** Do these when the lead first brings someone in. Nobody has been onboarded yet:
 
-- [ ] `00_template.ipynb`: install, mount, copy tarball, load one case, show maps + mask + clinical row, and warn against opening or attaching `splits/folds.json`. Must run top to bottom in five minutes on a T4
-- [ ] Onboard each teammate as they are assigned work: share repo + Notion + the Drive folder; fill the Person column; they accept the RSNA competition rules before getting dataset access; they run `00_template`
-- [ ] Assign Phase 2 tasks per role, with the notes in `docs/DATA.md`: Tmax and `native_volumes.csv` for Vision A; missing clinical data, time text and `unknown` occlusion site for NLP A
+- [ ] `00_template.ipynb`: install, mount, copy tarball, load one case, show maps + mask + clinical row, and warn against opening or attaching `splits/folds.json`. Must run top to bottom in five minutes on a T4 — written 6 Nov 2026 (`data/template.py`, tested; the figure checked locally on one development case); awaits its first T4 run
+- [ ] Onboard each teammate as they are assigned work: share repo + Notion + the Drive folder; fill the Person column; they accept the RSNA competition rules before getting dataset access; they run `00_template` — started 6 Nov 2026: Lorna, Mohamed, Hana and Benny invited to Notion; the access steps are in `docs/team/README.md`
+- [x] Assign Phase 2 tasks per role, with the notes in `docs/DATA.md`: Tmax and `native_volumes.csv` for Vision A; missing clinical data, time text and `unknown` occlusion site for NLP A — superseded: Phase 2 was done without the team. Phase 3 roles agreed by Parsa on 6 Nov 2026, with one brief each in `docs/team/`
 
 ### Phase 2 — Baselines (weeks 1–2; whole team)
 
@@ -497,6 +497,8 @@ Acceptance: a single notebook (`50_end_to_end.ipynb`, fixture mode) runs fixture
 ### Phase 3 — Build (weeks 3–5)
 
 Goal: each component made good; real vision outputs replace fixtures; the multi-LLM table exists.
+
+Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the long GPU runs, the paid model runs, `contract/build.py`, the verifier fixes and the decisions. Lorna: Vision A error analysis and confidence. Mohamed: Vision B operating point and ISLES'24 check. Hana: model shortlist, prompt v2, providers, real inputs. Benny: error taxonomy, comparison notebook, labelling kit. Lorna and Mohamed are the blind labellers.
 
 **Vision A**
 - [ ] All 5 folds for nnU-Net; mean ± std Dice; compare against threshold baseline

@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
+- **Roles agreed by Parsa:**
+  - Parsa keeps the long GPU runs, the paid model runs, `contract/build.py`, the verifier fixes and the decisions.
+  - Lorna: Vision A error analysis and confidence.
+  - Mohamed: Vision B operating point and ISLES'24 check.
+  - Hana: model shortlist, prompt v2, providers and real inputs.
+  - Benny: error taxonomy, comparison notebook and labelling kit.
+  - Lorna and Mohamed are the blind labellers.
+- **`docs/team/`:** a shared guide (access, rules, branches and pull requests, run records) and one brief per person, with inputs, deliverables and "done when". Teammates make no paid API calls.
+- **`notebooks/00_template.ipynb` and `data/template.py`** (tested): install, mount, checksum checks, unpack, and one development case's maps with infarct and occlusion outlines plus the note-safe clinical row.
+  - The figure was checked locally on one development case.
+  - It has not yet run on a Colab T4, so the 5-minute target is unmeasured.
+- **Collect** now also brings back nnU-Net's validation masks (`validation/*.nii.gz`) for folds 1–4. EXP-14's fold-0 masks stayed on the destroyed pod, so they need regenerating for the error analysis.
+- **Plan §7:** onboarding started; Phase 3 owners recorded; the old "assign Phase 2 tasks" item marked superseded.
+- pytest: 436 passed.
+- **Notion sync** (approved by Parsa, done 6 Nov 2026):
+  - Documentation → "Team guide (Phase 3)", with one brief subpage per person.
+  - Tasks → 17 Phase 3 rows, each linked to its brief: 13 for the team and 4 for Parsa. Lorna, Mohammed Elzeiny and Hana Ayad are set as Owners. Benny's 3 rows have no Owner yet, because his Notion account wasn't found.
+  - The two existing Phase 3 rows are assigned to Parsa.
+  - The onboarding row is In progress, and the template row is In review.
+  - The charter's Person column is filled in.
+
 ## 2026-11-05 — Claude Code session (DEC-21 rented GPU, EXP-13 and EXP-14, notes, trial passages checked; Phase 2 closed)
 - **DEC-21 pod tooling** (commit `5767cd4`): `src/strokecopilot/compute/` and `scripts/pod` (`offers`, `up`, `status`, `collect`, `down`, `monitor`).
   - `up` refuses without Parsa's `--go`, with a secret in the repo, with a balance under 1.5 × the estimated cost, with uncommitted code under `src/`, or with a tarball that fails its checksum. It destroys the pod if setup fails.
