@@ -282,3 +282,16 @@ def test_up_refuses_uncommitted_code(stubbed, monkeypatch):
     with pytest.raises(pod.PodError, match="Commit first"):
         pod.up("EXP-13", 11, go=True, log=lambda m: None)
     assert prov.created == []
+
+
+def test_search_unions_varying_samples():
+    class Sampler:
+        answers = iter([[{"id": 1, "dph_total": 0.4}], [{"id": 2, "dph_total": 0.3}], [{"id": 1, "dph_total": 0.4}]])
+
+        def offers(self, filters=None, limit=10):
+            return next(self.answers, [])
+    assert [o["id"] for o in pod.search(Sampler(), rounds=4)] == [2, 1]
+
+
+def test_bootstrap_installs_a_compiler():
+    assert "build-essential" in remote.BOOTSTRAP and "command -v gcc" in remote.BOOTSTRAP

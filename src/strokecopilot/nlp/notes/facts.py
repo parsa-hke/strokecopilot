@@ -49,6 +49,12 @@ FACT_KEYS = {
     "bp_diastolic": "diastolic blood pressure on arrival, mmHg",
     "glucose": "capillary glucose, mmol/L",
     "referral": "how the patient arrived (ambulance, transfer)",
+    # ISLES'24 notes (notes/generate.py): the data gives durations, not clock times.
+    "atrial_fibrillation": "history of atrial fibrillation",
+    "onset_to_door": "time from symptom onset to arrival",
+    "door_to_imaging": "time from arrival to imaging",
+    "found_to_imaging": "time from symptoms being found (wake-up stroke) to imaging",
+    "found_to_door": "time from symptoms being found (wake-up stroke) to arrival",
 }
 
 

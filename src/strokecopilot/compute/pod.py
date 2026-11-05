@@ -99,8 +99,9 @@ def head_commit():
     return subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
 
 
-def uncommitted(paths=("src", "pyproject.toml", "schemas", "splits")):
-    """Files under `paths` that differ from HEAD or are untracked: the pod runs HEAD, so these would be missing."""
+def uncommitted(paths=("src", "pyproject.toml", "schemas", "splits", ":!src/strokecopilot/compute")):
+    """Files under `paths` that differ from HEAD or are untracked: the pod runs HEAD, so these would be missing.
+    compute/ is left out: it runs on the Mac only."""
     out = subprocess.run(["git", "status", "--porcelain", "--", *paths], cwd=REPO, capture_output=True, text=True, check=True).stdout
     return [line[3:] for line in out.splitlines() if line.strip()]
 
@@ -145,7 +146,7 @@ def rsync_down(state, remote_path, local, includes):
     run(["rsync", "-a", "--prune-empty-dirs", *filters, "-e", e, f"{state['user']}@{state['host']}:{remote_path}", str(local)])
 
 
-def wait_ssh(state, tries=20, pause=15):
+def wait_ssh(state, tries=8, pause=15):
     for _ in range(tries):
         out = subprocess.run(ssh_base(state["host"], state["port"], state["user"]) + ["echo ok"], capture_output=True, text=True)
         if out.returncode == 0 and "ok" in out.stdout:
@@ -165,11 +166,21 @@ def preferred(offer):
     return (offer.get("geolocation") or "").rsplit(",", 1)[-1].strip().upper() in PREFERRED
 
 
+def search(p, rounds=6):
+    """Every offer seen over several searches, cheapest first. Vast answers each search with a varying sample of
+    about 15 matching offers (checked 5 Nov 2026), so one search can miss an offer that is still for rent."""
+    seen = {}
+    for _ in range(rounds):
+        for o in p.offers(limit=64):
+            seen[str(o["id"])] = o
+    return sorted(seen.values(), key=lambda o: o.get("dph_total", 1e9))
+
+
 def offers(exp, provider_name="vast", log=print, show=6):
     """The cheapest offers that pass the filters, US and EU hosts first."""
     spec = jobs.get(exp)
     p = provider(provider_name)
-    found = p.offers(limit=40)
+    found = search(p)
     found = ([o for o in found if preferred(o)] + [o for o in found if not preferred(o)])[:show]
     balance = p.balance()
     log(f"{exp}: {spec['what']}; hour limit {spec['hours']} h; estimated {spec['est_hours']} h. Balance ${balance:.2f}.")
@@ -190,7 +201,7 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
     p = provider(provider_name)
     if any(i.get("label") == label(exp) for i in p.instances()):
         raise PodError(f"An instance labelled {label(exp)} already exists. Run down first.")
-    offer = next((o for o in p.offers(limit=64) if str(o["id"]) == str(offer_id)), None)
+    offer = next((o for o in search(p, rounds=10) if str(o["id"]) == str(offer_id)), None)
     if offer is None:
         raise PodError(f"Offer {offer_id} no longer passes the filters or is gone. Run offers again.")
     need = offer["dph_total"] * spec["est_hours"] * BALANCE_MARGIN
@@ -223,6 +234,7 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
         rsync_up(state, tar, f"{remote.ROOT}/data/{TARBALL}")
         archive = repo_archive(commit, RUNS / exp / "repo.tar")
         rsync_up(state, archive, f"{remote.ROOT}/repo.tar")
+        archive.unlink(missing_ok=True)
         log(f"Copied the tarball and the repo at {commit[:7]} in {time.time() - started:.0f} s.")
         remote_sh(state, "cd /root/sc && tar -xf repo.tar -C repo && rm repo.tar")
         log(remote_sh(state, remote.SETUP.replace("{nnunet}", jobs.NNUNET_VERSION), timeout=1800).strip())

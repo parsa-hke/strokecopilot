@@ -8,12 +8,14 @@ ROOT = "/root/sc"
 # SSH sessions do not always inherit the image's PATH; the PyTorch images keep python in /opt/conda/bin.
 PATH = "export PATH=/opt/conda/bin:/usr/local/bin:$PATH"
 
-# Run first, before any copy: rsync and tmux are not in every image.
+# Run first, before any copy: rsync and tmux are not in every image, and the PyTorch runtime image has no C compiler,
+# which torch.compile (on by default in nnU-Net 2.8) needs (EXP-13, 5 Nov 2026: "Failed to find C compiler").
 BOOTSTRAP = r"""set -e
 mkdir -p /root/sc/data /root/sc/repo /root/sc/runs
-if ! command -v rsync >/dev/null || ! command -v tmux >/dev/null; then
-  (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rsync tmux curl) >/dev/null 2>&1
+if ! command -v rsync >/dev/null || ! command -v tmux >/dev/null || ! command -v gcc >/dev/null; then
+  (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rsync tmux curl build-essential) >/dev/null 2>&1
 fi
+gcc --version | head -1
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 nproc
 free -g | awk '/Mem:/ {print $2 " GiB RAM"}'
@@ -64,7 +66,11 @@ def start_job(exp, command):
 def status(exp):
     run = f"/root/sc/runs/{exp}"
     return (f"if [ -f {run}/job.exit ]; then echo EXIT=$(cat {run}/job.exit); else echo RUNNING; fi; "
-            f"tail -n 5 {run}/job.log 2>/dev/null; tail -n 2 /root/sc/watchdog.log 2>/dev/null")
+            f"tail -n 5 {run}/job.log 2>/dev/null; "
+            # job.log lags (nnU-Net's output is block-buffered into it); nnU-Net's own log is current.
+            f"t=$(ls -t {run}/nnUNet_results/*/*/fold_*/training_log_*.txt 2>/dev/null | head -1); "
+            f"[ -n \"$t\" ] && echo \"epochs done: $(grep -c 'Epoch time' $t)\" && grep -E 'Epoch time|Pseudo dice' $t | tail -2; "
+            f"tail -n 2 /root/sc/watchdog.log 2>/dev/null")
 
 
 def quote(s):

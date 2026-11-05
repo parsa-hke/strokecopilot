@@ -1,7 +1,8 @@
 """The runs a pod can do: what each runs, its hour limit and its cost estimate (DEC-21).
 
 Each entry is one Experiments row. `hours` is the watchdog's hard limit; `est_hours` sizes the balance check and the
-approval message. Epoch times are estimates until EXP-13 measures them on a 4090.
+approval message. EXP-13 measured 37-44 s per epoch on a 4090 after the first (69 s, with compilation), so 300
+epochs take about 3.3-3.7 h, plus about 15 min of setup and a few minutes of validation.
 """
 
 NNUNET_VERSION = "2.8.1"
@@ -10,7 +11,7 @@ RUNS = {
     "EXP-13": {"what": "nnU-Net fold 0 dummy: 2 epochs, resume to 3, predict and score (timing, workers, resume, collect, down)",
                "run_dir": "EXP-13_nnunet_pod_dummy", "args": "--mode dummy --fold 0", "hours": 1.5, "est_hours": 0.6},
     "EXP-14": {"what": "nnU-Net fold 0, 300 epochs (DEC-21)",
-               "run_dir": "EXP-14_nnunet_fold0", "args": "--mode train --fold 0 --epochs 300", "hours": 9.0, "est_hours": 6.5},
+               "run_dir": "EXP-14_nnunet_fold0", "args": "--mode train --fold 0 --epochs 300", "hours": 5.5, "est_hours": 4.0},
 }
 
 # What collect brings back: never the preprocessed data or the tarball.
