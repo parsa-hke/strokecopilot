@@ -1,0 +1,7 @@
+#!/bin/bash
+# Rented GPU pods (DEC-21, plan §4.6): scripts/pod offers|up|status|collect|down EXP-<id> [--offer ID --go]
+# Reads VAST_API_KEY from the environment (~/.zshenv); never pass a key on the command line.
+set -e
+cd "$(dirname "$0")/.."
+[ -f "$HOME/.zshenv" ] && source "$HOME/.zshenv" >/dev/null 2>&1 || true
+exec ./.venv/bin/python -m strokecopilot.compute.pod "$@"

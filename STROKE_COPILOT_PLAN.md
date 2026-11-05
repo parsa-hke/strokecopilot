@@ -95,6 +95,7 @@ These are recorded in the Notion Decisions log. Do not change them without a new
 | DEC-15 | `haemorrhage.confidence` means the calibrated probability that a haemorrhage is present | Decided |
 | DEC-16 | Vision B uses all labelled RSNA data, with no subset | Decided |
 | DEC-17 | Vision B preprocesses once to 320 px JPEG tar shards on Kaggle, then trains there, as an exception to DEC-3; only checkpoints and metrics move to Drive | Decided |
+| DEC-21 | Vision A training (nnU-Net on ISLES'24) and, later, Phase 4 open-model inference if an API cannot serve the model, run on a GPU pod rented per job, as an amendment to DEC-3. Provider: Vast.ai, on-demand, one RTX 4090, from verified hosts with reliability ≥ 0.98, ≥ 16 CPU cores, ≥ 32 GB RAM, ≥ 100 GB disk, ≥ 200 Mbps download and a driver for CUDA 12.8, preferring hosts in the US or EU. Amended 5 Nov 2026: the first draft also required datacenter hosts, but no datacenter 4090 was offered under 0.50 USD/h (cheapest 0.72 USD/h), while verified non-datacenter hosts started near 0.40 USD/h. Fallback: RunPod Community Cloud RTX 4090, if no Vast offer passes at under 0.50 USD/h. Budget: 8–15 USD of GPU rental for the whole project, with no persistent volume; every run ends by destroying its pod, and a watchdog on the pod enforces an hour limit per run. No A100: EXP-4 ran this plan (3d_fullres, patch 96 × 128 × 112, batch 4) on a 24 GB L4. Vision A trains 300 epochs per fold, all five folds, fold 0 first. Kaggle keeps RSNA (DEC-17); Drive stays the store; Colab stays for the demo and the thin notebooks (§4.6) | Decided — Parsa, 5 Nov 2026; host filter relaxed by Parsa, 5 Nov 2026 |
 | DEC-20 | The verifier's judge is `claude-haiku-5-5` (effort medium, `judge_v2`) with τ = 0.6; the claim extractor is `claude-sonnet-5-5` (effort medium). Chosen by the EXP-11 bake-off: both judges reach the seeded-error bar with the same recall, Haiku with fewer false flags (0.010 vs 0.019) at about a twentieth of the cost per call | Decided — Parsa, 4 Nov 2026 |
 | DEC-19 | The reasoner gets the whole rulebook in its prompt, not retrieved passages. Retrieval stays only for the verifier's candidate passages (`BAAI/bge-base-en-v1.5`). Experiment arm 1 becomes with vs without the rulebook. Reason: EXP-7 found top-k retrieval missed 6 of 15 key fixture rules, because embeddings cannot tell apart rule rows that differ only in numbers. The rulebook is about 4,600 tokens, so sending it whole is cheap | Decided — Parsa, 4 Nov 2026 |
 | DEC-18 | The corpus is a rulebook in our own words, one passage per criterion, each pointing to its source, section, recommendation and page. It keeps the numeric criteria as facts and copies no wording. The reasoner and judge see only our text; the PDFs stay on Drive for checking. Reason: AHA allows no reproduction without permission, and NEJM reserves text and data mining and AI use (`docs/DATA_USE.md`). The sources in DEC-2 are unchanged | Decided — Parsa, 4 Nov 2026 |
@@ -257,7 +258,16 @@ Kaggle token, Hugging Face token, LLM API keys: Colab Secrets panel only. The pa
 
 ### 4.5 Local development (optional)
 
-`pip install -e .` in a venv works for the NLP side and tests. Vision training is Colab-only.
+`pip install -e .` in a venv works for the NLP side and tests. Vision training runs on Colab or a rented pod (§4.6).
+
+### 4.6 Rented GPUs (DEC-21)
+
+Vision A training runs on a Vast.ai RTX 4090 pod rented for one job, driven from the Mac by `scripts/pod` (logic in `src/strokecopilot/compute/`):
+- `scripts/pod up EXP-<id>` checks the repo for secrets and the Vast balance (at least 1.5 × the run's estimated cost), creates the pod on an offer Parsa approved from `scripts/pod offers EXP-<id>` (`--offer <id> --go`), sends the tarball and an archive of the repo at the pinned commit, installs, and starts the job detached under `tmux` with its log on the pod. A watchdog on the pod destroys it after the run's hour limit.
+- `scripts/pod collect EXP-<id>` copies `runs/EXP-<id>/` (config, metrics, best checkpoint, log) back to Drive, then runs `down`.
+- `scripts/pod down EXP-<id>` destroys the pod and confirms by listing instances.
+
+No Drive or GitHub token ever reaches a pod: data and code go up from the Mac over SSH, and results come back the same way. RSNA data never touches a pod (DEC-17, `docs/DATA_USE.md`). A pod is created only after Parsa approves the offer, price and hour limit for that run.
 
 ---
 

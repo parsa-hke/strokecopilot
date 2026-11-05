@@ -1,0 +1,71 @@
+"""Shell scripts that run on the pod. Kept as strings so tests can check them and `pod.py` can send them over SSH.
+
+Layout on the pod (/root/sc): data/ (the tarball), repo/ (the package at the pinned commit), runs/EXP-<id>/ (outputs,
+job.log, job.exit), watchdog.log.
+"""
+
+ROOT = "/root/sc"
+# SSH sessions do not always inherit the image's PATH; the PyTorch images keep python in /opt/conda/bin.
+PATH = "export PATH=/opt/conda/bin:/usr/local/bin:$PATH"
+
+# Run first, before any copy: rsync and tmux are not in every image.
+BOOTSTRAP = r"""set -e
+mkdir -p /root/sc/data /root/sc/repo /root/sc/runs
+if ! command -v rsync >/dev/null || ! command -v tmux >/dev/null; then
+  (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rsync tmux curl) >/dev/null 2>&1
+fi
+nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+nproc
+free -g | awk '/Mem:/ {print $2 " GiB RAM"}'
+df -BG /root | awk 'NR==2 {print $4 " free on /root"}'
+"""
+
+# Install the package from the archive sent up from the Mac, and nnU-Net from PyPI. No token is involved.
+SETUP = r"""set -e
+export PATH=/opt/conda/bin:/usr/local/bin:$PATH
+cd /root/sc/repo
+python -m pip install -q --upgrade pip >/dev/null
+python -m pip install -q ".[isles]" "nnunetv2=={nnunet}" >/root/sc/pip.log 2>&1 || (tail -20 /root/sc/pip.log; exit 1)
+python -c "import torch, strokecopilot; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())"
+"""
+
+# The watchdog destroys the pod after the hour limit with the instance's own key, which Vast sets in every instance
+# and which can only act on that instance. No key of ours is on the pod. If the destroy fails, it stops the container,
+# which ends GPU billing (storage billing continues until `down`).
+WATCHDOG = r"""#!/bin/bash
+LIMIT_S="$1"
+getvar() { local v="${!1}"; if [ -z "$v" ]; then v=$(tr '\0' '\n' </proc/1/environ | sed -n "s/^$1=//p"); fi; echo "$v"; }
+echo "watchdog armed for ${LIMIT_S} s at $(date -u +%FT%TZ)" >> /root/sc/watchdog.log
+sleep "$LIMIT_S"
+ID=$(getvar CONTAINER_ID); KEY=$(getvar CONTAINER_API_KEY)
+echo "hour limit reached at $(date -u +%FT%TZ); destroying instance ${ID}" >> /root/sc/watchdog.log
+curl -s -o /dev/null -w "destroy HTTP %{http_code}\n" -X DELETE -H "Authorization: Bearer ${KEY}" \
+  "https://console.vast.ai/api/v0/instances/${ID}/" >> /root/sc/watchdog.log 2>&1
+sleep 120
+echo "still alive after destroy; stopping the container" >> /root/sc/watchdog.log
+kill -TERM 1
+"""
+
+
+def start_watchdog(limit_s):
+    return (f"cat > /root/sc/watchdog.sh <<'WD'\n{WATCHDOG}WD\nchmod +x /root/sc/watchdog.sh\n"
+            f"nohup setsid /root/sc/watchdog.sh {int(limit_s)} >/dev/null 2>&1 < /dev/null &\n"
+            "sleep 1; pgrep -f watchdog.sh >/dev/null && echo watchdog running")
+
+
+def start_job(exp, command):
+    """Start the job detached under tmux; its exit code lands in job.exit when it ends."""
+    run = f"/root/sc/runs/{exp}"
+    inner = f"{PATH}; cd /root/sc && ( {command} ) > {run}/job.log 2>&1; echo $? > {run}/job.exit"
+    return (f"mkdir -p {run} && rm -f {run}/job.exit && tmux new-session -d -s job {quote(inner)} "
+            f"&& sleep 2 && tmux has-session -t job && echo job started")
+
+
+def status(exp):
+    run = f"/root/sc/runs/{exp}"
+    return (f"if [ -f {run}/job.exit ]; then echo EXIT=$(cat {run}/job.exit); else echo RUNNING; fi; "
+            f"tail -n 5 {run}/job.log 2>/dev/null; tail -n 2 /root/sc/watchdog.log 2>/dev/null")
+
+
+def quote(s):
+    return "'" + s.replace("'", "'\"'\"'") + "'"
