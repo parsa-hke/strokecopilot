@@ -124,8 +124,9 @@ def _dawn(c):
 def _defuse3(c):
     if None in (c.age, c.nihss, c.mrs, c.core, c.mismatch) or c.minutes > DEFUSE3_LATE:
         return False
-    ratio_ok = c.ratio >= 1.8 if c.ratio is not None else c.core < 1
-    return 18 <= c.age <= 90 and c.nihss >= 6 and c.mrs <= 2 and c.core < 70 and ratio_ok and c.mismatch >= 15
+    # Ratio above 1.8 and mismatch above 15 mL, strictly: checked against the DEFUSE-3 paper by Parsa, 5 Nov 2026
+    ratio_ok = c.ratio > 1.8 if c.ratio is not None else c.core < 1
+    return 18 <= c.age <= 90 and c.nihss >= 6 and c.mrs <= 2 and c.core < 70 and ratio_ok and c.mismatch > 15
 
 
 def thrombectomy(c):

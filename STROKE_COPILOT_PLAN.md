@@ -263,7 +263,7 @@ Kaggle token, Hugging Face token, LLM API keys: Colab Secrets panel only. The pa
 ### 4.6 Rented GPUs (DEC-21)
 
 Vision A training runs on a Vast.ai RTX 4090 pod rented for one job, driven from the Mac by `scripts/pod` (logic in `src/strokecopilot/compute/`):
-- `scripts/pod up EXP-<id>` checks the repo for secrets and the Vast balance (at least 1.5 × the run's estimated cost), creates the pod on an offer Parsa approved from `scripts/pod offers EXP-<id>` (`--offer <id> --go`), sends the tarball and an archive of the repo at the pinned commit, installs, and starts the job detached under `tmux` with its log on the pod. A watchdog on the pod destroys it after the run's hour limit.
+- `scripts/pod up EXP-<id>` checks the repo for secrets, the Vast balance (at least 1.5 × the run's estimated cost) and the host's contract (it must run at least 1 h past the run's hour limit, because Vast stops the pod when the contract ends, as it did to EXP-14), creates the pod on an offer Parsa approved from `scripts/pod offers EXP-<id>` (`--offer <id> --go`), sends the tarball and an archive of the repo at the pinned commit, installs, and starts the job detached under `tmux` with its log on the pod. A watchdog on the pod destroys it after the run's hour limit.
 - `scripts/pod collect EXP-<id>` copies `runs/EXP-<id>/` (config, metrics, best checkpoint, log) back to Drive, then runs `down`.
 - `scripts/pod down EXP-<id>` destroys the pod and confirms by listing instances.
 
@@ -466,7 +466,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 
 **Vision A (perfusion)**
 - [x] `thresholds.py`: core = rCBF < 30% of contralateral, penumbra = Tmax > 6 s; compute volumes; evaluate Dice of thresholded core vs final infarct per fold — this is the clinical-standard baseline (EXP-1: Dice 0.111 ± 0.031, abs volume error 25.2 mL; `docs/DATA.md`)
-- [ ] nnU-Net v2 dataset conversion (perfusion maps as channels, final infarct as label); train fold 0 with reduced epochs; checkpoint/resume to Drive; report Dice
+- [x] nnU-Net v2 dataset conversion (perfusion maps as channels, final infarct as label); train fold 0 with reduced epochs; checkpoint/resume to Drive; report Dice — done 5 Nov 2026 as EXP-14, at the full 300 epochs on a rented RTX 4090 (DEC-21) instead of reduced epochs: fold 0 Dice 0.218 ± 0.249 (median 0.111), abs volume error 19.6 mL, against the threshold baseline's 0.123 and 20.5 mL on the same 26 cases. Checkpoint/resume proven live: Vast stopped the pod at epoch 270 when the host's contract ended, and training resumed from the epoch-269 checkpoint. Checkpoints on Drive `runs/EXP-14_nnunet_fold0/`. Cost 2.14 USD
 - [x] `volumes.py`: mask → mL using spacing; mismatch ratio/volume via `contract.schema.derive_mismatch`; occlusion-site lookup from the occlusion mask and Circle of Willis labels (distance limit 5 mm, from EXP-1)
 
 **Vision B (haemorrhage)**
@@ -475,7 +475,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 - [x] `infer.py`: scan → `{present, confidence}` — code and tests done 4 Nov 2026; the EXP-6 calibrator plugs in through `calibration.json`
 
 **NLP A (reasoner)**
-- [ ] `ingest.py`: guideline PDF + two trial papers → passages with stable IDs; `docs/RULEBOOK.md` generated from the same source — changed by DEC-18: `corpus/RULEBOOK.md` (own words) → `corpus/passages.jsonl`, with checks. Code, tests and 47 passages done 4 Nov 2026: all 43 AHA passages checked against the guideline, off-topic passages added, copy check clean. Ticked once a person has checked the 2 DAWN and 2 DEFUSE-3 passages
+- [x] `ingest.py`: guideline PDF + two trial papers → passages with stable IDs; `docs/RULEBOOK.md` generated from the same source — changed by DEC-18: `corpus/RULEBOOK.md` (own words) → `corpus/passages.jsonl`, with checks. Code, tests and 47 passages done 4 Nov 2026: all 43 AHA passages checked against the guideline, off-topic passages added, copy check clean. Done 5 Nov 2026: Parsa checked the 2 DAWN and 2 DEFUSE-3 passages against the trial protocols (supplementary appendices), with pages; 15 of 18 facts matched, 1 found on a second look (DEFUSE-3 pre-stroke mRS 0–2), and 2 corrected: DEFUSE-3 ratio above 1.8 and mismatch above 15 mL (strict), in the passage and in `rules.py` (no scenario decision changed). All 47 passages checked
 - [x] `index.py`: embed passages; retrieve top-k by query; sanity-check that each fixture's expected rule IDs are retrievable — done 4 Nov 2026. The check (EXP-7, bge-base) found 9 of 15 fixture rules, so the reasoner gets the whole rulebook (DEC-19) and `index.py` serves only the verifier's candidates
 - [x] `notes/generate.py`: clinical row → triage note (templated with controlled variation), using allowed columns only; test that nothing post-treatment leaks; produce notes for all 149 cases — done 5 Nov 2026 for the 129 development cases (the 20 held-out cases follow in Phase 4, under the held-out rule). Durations only, no invented clock times; missing rule inputs written as not recorded. Run on Drive `artifacts/isles24_notes_v1/`: onset time known in 45, wake-up 36 (last known well never recorded), no onset time in 44, onset to door without door to imaging in 4; not recorded: pre-stroke mRS 52, INR 53, NIHSS 4, anticoagulation 3
 - [x] `reasoner/run.py` v0 with `prompts/reasoner_v1.md`: fixture JSON + note + the whole rulebook (DEC-19) → `recommendation.json`; run on all five fixtures with one model — code, prompt, tests and `31_nlpA_reasoner.ipynb` done 4 Nov 2026 with a fake model; EXP-8 (dummy) and EXP-9 (five fixtures × 2, `claude-sonnet-5-5`): 0 format failures, 18/18 judged decisions right, $0.37
@@ -490,7 +490,7 @@ Goal: every box in the diagram does *something*, measured, even if badly.
 - [x] Run verifier on the five fixture outputs; `tests/test_claims.py`, `tests/test_trace.py` — EXP-12 (`50_end_to_end.ipynb`, 4 Nov 2026): 371 claims, verifier rate 0.235. Not yet adjudicated, and most flags look like verifier issues on real output (see CHANGELOG)
 
 **Everyone**
-- [ ] Every run above has an Experiments row and a `runs/EXP-*` folder with `metrics.json`
+- [x] Every run above has an Experiments row and a `runs/EXP-*` folder with `metrics.json` — checked 5 Nov 2026 for EXP-1 to EXP-14 (EXP-11 splits its metrics across files; EXP-3 and EXP-5 got their `metrics.json` in this check)
 
 Acceptance: a single notebook (`50_end_to_end.ipynb`, fixture mode) runs fixture → reasoner → verifier and prints a hallucination rate. Vision baselines have fold-0 numbers in Experiments.
 
@@ -620,7 +620,7 @@ Providers: thin wrappers with identical signatures for each model; temperature 0
 
 - Thrombectomy, M2 and beyond (§4.7.2): dominant proximal M2, 0–6 h, mRS 0–1, NIHSS ≥ 6, ASPECTS ≥ 6: COR 2a, benefits uncertain. Non-dominant or codominant proximal M2, distal MCA, ACA, PCA: COR 3 no benefit.
 - Thrombectomy, basilar, within 24 h (§4.7.3): mRS 0–1, NIHSS ≥ 10, PC-ASPECTS ≥ 6: COR 1. NIHSS 6–9: COR 2b.
-- Trial criteria (§4.7.2): the guideline's recommendations are written on ASPECTS, not perfusion mismatch. It cites DAWN and DEFUSE-3 as establishing late-window benefit and notes similar outcomes with NCCT selection, so these criteria are supporting evidence and our route to a decision when ASPECTS is unknown. Numeric criteria come from the trial papers and must be verified at ingestion: DEFUSE-3 (6–16 h): core < 70 mL, ratio ≥ 1.8, mismatch ≥ 15 mL. DAWN (6–24 h): age ≥ 80: NIHSS ≥ 10 and core < 21 mL; age < 80: NIHSS ≥ 10 and core < 31 mL, or NIHSS ≥ 20 and core 31–51 mL.
+- Trial criteria (§4.7.2): the guideline's recommendations are written on ASPECTS, not perfusion mismatch. It cites DAWN and DEFUSE-3 as establishing late-window benefit and notes similar outcomes with NCCT selection, so these criteria are supporting evidence and our route to a decision when ASPECTS is unknown. Numeric criteria come from the trial papers and must be verified at ingestion: DEFUSE-3 (6–16 h): core < 70 mL, ratio > 1.8, mismatch > 15 mL (strict; checked against the paper by Parsa on 5 Nov 2026). DAWN (6–24 h): age ≥ 80: NIHSS ≥ 10 and core < 21 mL; age < 80: NIHSS ≥ 10 and core < 31 mL, or NIHSS ≥ 20 and core 31–51 mL.
 - Inputs we cannot observe: ASPECTS from the real pipeline, significant mass effect, M2 dominance, and extensive hypodensity. The reasoner must name them as uncertainties, never assume them.
 
 ### 8.4 NLP B — verifier and evaluation

@@ -41,6 +41,13 @@ def _http(method, url, key, body=None, timeout=60):
         raise VastError(f"{method} {url.split('/api', 1)[1]} -> HTTP {e.code}: {detail}") from None
 
 
+def contract_hours(offer, now=None):
+    """Hours left on the host's contract. Vast stops the instance when it ends (EXP-14 was stopped at epoch 270)."""
+    if offer.get("end_date"):
+        return (offer["end_date"] - (now or time.time())) / 3600
+    return (offer.get("duration") or 0) / 3600
+
+
 class Vast:
     name = "vast"
 
@@ -107,4 +114,5 @@ class Vast:
         return (f"offer {offer.get('id')}: ${offer.get('dph_total', 0):.3f}/h, {offer.get('gpu_name')}, "
                 f"{offer.get('cpu_cores_effective', 0):.0f} CPU cores, {offer.get('cpu_ram', 0) / 1000:.0f} GB RAM, "
                 f"{offer.get('disk_space', 0):.0f} GB disk, {offer.get('inet_down', 0):.0f} Mbps down, "
-                f"reliability {offer.get('reliability', 0):.3f}, {offer.get('geolocation') or '?'}")
+                f"reliability {offer.get('reliability', 0):.3f}, {offer.get('geolocation') or '?'}, "
+                f"host contract {contract_hours(offer):.1f} h left")

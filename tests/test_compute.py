@@ -2,10 +2,12 @@
 
 import json
 import subprocess
+import time
 
 import pytest
 
 from strokecopilot.compute import jobs, keyscan, pod, remote
+from strokecopilot.compute import vast
 from strokecopilot.compute.vast import FILTERS, Vast, VastError
 
 
@@ -133,7 +135,7 @@ def test_jobs_registry():
 
 class StubProvider:
     def __init__(self, balance=5.0, offers=None):
-        self._balance, self._offers = balance, offers if offers is not None else [{"id": 11, "dph_total": 0.40}]
+        self._balance, self._offers = balance, offers if offers is not None else [{"id": 11, "dph_total": 0.40, "duration": 500 * 3600}]
         self.live, self.created, self.destroyed = {}, [], []
 
     def balance(self):
@@ -295,3 +297,68 @@ def test_search_unions_varying_samples():
 
 def test_bootstrap_installs_a_compiler():
     assert "build-essential" in remote.BOOTSTRAP and "command -v gcc" in remote.BOOTSTRAP
+
+
+LOG = """2026-11-05 15:04:28.141622: Epoch 0
+2026-11-05 15:04:28.141860: Current learning rate: 0.01
+2026-11-05 15:05:37.150419: train_loss -0.1016
+2026-11-05 15:05:37.150601: val_loss -0.1722
+2026-11-05 15:05:37.150646: Pseudo dice [np.float32(0.3117)]
+2026-11-05 15:05:37.150700: Epoch time: 69.01 s
+2026-11-05 15:05:38.035856: Epoch 1
+2026-11-05 15:06:15.382176: train_loss -0.1465
+2026-11-05 15:06:15.382359: val_loss -0.2016
+2026-11-05 15:06:15.382405: Pseudo dice [np.float32(0.369)]
+2026-11-05 15:06:15.382456: Epoch time: 37.35 s
+2026-11-05 15:06:16.000000: Epoch 2
+#EXIT
+2026-11-05T15:14:26Z watchdog armed for 19800 s at 2026-11-05T15:14:26Z
+"""
+
+
+def test_monitor_parses_finished_epochs_only():
+    from strokecopilot.compute import monitor
+    ep = monitor.parse_log(LOG)
+    assert [e["epoch"] for e in ep] == [0, 1]
+    assert ep[1]["dice"] == 0.369 and ep[1]["seconds"] == 37.35 and ep[1]["train_loss"] == -0.1465
+    assert ep[0]["ema"] == 0.3117 and ep[1]["ema"] == round(0.9 * 0.3117 + 0.1 * 0.369, 4)
+
+
+def test_monitor_summary_eta_cost_and_watchdog():
+    import datetime as dt
+    from strokecopilot.compute import monitor
+    state = {"created_utc": "2026-11-05T15:00:00+00:00", "dph": 0.5, "hours_limit": 5.5, "instance_id": 1}
+    now = dt.datetime(2026, 11, 5, 16, 0, tzinfo=dt.timezone.utc)
+    d = monitor.summarise("EXP-14", state, LOG, now=now)
+    assert d["epochs_total"] == 300 and d["epochs_done"] == 2 and d["phase"] == "training"
+    assert d["cost_so_far"] == 0.5 and d["exit_code"] is None
+    assert d["watchdog_deadline_utc"].startswith("2026-11-05T20:44:26")
+    assert d["cost_projected"] > d["cost_so_far"]
+    assert "sub-stroke" not in json.dumps(d)
+    d = monitor.summarise("EXP-14", {**state, "destroyed": True, "destroyed_utc": "2026-11-05T19:00:00+00:00"},
+                          LOG.replace("#EXIT", "#EXIT 0"), now=now)
+    assert d["phase"].startswith("finished") and d["exit_code"] == 0 and d["hours_up"] == 4.0
+
+
+def test_monitor_reads_a_resumed_run_across_logs():
+    from strokecopilot.compute import monitor
+    first = ("2026-11-05 18:24:00.1: Epoch 269\n2026-11-05 18:24:01.1: train_loss -0.66\n2026-11-05 18:24:01.1: val_loss -0.18\n"
+             "2026-11-05 18:24:01.1: Pseudo dice [np.float32(0.46)]\n2026-11-05 18:24:37.1: Epoch time: 37.6 s\n"
+             "2026-11-05 18:25:52.9: Epoch 270\n")
+    second = ("2026-11-05 19:33:32.9: Epoch 270\n2026-11-05 19:34:10.1: train_loss -0.67\n2026-11-05 19:34:10.1: val_loss -0.18\n"
+              "2026-11-05 19:34:10.1: Pseudo dice [np.float32(0.51)]\n2026-11-05 19:34:17.6: Epoch time: 44.7 s\n")
+    epochs = monitor.parse_log(first + second)
+    assert [e["epoch"] for e in epochs] == [269, 270] and epochs[-1]["dice"] == 0.51
+    assert "ls -tr" in monitor.REMOTE and "head -1" not in monitor.REMOTE
+    assert "ls -tr" in remote.status("EXP-14") and "head -1" not in remote.status("EXP-14")
+
+
+def test_up_refuses_an_offer_whose_contract_ends_too_soon(stubbed):
+    prov, _, _ = stubbed
+    prov._offers = [{"id": 11, "dph_total": 0.40, "end_date": time.time() + 3 * 3600}]
+    with pytest.raises(pod.PodError, match="contract ends"):
+        pod.up("EXP-14", 11, go=True, log=lambda m: None)
+    assert prov.created == []
+    assert round(vast.contract_hours({"end_date": 1000 + 7200}, now=1000), 1) == 2.0
+    assert vast.contract_hours({"duration": 3600}) == 1.0
+    assert "contract 2.0 h left" in Vast(key="k").describe({"id": 1, "end_date": time.time() + 7200 + 60})

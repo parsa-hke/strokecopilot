@@ -515,45 +515,45 @@ The risk of antiplatelet drugs in the first 24 hours after IV thrombolysis, with
 ### DEFUSE3-inclusion-clinical
 - source: DEFUSE3
 - section: Methods
-- pointer: Methods, eligibility criteria
-- page:
+- pointer: Supplementary appendix (protocol), clinical inclusion criteria, pre-stroke mRS 0 to 2 included; checked by Parsa, 5 Nov 2026
+- page: suppl. PDF p. 5 of 19
 - treatment: thrombectomy
 - must_have: yes
-- status: draft
+- status: checked
 
 DEFUSE-3 enrolled patients aged 18 to 90 with an occlusion of the ICA or the M1 segment of the MCA, NIHSS 6 or more and pre-stroke mRS 0 to 2, who could start thrombectomy 6 to 16 hours after last known well.
 
 ### DEFUSE3-inclusion-imaging
 - source: DEFUSE3
 - section: Methods
-- pointer: Methods, imaging eligibility criteria
-- page:
+- pointer: Supplementary appendix (protocol), neuroimaging inclusion criteria; checked by Parsa, 5 Nov 2026
+- page: suppl. PDF p. 6 of 19
 - treatment: thrombectomy
 - must_have: yes
-- status: draft
+- status: checked
 
-DEFUSE-3 required a perfusion profile on CT or MRI: an ischaemic core under 70 mL, a mismatch ratio of 1.8 or more (hypoperfused volume with Tmax over 6 s divided by core), and a mismatch volume of 15 mL or more (hypoperfused volume minus core).
+DEFUSE-3 required a perfusion profile on CT or MRI: an ischaemic core under 70 mL, a mismatch ratio above 1.8 (hypoperfused volume with Tmax over 6 s divided by core), and a mismatch volume above 15 mL (hypoperfused volume minus core).
 
 ## Trial criteria: DAWN
 
 ### DAWN-inclusion-clinical
 - source: DAWN
 - section: Methods
-- pointer: Methods, eligibility criteria
-- page:
+- pointer: Supplementary appendix (protocol), clinical inclusion criteria; checked by Parsa, 5 Nov 2026
+- page: suppl. PDF p. 6 of 91
 - treatment: thrombectomy
 - must_have: yes
-- status: draft
+- status: checked
 
 DAWN enrolled adults with an occlusion of the intracranial ICA or the M1 segment, pre-stroke mRS 0 or 1, who could be treated 6 to 24 hours after last known well and whose deficit was out of proportion to the infarct core (clinical-core mismatch).
 
 ### DAWN-inclusion-mismatch-groups
 - source: DAWN
 - section: Methods
-- pointer: Methods, clinical-core mismatch groups
-- page:
+- pointer: Supplementary appendix (protocol), clinical-core mismatch groups A-C; checked by Parsa, 5 Nov 2026
+- page: suppl. PDF pp. 12-13 of 91
 - treatment: thrombectomy
 - must_have: yes
-- status: draft
+- status: checked
 
 DAWN defined clinical-core mismatch in three groups. Age 80 or over: NIHSS 10 or more and core under 21 mL. Under 80: NIHSS 10 or more and core under 31 mL. Under 80: NIHSS 20 or more and core from 31 mL up to under 51 mL.

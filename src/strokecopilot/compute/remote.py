@@ -68,8 +68,9 @@ def status(exp):
     return (f"if [ -f {run}/job.exit ]; then echo EXIT=$(cat {run}/job.exit); else echo RUNNING; fi; "
             f"tail -n 5 {run}/job.log 2>/dev/null; "
             # job.log lags (nnU-Net's output is block-buffered into it); nnU-Net's own log is current.
-            f"t=$(ls -t {run}/nnUNet_results/*/*/fold_*/training_log_*.txt 2>/dev/null | head -1); "
-            f"[ -n \"$t\" ] && echo \"epochs done: $(grep -c 'Epoch time' $t)\" && grep -E 'Epoch time|Pseudo dice' $t | tail -2; "
+            # A resumed run writes a new log, so read them all, oldest first.
+            f"t=$(ls -tr {run}/nnUNet_results/*/*/fold_*/training_log_*.txt 2>/dev/null); "
+            f"[ -n \"$t\" ] && echo \"epochs done: $(cat $t | grep -c 'Epoch time')\" && cat $t | grep -E 'Epoch time|Pseudo dice' | tail -2; "
             f"tail -n 2 /root/sc/watchdog.log 2>/dev/null")
 
 

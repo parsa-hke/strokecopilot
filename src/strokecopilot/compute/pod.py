@@ -21,7 +21,7 @@ import sys
 import time
 from pathlib import Path
 
-from strokecopilot.compute import jobs, keyscan, remote
+from strokecopilot.compute import jobs, keyscan, remote, vast
 
 REPO = Path(__file__).resolve().parents[3]
 RUNS = REPO / "runs"
@@ -204,6 +204,9 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
     offer = next((o for o in search(p, rounds=10) if str(o["id"]) == str(offer_id)), None)
     if offer is None:
         raise PodError(f"Offer {offer_id} no longer passes the filters or is gone. Run offers again.")
+    if provider_name == "vast" and vast.contract_hours(offer) < spec["hours"] + 1:
+        raise PodError(f"Offer {offer_id}'s host contract ends in {vast.contract_hours(offer):.1f} h, under the "
+                       f"{spec['hours']} h limit plus 1 h. Vast stops the pod when it ends. Pick another offer.")
     need = offer["dph_total"] * spec["est_hours"] * BALANCE_MARGIN
     if p.balance() < need:
         raise PodError(f"Balance ${p.balance():.2f} is under ${need:.2f} (1.5 x the estimated cost). Top up first.")
@@ -307,7 +310,7 @@ def down(exp, log=print):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="scripts/pod", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("verb", choices=["offers", "up", "status", "collect", "down"])
+    ap.add_argument("verb", choices=["offers", "up", "status", "collect", "down", "monitor"])
     ap.add_argument("exp")
     ap.add_argument("--offer")
     ap.add_argument("--go", action="store_true")
@@ -323,6 +326,9 @@ def main(argv=None):
             up(a.exp, a.offer, a.go, a.provider)
         elif a.verb == "status":
             status(a.exp)
+        elif a.verb == "monitor":
+            from strokecopilot.compute import monitor
+            monitor.run(a.exp)
         elif a.verb == "collect":
             collect(a.exp, a.force)
         else:

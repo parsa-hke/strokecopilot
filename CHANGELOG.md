@@ -1,5 +1,60 @@
 # CHANGELOG
 
+## 2026-11-05 — Claude Code session (DEC-21 rented GPU, EXP-13 and EXP-14, notes, trial passages checked; Phase 2 closed)
+- **DEC-21 pod tooling** (commit `5767cd4`): `src/strokecopilot/compute/` and `scripts/pod` (`offers`, `up`, `status`, `collect`, `down`, `monitor`).
+  - `up` refuses without Parsa's `--go`, with a secret in the repo, with a balance under 1.5 × the estimated cost, with uncommitted code under `src/`, or with a tarball that fails its checksum. It destroys the pod if setup fails.
+  - A watchdog on the pod destroys it at the hour limit. `collect` brings outputs to the Mac and to Drive (via Drive for desktop), then destroys the pod and confirms it is gone.
+  - The Mac is the data relay: tarball from Drive for desktop, repo as `git archive` at the pinned commit. No token ever goes on the pod.
+  - Host filter relaxed by Parsa (DEC-21 amended): no datacenter requirement.
+- **New this session, uncommitted:**
+  - `compute/monitor.py`: a local progress page (`scripts/pod monitor EXP-<id>`, served from `runs/EXP-<id>/monitor/`), with epochs, ETA, pseudo Dice, cost and the watchdog deadline.
+  - `status` and the monitor read every nnU-Net training log, so a resumed run counts all its epochs.
+  - `collect` also brings back `job_part*.log`.
+  - **Host contract check.** `up` refuses an offer whose contract ends less than 1 h after the run's hour limit, and `offers` shows the hours left. This came from EXP-14 (below).
+- **EXP-13** (dummy, 3 epochs, Vast RTX 4090, California, 0.459 USD/h):
+  - Epochs took 37–44 s, against about 121 s on the Colab L4, so about 3× faster.
+  - GPU utilisation median 99%, with no worker bottleneck. Resume works.
+  - Two setup failures were fixed in the scripts:
+    - the PyTorch runtime image has no C compiler for `torch.compile` (gcc is now in the bootstrap);
+    - the local network blocks outbound SSH (fixed by using the VPN).
+- **EXP-14, nnU-Net fold 0, 300 epochs:**
+  - **Dice 0.218 ± 0.249** (median 0.111), Dice on reliable Tmax 0.221, abs volume error 19.6 ± 23.3 mL (signed −7.0 mL), over 26 development cases.
+  - **Threshold baseline on the same cases** (EXP-1, within Tmax > 6 s): Dice 0.123, 20.5 mL. Dice nearly doubles, but volume error, which matters more for the rules (§8.1), barely moves.
+  - Wrong threshold crossings at 21/31/51/70 mL: 5/5/3/3 of 26.
+  - By lesion size:
+    - three of the four infarcts above 95 mL score 0.60–0.70; the fourth (101 mL) is predicted empty;
+    - lesions under 5 mL average 0.12;
+    - 9 of 26 cases score 0.
+  - The 3-epoch dummy had a similar mean (0.236) by over-predicting everywhere. A Phase 3 error analysis is needed.
+  - **Interrupted and resumed.** Vast stopped the pod at 18:25:53 UTC because the host's contract ended: the offer had about 3.2 h of contract left against a 5.5 h limit, and I had not checked. The epoch-269 checkpoint was on disk. The instance was restarted about an hour later, the watchdog re-armed, and training resumed at epoch 270. Hence the new contract check.
+- **GPU spend** (measured from Vast credit; DEC-21 budget 8–15 USD):
+
+  | Run | USD |
+  |---|---|
+  | First pod, no SSH | 0.11 |
+  | EXP-13 | 0.31 |
+  | EXP-14 (includes the stopped hour's storage) | 2.14 |
+  | **Total** | **2.56** |
+
+  Credit left: 2.44.
+- **Estimate for folds 1–4** (not measured): about 3.6 h each, as 3.1 h of training at 37.6 s per epoch plus about 25 min of upload, preprocessing and scoring. That is about 1.8–2.0 USD each and 7–8 USD for the four, about 10 USD for the project so far. Running them needs a top-up of about 8 USD.
+- **Notes** (commit `6b1ceb4`): `nlp/notes/generate.py` wrote 129 development notes to Drive `artifacts/isles24_notes_v1/`.
+  - Durations only, no invented clock times, and missing rule inputs written as not recorded.
+  - New fact keys: `atrial_fibrillation`, `onset_to_door`, `door_to_imaging`, `found_to_imaging`, `found_to_door`. They change the extractor prompt for new runs.
+- **Trial passages checked by Parsa** against the DAWN and DEFUSE-3 supplementary protocols, with pages. All 47 passages are now checked.
+  - 15 of 18 facts matched, and 1 was found on a second look (DEFUSE-3 pre-stroke mRS 0–2).
+  - 2 were corrected: DEFUSE-3 needs a mismatch ratio **above** 1.8 and a mismatch volume **above** 15 mL (strict). The fix is in the passage, `rules.py`, §8.3 and `docs/CLINICIAN_REVIEW.md`. No scenario decision changed, and the scenario hash is unchanged.
+  - `corpus/passages.jsonl` sha256 is now `acb29e213b10…`. The reasoner gets the whole rulebook, so its prompt changes too: EXP-12's numbers belong to the earlier corpus.
+- **Run records:** every run EXP-1 to EXP-14 now has an Experiments row and a `runs/` folder with metrics. EXP-3 (a stop record, no numbers) and EXP-5 (Parsa's pasted metrics) got their `metrics.json` on Drive.
+- **Phase 2 is closed:** every §7 task is ticked, and the onboarding block stays deferred under DEC-6.
+- **Still open, not blocking:**
+  - a free EXP-12 rescore for the corrected critical rate;
+  - Parsa's OK on `HALLUCINATION_METRIC.md` §9 points 8–12 and on the RSNA split.
+- pytest: 432 passed.
+- **Notion sync:**
+  - done: Experiments → EXP-13 and EXP-14 rows;
+  - done: Tasks → the 8 Phase 2 rows (nnU-Net baseline, corpus, reasoner v0, verifier v0, haemorrhage classifier, metric definition, scenarios, seeded errors) → Done, with results in Notes; the Colab template and onboarding rows stay in Backlog, noted as deferred under DEC-6.
+
 ## 2026-11-05 — Claude Code session (EXP-12 rescore with the rulebook in code; critical-rate fix)
 - **EXP-12 rescore** (commit `f4d754f`, no API calls): rate 0.080 (content 0.060) over 351 claims, as before.
   - No omissions: the reasoner ignored no hard rule.

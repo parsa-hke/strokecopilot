@@ -36,7 +36,7 @@ Our reading of the 2026 AHA/ASA guideline (*Stroke* 2026;57:e316–e436), adults
 
 **Our own choices, which the guideline does not state directly**
 - *Salvageable penumbra:* the recommendations give no number, so we use the trial criteria in Table 3. For 4.5–9 h, EXTEND: ratio > 1.2, penumbra − core > 10 mL, core < 70 mL. For 4.5–24 h, TRACE-III: ratio > 1.8, mismatch > 15 mL, core < 70 mL.
-- *When ASPECTS is unknown:* our imaging pipeline does not produce ASPECTS, so we fall back on trial criteria. DEFUSE-3 (6–16 h): core < 70 mL, ratio ≥ 1.8, mismatch ≥ 15 mL. DAWN (6–24 h): age ≥ 80, NIHSS ≥ 10 and core < 21 mL; age < 80, NIHSS ≥ 10 and core < 31 mL, or NIHSS ≥ 20 and core 31–51 mL. We have not yet checked these numbers against the trial papers.
+- *When ASPECTS is unknown:* our imaging pipeline does not produce ASPECTS, so we fall back on trial criteria. DEFUSE-3 (6–16 h): core < 70 mL, ratio > 1.8, mismatch > 15 mL. DAWN (6–24 h): age ≥ 80, NIHSS ≥ 10 and core < 21 mL; age < 80, NIHSS ≥ 10 and core < 31 mL, or NIHSS ≥ 20 and core 31 to under 51 mL. Checked against the trial protocols (supplementary appendices) by a team member on 5 Nov 2026.
 - *What the system cannot see:* significant mass effect, M2 dominance and extensive hypodensity. It must name these as uncertainties and never assume them.
 
 ## 2. Test cases and expected answers

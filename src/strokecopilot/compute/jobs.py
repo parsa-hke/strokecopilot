@@ -15,7 +15,7 @@ RUNS = {
 }
 
 # What collect brings back: never the preprocessed data or the tarball.
-COLLECT = ["config.json", "metrics.json", "per_case.csv", "plan_3d_fullres.json", "job.log", "job.exit",
+COLLECT = ["config.json", "metrics.json", "per_case.csv", "plan_3d_fullres.json", "job.log", "job_part*.log", "job.exit",
            "checkpoint_best.pth", "checkpoint_final.pth", "checkpoint_latest.pth", "training_log_*.txt", "progress.png", "debug.json"]
 
 
