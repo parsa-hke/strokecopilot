@@ -47,7 +47,8 @@ def synthetic_case(infarct_box=(slice(24, 34), slice(8, 20), slice(6, 14)), no_d
                 "infarct": infarct, "occlusion": occlusion, "cow": cow},
         spacing_mm=SPACING,
         affine=np.diag([SPACING, SPACING, SPACING, 1.0]),
-        clinical={"case": "synthetic", "Onset to door": 90.0, "Door to imaging": 30.0},
+        # Time text as clinical.csv has it: hh:mm:ss, sometimes with microseconds.
+        clinical={"case": "synthetic", "Onset to door": "01:30:00", "Door to imaging": "00:30:00.250000"},
         native_volumes={"infarct_ml": mask_ml(infarct, SPACING), "tmax6_ml": mask_ml(tmax > 6, SPACING)},
     )
 
@@ -141,6 +142,53 @@ def test_write_config(tmp_path):
         error_analysis.write_config(tmp_path / "other", "")
 
 
+def test_case_features_default_case():
+    f = error_analysis.case_features(synthetic_case())
+    assert f["case"] == "synthetic"
+    assert f["infarct_ml"] == pytest.approx(7.68) and f["size_band"] == "5-21"
+    # The occlusion sits 2 mm from label 6, the left ICA: within the 5 mm limit.
+    assert (f["occlusion_site"], f["occlusion_reason"]) == ("ICA", "ok")
+    assert f["occlusion_nearest_label"] == 6 and f["occlusion_distance_mm"] == pytest.approx(2.0)
+    assert f["territory"] == "anterior"
+    assert f["onset_to_imaging_min"] == pytest.approx(120.0)
+    assert f["infarct_tmax_missing_share"] == 0.0 and f["infarct_tmax_unreliable_share"] == 0.0
+
+
+@pytest.mark.parametrize("label, site, territory", [
+    (1, "basilar", "posterior"),
+    (5, "unknown", "anterior"),   # MCA: M1 and M2 can't be told apart
+    (8, "unknown", "unknown"),    # posterior communicating artery joins both
+])
+def test_case_features_territory(label, site, territory):
+    f = error_analysis.case_features(synthetic_case(occlusion_label=label))
+    assert (f["occlusion_site"], f["territory"]) == (site, territory)
+
+
+def test_case_features_tmax_no_data():
+    half = (slice(24, 29), slice(8, 20), slice(6, 14))
+    case = synthetic_case(no_data_box=half)
+    case.arrays["tmax"][29:34, 8:20, 6:8] = -5.0  # failed fit: not -30, but still no reliable data
+    f = error_analysis.case_features(case)
+    assert f["infarct_tmax_missing_share"] == pytest.approx(0.5)
+    assert f["infarct_tmax_unreliable_share"] == pytest.approx(0.5 + 0.5 * 2 / 8)
+
+
+def test_case_features_missing_inputs():
+    case = synthetic_case(infarct_box=None)
+    case.clinical["Onset to door"] = None  # unknown onset, as in wake-up strokes
+    case.arrays["occlusion"][:] = False
+    f = error_analysis.case_features(case)
+    assert f["size_band"] == "none" and f["infarct_tmax_missing_share"] is None
+    assert f["onset_to_imaging_min"] is None
+    assert (f["occlusion_site"], f["occlusion_reason"], f["territory"]) == ("unknown", "empty_mask", "unknown")
+
+
+@pytest.mark.parametrize("ml, band", [(None, None), (0.0, "none"), (4.9, "<5"), (5.0, "5-21"), (20.99, "5-21"),
+                                      (21.0, "21-70"), (70.0, ">=70"), (101.0, ">=70")])
+def test_size_band(ml, band):
+    assert error_analysis.size_band(ml) == band
+
+
 def test_later_steps_not_built_yet():
     with pytest.raises(NotImplementedError):
-        error_analysis.case_features(synthetic_case())
+        error_analysis.group_summary(None, "size_band")

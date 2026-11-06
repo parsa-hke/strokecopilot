@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 3, code only)
+- **`error_analysis.case_features()`** gives the possible causes of failure for one loaded case:
+  - reference infarct volume and a size group: none, <5, 5–21, 21–70 or ≥70 mL;
+  - occlusion site and reason, from `volumes.occlusion_evidence` / `occlusion_site`, plus the nearest label and its distance;
+  - territory: anterior, posterior or unknown, from the occlusion's nearest Circle of Willis label;
+  - onset to imaging in minutes, computed as onset to door plus door to imaging, as the notes compute it (`notes.generate.minutes`). It is None when either is missing, which includes wake-up strokes;
+  - the share of the infarct with Tmax at −30, and the share with no reliable data (Tmax below 0 or CBF not finite, plan §8.1).
+- **Open points to check in Colab (step 4):**
+  - Territory uses the TopCoW numbering (1–3 posterior; 4–7, 10–12 and 15 anterior; 8–9 unknown), which `docs/DATA.md` notes is unconfirmed for this dataset.
+  - Territory applies no distance limit, and DATA.md says basilar-nearest occlusions sit 17–51 mm away. So read territory alongside `occlusion_distance_mm`.
+- **Tests:** 14 new synthetic tests (21 in `test_error_analysis.py`). The synthetic case's clinical times are now `hh:mm:ss` text, as in `clinical.csv`. Not run on real data.
+- pytest on Windows: 409 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
+- **Notion sync:** none new. The EXP-15 row stays Running.
+
 ## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 2, code only)
 - **EXP-15** (`runs/EXP-15_visionA_error_analysis/`). Lorna added the Notion Experiments row, with Status Running.
 - **`error_analysis.write_config()`** writes `config.json` before the run (`docs/team/README.md` §4) and refuses to overwrite one. It records:

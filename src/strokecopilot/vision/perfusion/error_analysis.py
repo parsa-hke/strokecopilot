@@ -6,7 +6,8 @@ Built one step at a time. Functions not built yet raise NotImplementedError.
 2. write_config(): runs/EXP-15_visionA_error_analysis/config.json, written before the run
    (docs/team/README.md §4). join_tables(): the nnU-Net (EXP-14) and threshold (EXP-1) per-case
    tables side by side.
-3. case_features(): per-case possible causes of failure, from a loaded Case.
+3. case_features(): per-case possible causes of failure, from a loaded Case: size, occlusion site,
+   territory, onset to imaging, and how much of the infarct has no Tmax data.
 4. (Colab) run case_features() over the development cases and join it to the step-2 table.
 5. group_summary(): scores per group of a feature, as counts and summaries.
 6. (Colab, then docs) images of failed cases and the write-up.
@@ -19,9 +20,14 @@ Volume error matters more than Dice, because the treatment rules are volume cut-
 import json
 from pathlib import Path
 
+import numpy as np
+
 from strokecopilot.config import ISLES24_SLIM
+from strokecopilot.nlp.notes.generate import minutes
+from strokecopilot.vision.perfusion import volumes
 from strokecopilot.vision.perfusion.evaluate import DECISION_CUTOFFS_ML
 from strokecopilot.vision.perfusion.pod_job import FOLDS_SHA256, SLIM_SHA256
+from strokecopilot.vision.perfusion.thresholds import reliable
 
 EXPERIMENT = "EXP-15"
 RUN_NAME = "EXP-15_visionA_error_analysis"
@@ -37,6 +43,16 @@ SHARED = ("ref_ml", "infarct_reliable_share")
 MISS_DICE = 0.05
 # Two reference volumes closer than this (mL) count as the same.
 REF_TOLERANCE_ML = 1e-6
+
+# Size groups: under 5 mL (the brief's small lesions), then the 21 and 70 mL treatment cut-offs.
+SIZE_EDGES_ML = (5.0, 21.0, 70.0)
+# Tmax fill value where there is no perfusion data (docs/DATA.md).
+TMAX_NO_DATA = -30.0
+# Territory from the Circle of Willis label nearest the occlusion. TopCoW numbering, which docs/DATA.md
+# notes is not confirmed for this dataset: 1 basilar, 2-3 PCAs; 4 and 6 ICAs, 5 and 7 MCAs, 10 Acom,
+# 11-12 ACAs, 15 third A2. The posterior communicating arteries (8, 9) join both, so they stay unknown.
+POSTERIOR_LABELS = frozenset({1, 2, 3})
+ANTERIOR_LABELS = frozenset({4, 5, 6, 7, 10, 11, 12, 15})
 
 
 def write_config(run_dir, git_commit, folds=(0,), notes=""):
@@ -91,8 +107,6 @@ def join_tables(nnunet, threshold):
     - miss: "both", "nnunet", "threshold" or "neither", by Dice below MISS_DICE;
     - crossings_disagree: how many cut-offs one model crosses and the other doesn't.
     """
-    import numpy as np
-
     for name, table, extra in (("nnunet", nnunet, ("fold", *SHARED)), ("threshold", threshold, ("ref_ml",))):
         missing = [c for c in ("case", *SCORES, *CROSSINGS, *extra) if c not in table.columns]
         if missing:
@@ -126,14 +140,78 @@ def join_tables(nnunet, threshold):
     return joined
 
 
+def size_band(infarct_ml):
+    """Size group of a reference infarct volume: none, <5, 5-21, 21-70 or >=70 mL."""
+    if infarct_ml is None:
+        return None
+    if infarct_ml <= 0:
+        return "none"
+    lower = 0.0
+    for edge in SIZE_EDGES_ML:
+        if infarct_ml < edge:
+            return f"<{edge:g}" if lower == 0 else f"{lower:g}-{edge:g}"
+        lower = edge
+    return f">={lower:g}"
+
+
+def territory_of_label(label):
+    """anterior, posterior or unknown, from a Circle of Willis label (TopCoW numbering)."""
+    if label is None:
+        return "unknown"
+    if int(label) in POSTERIOR_LABELS:
+        return "posterior"
+    if int(label) in ANTERIOR_LABELS:
+        return "anterior"
+    return "unknown"
+
+
 def case_features(case):
     """Step 3. Possible causes of failure for one loaded isles24.Case, as a flat dict.
 
-    Planned: reference infarct volume, territory (anterior or posterior), occlusion site
-    (volumes.occlusion_site), onset to imaging in minutes, share of the brain and of the infarct
-    with no reliable Tmax (thresholds.reliable), and simple artefact signals.
+    The case needs tmax, cbf, infarct, occlusion and cow arrays, native_volumes["infarct_ml"] and
+    the clinical row. Keys:
+    - case (for joining to join_tables(); stays on Drive), infarct_ml (native reference), size_band;
+    - occlusion_site and occlusion_reason (volumes.occlusion_site), occlusion_nearest_label,
+      occlusion_distance_mm;
+    - territory: anterior or posterior from the occlusion's nearest label, else unknown. No distance
+      limit is applied, so check it against occlusion_distance_mm;
+    - onset_to_imaging_min: onset to door + door to imaging, as the notes compute it. None when
+      either is missing, which includes wake-up strokes;
+    - infarct_tmax_missing_share: share of the infarct with Tmax at the -30 no-data value;
+    - infarct_tmax_unreliable_share: share without reliable data (thresholds.reliable: Tmax below 0
+      or CBF not finite), which plan §8.1 treats as no data. Both None for an empty infarct.
     """
-    raise NotImplementedError("Step 3")
+    arrays = case.arrays
+    infarct_ml = case.native_volumes.get("infarct_ml")
+    evidence = volumes.occlusion_evidence(arrays["occlusion"], arrays["cow"], case.spacing_mm)
+    site, reason = volumes.occlusion_site(evidence)
+
+    onset_door = minutes(case.clinical.get("Onset to door"))
+    door_imaging = minutes(case.clinical.get("Door to imaging"))
+    onset_imaging = None if onset_door is None or door_imaging is None else onset_door + door_imaging
+
+    infarct = np.asarray(arrays["infarct"], dtype=bool)
+    n_infarct = int(np.count_nonzero(infarct))
+    tmax = np.asarray(arrays["tmax"], dtype=np.float32)
+    if n_infarct:
+        missing_share = float(np.count_nonzero(infarct & (tmax == TMAX_NO_DATA)) / n_infarct)
+        unreliable_share = float(np.count_nonzero(infarct & ~reliable(tmax, arrays["cbf"])) / n_infarct)
+    else:
+        missing_share = unreliable_share = None
+
+    return {
+        "case": case.id,
+        "infarct_ml": infarct_ml,
+        "size_band": size_band(infarct_ml),
+        "occlusion_site": site,
+        "occlusion_reason": reason,
+        "occlusion_nearest_label": evidence["nearest_label"],
+        "occlusion_distance_mm": evidence["distance_mm"],
+        "territory": territory_of_label(evidence["nearest_label"]),
+        "onset_to_imaging_min": onset_imaging,
+        "infarct_tmax_missing_share": missing_share,
+        "infarct_tmax_unreliable_share": unreliable_share,
+    }
 
 
 def group_summary(table, by):
