@@ -4,9 +4,11 @@ Step 1 sets up the synthetic case builder. Later steps add tests for each functi
 strokecopilot.vision.perfusion.error_analysis as it is filled in.
 """
 
+import io
+
 import pytest
 
-np = pytest.importorskip("numpy")
+np =pytest.importorskip("numpy")
 pytest.importorskip("scipy")
 
 from strokecopilot.data.isles24 import Case  # noqa: E402
@@ -62,6 +64,81 @@ def test_synthetic_case_no_data_region():
     valid = reliable(case.arrays["tmax"], case.arrays["cbf"])
     infarct = case.arrays["infarct"]
     assert np.count_nonzero(infarct & valid) / np.count_nonzero(infarct) == pytest.approx(0.5)
+
+
+pd = pytest.importorskip("pandas")
+from strokecopilot.vision.perfusion import evaluate  # noqa: E402
+
+
+def _row(case, pred, truth, ref_ml, fold=0):
+    """One per_case.csv row, scored the way EXP-1 and EXP-14 score theirs."""
+    valid = np.ones(SHAPE, dtype=bool)
+    return {"case": case, "fold": fold, **evaluate.case_metrics(pred, truth, valid, SPACING, ref_ml)}
+
+
+def _box(x0, x1):
+    mask = np.zeros(SHAPE, dtype=bool)
+    mask[x0:x1, 8:20, 6:14] = True  # 96 voxels per x slice, 0.768 mL
+    return mask
+
+
+def _tables():
+    """Three fake cases. a: nnU-Net exact, threshold empty. b: both empty on a real infarct. c: nnU-Net
+    far too big (crosses 31, 51 and 70 mL), threshold exact. The threshold table has one extra case."""
+    small, big = _box(24, 34), _box(0, 40)   # 7.68 mL and 30.72 mL
+    huge = np.ones(SHAPE, dtype=bool)        # 192 mL
+    empty = np.zeros(SHAPE, dtype=bool)
+    ref = {"a": mask_ml(small, SPACING), "b": mask_ml(small, SPACING), "c": mask_ml(big, SPACING)}
+    nnunet = pd.DataFrame([_row("a", small, small, ref["a"]), _row("b", empty, small, ref["b"]), _row("c", huge, big, ref["c"])])
+    threshold = pd.DataFrame([_row("a", empty, small, ref["a"]), _row("b", empty, small, ref["b"]),
+                              _row("c", big, big, ref["c"]), _row("d", small, small, ref["a"], fold=1)])
+    # Through CSV and back, as the tables arrive from Drive.
+    return [pd.read_csv(io.StringIO(t.to_csv(index=False))) for t in (nnunet, threshold)]
+
+
+def test_join_tables_side_by_side():
+    joined = error_analysis.join_tables(*_tables()).set_index("case")
+    assert list(joined.index) == ["a", "b", "c"]  # only nnU-Net's cases
+    assert joined.loc["a", "nnunet_dice"] == 1.0 and joined.loc["a", "threshold_dice"] == 0.0
+    assert joined.loc["a", "dice_gap"] == 1.0
+    assert joined.loc["a", "better_volume"] == "nnunet"
+    assert joined.loc["c", "better_volume"] == "threshold"
+    assert joined.loc["b", "better_volume"] == "tie"
+
+
+def test_join_tables_misses_and_crossings():
+    joined = error_analysis.join_tables(*_tables()).set_index("case")
+    assert joined["miss"].to_dict() == {"a": "threshold", "b": "both", "c": "neither"}
+    # c: nnU-Net predicts 192 mL against 30.72; it crosses 31, 51 and 70 mL, the exact threshold none.
+    assert joined.loc["c", "crossings_disagree"] == 3
+    assert joined.loc["b", "crossings_disagree"] == 0
+
+
+def test_join_tables_refuses_bad_tables():
+    nnunet, threshold = _tables()
+    with pytest.raises(ValueError, match="missing from the threshold"):
+        error_analysis.join_tables(nnunet, threshold[threshold["case"] != "a"])
+    with pytest.raises(ValueError, match="repeated"):
+        error_analysis.join_tables(pd.concat([nnunet, nnunet.iloc[:1]]), threshold)
+    shifted = threshold.copy()
+    shifted.loc[shifted["case"] == "a", "ref_ml"] += 1.0
+    with pytest.raises(ValueError, match="reference volumes"):
+        error_analysis.join_tables(nnunet, shifted)
+    with pytest.raises(ValueError, match="lacks columns"):
+        error_analysis.join_tables(nnunet.drop(columns=["abs_error_ml"]), threshold)
+
+
+def test_write_config(tmp_path):
+    run_dir = tmp_path / error_analysis.RUN_NAME
+    config = error_analysis.write_config(run_dir, "abc1234")
+    saved = (run_dir / "config.json").read_text()
+    assert config["experiment"] == "EXP-15" and config["git_commit"] == "abc1234"
+    assert config["inputs"]["nnunet"] == "runs/EXP-14_nnunet_fold0/per_case.csv"
+    assert '"EXP-15"' in saved
+    with pytest.raises(FileExistsError):
+        error_analysis.write_config(run_dir, "def5678")
+    with pytest.raises(ValueError):
+        error_analysis.write_config(tmp_path / "other", "")
 
 
 def test_later_steps_not_built_yet():

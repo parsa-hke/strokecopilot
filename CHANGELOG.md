@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 2, code only)
+- **EXP-15** (`runs/EXP-15_visionA_error_analysis/`). Lorna added the Notion Experiments row, with Status Running.
+- **`error_analysis.write_config()`** writes `config.json` before the run (`docs/team/README.md` §4) and refuses to overwrite one. It records:
+  - the experiment and the installed commit;
+  - the slim tarball and split checksums (shared with `pod_job`), with no case IDs;
+  - the folds analysed and the input tables;
+  - the decision cut-offs, the miss threshold and the counts-only output rule.
+- **`error_analysis.join_tables()`** puts the EXP-14 nnU-Net and EXP-1 threshold per-case tables side by side.
+  - It keeps only nnU-Net's cases.
+  - It refuses missing columns, repeated cases, nnU-Net cases absent from the threshold table, and reference volumes that differ between the two tables.
+  - It adds:
+    - the Dice and absolute-volume-error gaps;
+    - which model has the smaller volume error;
+    - which model misses (Dice < 0.05);
+    - how many decision cut-offs one model crosses and the other doesn't.
+  - Assumption to check in Colab: EXP-1's `per_case.csv` has the `evaluate.case_metrics` columns. It wasn't opened here.
+- **Tests:** 4 new synthetic tests (7 in `test_error_analysis.py`). Not run on real data.
+- pytest on Windows: 395 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures as in step 1.
+- **Notion sync:** Experiments → EXP-15 row exists (Running). Fill in its commit once the notebook installs one.
+
 ## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 1)
 - **Plan for Task 1** (brief `docs/team/lorna_vision_a.md`), six steps:
   1. module skeleton and synthetic tests;
