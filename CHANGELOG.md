@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 2026-11-06 — Claude Code session (Vision B Task 2: ISLES'24 domain-shift check, code and notebook)
+- **Scope:** Phase 3, Vision B, Task 2 from `docs/team/mohamed_vision_b.md`. Code and notebook only; the real run is Mohamed's, on Colab.
+- **`vision/haemorrhage/isles_check.py`** (tested): scores each development case's `ncct_native` the way the RSNA shards were built:
+  - turned to RAS, then laid out as DICOM stores axial slices (front of the head at the top, patient's right on the left). ISLES'24 sources are LAS or LPS, so this matters;
+  - averaged into 5 mm slabs in HU, each native slice weighted by its overlap. 5 mm is RSNA's documented thickness (plan §5.2), not measured: the shards' `z_mm` could confirm it on Kaggle;
+  - padded to a square with air, then `rsna.window_hu` (brain, subdural, bone) at 320 px, then JPEG at quality 95 and back, as the shards were stored;
+  - scored with EXP-6's top-2 mean and Platt calibration through `infer`, against the calibrated threshold in `calibration.json`.
+  - The native thin slices are scored too, as a second reading, to show what the reformatting changes.
+  - Reports hold counts, rates with 95% Wilson intervals, percentiles and a histogram. The per-case table holds case IDs and is saved only to Drive. Figures are labelled by rank and score. A held-out request stops the run; any other failure is kept in the table and counted.
+- **`notebooks/21_visionB_isles_check.ipynb`:** thin Colab notebook: install, checksums, `config.json` before the run, scoring, results, the top-scored scans with a list of common false-alarm causes, then `metrics.json`, `per_case.csv` (with an empty `review` column), two figures and a read-back. `REPO_REF` is `mohamed/isles-check` until the pull request is merged.
+  - Sections 4–8 were dry-run locally on synthetic volumes with a random-weight model and a stubbed Drive. It has not run on Colab or on real data, so its timing and every result are unmeasured.
+- **Known limits, to state with the result:** no bleed labels, so positives are *presumed* false positives; the threshold (0.278) is provisional until Task 1; in-plane field of view is not matched to RSNA's (ISLES'24 spacing is 0.305–0.562 mm, `docs/DATA.md`), and is recorded per case so it can be checked. `set_field_of_view` exists for that check but is off.
+- **Plan:** layout lists `isles_check.py` and notebook 21; the §7 domain-shift item notes the code is ready and the run pending (not ticked). README lists notebook 21.
+- pytest: 455 passed (19 new).
+- **Notion sync** (not done; for Mohamed or Parsa):
+  - Tasks → Vision B "Domain shift check": In progress; code and notebook ready on `mohamed/isles-check`.
+  - Experiments → a new row (Status *Running*) before the Colab run; its ID goes in `EXPERIMENT`. Afterwards: the presumed false-positive rate at 0.278 with its interval, the top-scan review by count, and the commit.
+
 ## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
 - **Roles agreed by Parsa:**
   - Parsa keeps the long GPU runs, the paid model runs, `contract/build.py`, the verifier fixes and the decisions.
