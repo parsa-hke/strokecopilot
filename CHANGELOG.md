@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 1)
+- **Plan for Task 1** (brief `docs/team/lorna_vision_a.md`), six steps:
+  1. module skeleton and synthetic tests;
+  2. join the EXP-14 and EXP-1 per-case tables, after the Notion Experiments row and `config.json` (`docs/team/README.md` §4);
+  3. per-case feature functions;
+  4. feature table in Colab;
+  5. failure groups;
+  6. images and write-up.
+  - Notebook outputs print counts and summaries, never case IDs.
+- **`vision/perfusion/error_analysis.py`:** skeleton only. `join_tables`, `case_features` and `group_summary` raise NotImplementedError until steps 2, 3 and 5.
+- **`tests/test_error_analysis.py`:** a synthetic case builder in the shape `load_case()` returns (maps, infarct, occlusion, Circle of Willis labels, a no-data Tmax region, clinical times), with 3 tests.
+- Local setup on Lorna's Windows laptop: `.venv` with Python 3.12.4, `pip install -e ".[dev,isles]"`.
+- pytest on Windows: 391 passed, 3 skipped, 9 failed. The same 9 fail without this change: `test_archive_listing` (5), `test_compute::test_scripts_parse_in_bash`, `test_corpus_ingest` (UnicodeDecodeError), `test_nnunet_wrapper::test_splits_final_matches_our_folds` and `test_reasoner::test_run_fixtures_writes_the_run_folder`. They look like Windows-only problems (bash, file encoding), not yet investigated. The last entry reported 436 passed on the Mac.
+- Plan §7: nothing ticked; the error-analysis task stays open.
+- **Notion sync:** Tasks → Lorna's error-analysis row to In progress. No Experiments row yet (comes before step 2).
+
 ## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
 - **Roles agreed by Parsa:**
   - Parsa keeps the long GPU runs, the paid model runs, `contract/build.py`, the verifier fixes and the decisions.
