@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 4 fix after the first Colab run)
+- **First Colab run of notebook 12 stopped in `join_tables`:** "The threshold table has 129 repeated cases." EXP-1's `per_case.csv` has two rows per case, one per `variant` (`within_tmax6`, the default compared with EXP-14, and `unrestricted`; notebook 11).
+- **`join_tables`** now keeps only the `within_tmax6` rows when there is a `variant` column (`THRESHOLD_VARIANT`, overridable). It raises if that variant has no rows.
+- **`config.json`** records `inputs.threshold_variant`. Notebook 12 prints the variant and calls the threshold count "rows".
+- The first run wrote EXP-15's `config.json` before it stopped, so that file has no `threshold_variant`. Lorna decides whether to delete it on Drive before rerunning.
+- **Tests:** 1 new test with both variants (23 in `test_error_analysis.py`).
+- pytest on Windows: 411 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
+- **Notion sync:** none new.
+
 ## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 4 prepared, not run)
 - **`notebooks/12_visionA_error_analysis.ipynb`** (thin, CPU runtime). It:
   - installs from `lorna/error-analysis` with `GITHUB_TOKEN`, as in `00_template`;

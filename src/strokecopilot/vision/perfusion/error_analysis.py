@@ -39,6 +39,9 @@ SCORES = ("dice", "dice_reliable", "pred_ml", "error_ml", "abs_error_ml")
 CROSSINGS = tuple(f"crosses_{cutoff:g}" for cutoff in DECISION_CUTOFFS_ML)
 # Taken once, from the nnU-Net table. ref_ml is checked against the threshold table's.
 SHARED = ("ref_ml", "infarct_reliable_share")
+# EXP-1's per_case.csv holds two rows per case, one per `variant` (notebooks/11_visionA_thresholds.ipynb):
+# the core restricted to Tmax > 6 s ("within_tmax6", the default and the one compared with EXP-14) or not.
+THRESHOLD_VARIANT = "within_tmax6"
 # Below this Dice a case counts as a miss when comparing the two models.
 MISS_DICE = 0.05
 # Two reference volumes closer than this (mL) count as the same.
@@ -80,6 +83,7 @@ def write_config(run_dir, git_commit, folds=(0,), notes=""):
         "inputs": {
             "nnunet": f"runs/{NNUNET_RUN}/per_case.csv",
             "threshold": f"runs/{THRESHOLD_RUN}/per_case.csv",
+            "threshold_variant": THRESHOLD_VARIANT,
             "slim": f"slim/{ISLES24_SLIM}",
         },
         "decision_cutoffs_ml": list(DECISION_CUTOFFS_ML),
@@ -92,11 +96,13 @@ def write_config(run_dir, git_commit, folds=(0,), notes=""):
     return config
 
 
-def join_tables(nnunet, threshold):
+def join_tables(nnunet, threshold, variant=THRESHOLD_VARIANT):
     """Step 2. One row per nnU-Net case with both models' scores side by side, and where they disagree.
 
-    nnunet, threshold: the per_case.csv tables of EXP-14 and EXP-1 as pandas DataFrames. The
-    threshold table may cover more cases (all folds); only the nnU-Net cases are kept. Raises if an
+    nnunet, threshold: the per_case.csv tables of EXP-14 and EXP-1 as pandas DataFrames. If the
+    threshold table has a `variant` column, only the rows of `variant` are kept, and it raises if
+    there are none. The threshold table may cover more cases (all folds); only the nnU-Net cases are
+    kept. Raises if an
     nnU-Net case is missing from the threshold table, a case appears twice, or the two tables
     disagree on the reference volume. Columns:
     - case, fold, ref_ml, infarct_reliable_share;
@@ -107,6 +113,11 @@ def join_tables(nnunet, threshold):
     - miss: "both", "nnunet", "threshold" or "neither", by Dice below MISS_DICE;
     - crossings_disagree: how many cut-offs one model crosses and the other doesn't.
     """
+    if "variant" in threshold.columns:
+        found = sorted(threshold["variant"].dropna().unique())
+        threshold = threshold[threshold["variant"] == variant]
+        if threshold.empty:
+            raise ValueError(f"The threshold table has no {variant!r} rows; its variants are {found}.")
     for name, table, extra in (("nnunet", nnunet, ("fold", *SHARED)), ("threshold", threshold, ("ref_ml",))):
         missing = [c for c in ("case", *SCORES, *CROSSINGS, *extra) if c not in table.columns]
         if missing:

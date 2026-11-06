@@ -129,12 +129,30 @@ def test_join_tables_refuses_bad_tables():
         error_analysis.join_tables(nnunet.drop(columns=["abs_error_ml"]), threshold)
 
 
+def test_join_tables_keeps_one_threshold_variant():
+    """EXP-1 has a row per case for each core variant; only within_tmax6 is joined."""
+    nnunet, within = _tables()
+    unrestricted = within.copy()
+    unrestricted["dice"] = 0.5  # different scores, same cases and reference volumes
+    threshold = pd.concat([within.assign(variant="within_tmax6"), unrestricted.assign(variant="unrestricted")])
+    joined = error_analysis.join_tables(nnunet, threshold).set_index("case")
+    assert len(joined) == 3
+    assert joined.loc["a", "threshold_dice"] == 0.0  # the within_tmax6 row, not 0.5
+    other = error_analysis.join_tables(nnunet, threshold, variant="unrestricted").set_index("case")
+    assert (other["threshold_dice"] == 0.5).all()
+    with pytest.raises(ValueError, match="no 'missing' rows"):
+        error_analysis.join_tables(nnunet, threshold, variant="missing")
+    with pytest.raises(ValueError, match="repeated"):
+        error_analysis.join_tables(nnunet, threshold.drop(columns=["variant"]))
+
+
 def test_write_config(tmp_path):
     run_dir = tmp_path / error_analysis.RUN_NAME
     config = error_analysis.write_config(run_dir, "abc1234")
     saved = (run_dir / "config.json").read_text()
     assert config["experiment"] == "EXP-15" and config["git_commit"] == "abc1234"
     assert config["inputs"]["nnunet"] == "runs/EXP-14_nnunet_fold0/per_case.csv"
+    assert config["inputs"]["threshold_variant"] == "within_tmax6"
     assert '"EXP-15"' in saved
     with pytest.raises(FileExistsError):
         error_analysis.write_config(run_dir, "def5678")
