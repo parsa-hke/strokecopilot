@@ -183,6 +183,17 @@ def test_case_features_missing_inputs():
     assert (f["occlusion_site"], f["occlusion_reason"], f["territory"]) == ("unknown", "empty_mask", "unknown")
 
 
+def test_notebook_table_merge():
+    """What notebook 12 does: join the two tables, then add case_features for each case."""
+    import dataclasses
+
+    joined = error_analysis.join_tables(*_tables())
+    rows = [error_analysis.case_features(dataclasses.replace(synthetic_case(), id=case)) for case in joined["case"]]
+    table = joined.merge(pd.DataFrame(rows), on="case", how="left", validate="one_to_one")
+    assert len(table) == 3 and table["territory"].notna().all()
+    assert {"nnunet_dice", "threshold_abs_error_ml", "size_band", "infarct_tmax_missing_share"} <= set(table.columns)
+
+
 @pytest.mark.parametrize("ml, band", [(None, None), (0.0, "none"), (4.9, "<5"), (5.0, "5-21"), (20.99, "5-21"),
                                       (21.0, "21-70"), (70.0, ">=70"), (101.0, ">=70")])
 def test_size_band(ml, band):

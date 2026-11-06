@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 4 prepared, not run)
+- **`notebooks/12_visionA_error_analysis.ipynb`** (thin, CPU runtime). It:
+  - installs from `lorna/error-analysis` with `GITHUB_TOKEN`, as in `00_template`;
+  - mounts Drive and checks the split and tarball checksums;
+  - writes EXP-15's `config.json` once, keeping the existing one on a rerun;
+  - joins the EXP-14 and EXP-1 per-case tables, after checking that EXP-14's cases are the fold-0 cases;
+  - runs `case_features` on each fold-0 case from the unpacked slim tar;
+  - saves the combined table as `runs/EXP-15_visionA_error_analysis/per_case.csv` on Drive, after checking that no held-out case is in it.
+  - It prints counts and summaries only, never case IDs.
+- **Not run yet.** The branch must be pushed before Colab can install it. `metrics.json` comes in step 5.
+- **Tests:** 1 new test of the notebook's join-then-merge on synthetic tables (22 in `test_error_analysis.py`).
+- pytest on Windows: 410 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
+- **Notion sync:** none new. Fill in EXP-15's commit after the Colab run.
+
 ## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 3, code only)
 - **`error_analysis.case_features()`** gives the possible causes of failure for one loaded case:
   - reference infarct volume and a size group: none, <5, 5–21, 21–70 or ≥70 mL;
