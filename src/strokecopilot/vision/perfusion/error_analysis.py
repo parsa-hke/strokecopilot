@@ -24,6 +24,8 @@ from pathlib import Path
 import numpy as np
 
 from strokecopilot.config import ISLES24_SLIM
+from strokecopilot.data import template
+from strokecopilot.data.isles24_survey import PENUMBRA_TMAX_S
 from strokecopilot.nlp.notes.generate import minutes
 from strokecopilot.vision.perfusion import volumes
 from strokecopilot.vision.perfusion.evaluate import DECISION_CUTOFFS_ML
@@ -60,12 +62,17 @@ ANTERIOR_LABELS = frozenset({4, 5, 6, 7, 10, 11, 12, 15})
 
 # Step 5. Bands of the share of the infarct with Tmax at -30.
 TMAX_MISSING_EDGES = (0.05, 0.25)
-# The features the cases are grouped by. The last two are derived by add_groups().
-GROUP_FEATURES = ("size_band", "territory", "occlusion_site", "tmax_missing_band", "onset_known")
+# Step 6a. Bands of the share of the (reliable) infarct with Tmax > 6 s on admission.
+TMAX6_EDGES = (0.25, 0.5, 0.75)
+# The features the cases are grouped by. The last three are derived by add_groups().
+GROUP_FEATURES = ("size_band", "territory", "occlusion_site", "tmax_missing_band", "onset_known", "tmax6_band")
 # What the miss profile shows about the largest Dice-0 miss: values only, no case ID.
 LARGEST_MISS_KEYS = ("ref_ml", "nnunet_pred_ml", "threshold_dice", "threshold_pred_ml", *GROUP_FEATURES,
                      "occlusion_distance_mm", "onset_to_imaging_min", "infarct_tmax_missing_share",
-                     "infarct_tmax_unreliable_share", "infarct_reliable_share")
+                     "infarct_tmax_unreliable_share", "infarct_reliable_share", "infarct_tmax6_share")
+# Step 6a figures: the maps shown, with display windows (template.PANELS), and how many best cases.
+FIGURE_PANELS = (("ncct", 0, 80), ("cbf", None, None), ("tmax", 0, 12))
+BEST_CASES = 3
 
 
 def write_config(run_dir, git_commit, folds=(0,), notes=""):
@@ -200,7 +207,10 @@ def case_features(case):
       either is missing, which includes wake-up strokes;
     - infarct_tmax_missing_share: share of the infarct with Tmax at the -30 no-data value;
     - infarct_tmax_unreliable_share: share without reliable data (thresholds.reliable: Tmax below 0
-      or CBF not finite), which plan §8.1 treats as no data. Both None for an empty infarct.
+      or CBF not finite), which plan §8.1 treats as no data. Both None for an empty infarct;
+    - infarct_tmax6_share: of the infarct voxels with reliable data, the share with Tmax > 6 s on
+      the admission scan, i.e. how much of the final infarct the perfusion input shows as delayed.
+      None when no infarct voxel has reliable data.
     """
     arrays = case.arrays
     infarct_ml = case.native_volumes.get("infarct_ml")
@@ -214,11 +224,14 @@ def case_features(case):
     infarct = np.asarray(arrays["infarct"], dtype=bool)
     n_infarct = int(np.count_nonzero(infarct))
     tmax = np.asarray(arrays["tmax"], dtype=np.float32)
+    valid = reliable(tmax, arrays["cbf"])
     if n_infarct:
         missing_share = float(np.count_nonzero(infarct & (tmax == TMAX_NO_DATA)) / n_infarct)
-        unreliable_share = float(np.count_nonzero(infarct & ~reliable(tmax, arrays["cbf"])) / n_infarct)
+        unreliable_share = float(np.count_nonzero(infarct & ~valid) / n_infarct)
     else:
         missing_share = unreliable_share = None
+    n_reliable = int(np.count_nonzero(infarct & valid))
+    tmax6_share = float(np.count_nonzero(infarct & valid & (tmax > PENUMBRA_TMAX_S)) / n_reliable) if n_reliable else None
 
     return {
         "case": case.id,
@@ -232,6 +245,7 @@ def case_features(case):
         "onset_to_imaging_min": onset_imaging,
         "infarct_tmax_missing_share": missing_share,
         "infarct_tmax_unreliable_share": unreliable_share,
+        "infarct_tmax6_share": tmax6_share,
     }
 
 
@@ -249,12 +263,36 @@ def tmax_missing_band(share):
     return f">={lower:.0%}"
 
 
+def tmax6_band(share):
+    """Group of the share of the reliable infarct with Tmax > 6 s: <25%, 25%-50%, 50%-75%, >=75%, or no data."""
+    if share is None or (isinstance(share, float) and np.isnan(share)):
+        return "no data"
+    lower = 0.0
+    for edge in TMAX6_EDGES:
+        if share < edge:
+            return f"<{edge:.0%}" if lower == 0 else f"{lower:.0%}-{edge:.0%}"
+        lower = edge
+    return f">={lower:.0%}"
+
+
 def add_groups(table):
-    """A copy of the step-4 table with the two derived group columns: tmax_missing_band and onset_known."""
+    """A copy of the step-4 table with the derived group columns: tmax_missing_band, onset_known, tmax6_band."""
     table = table.copy()
     table["tmax_missing_band"] = [tmax_missing_band(s) for s in table["infarct_tmax_missing_share"]]
     table["onset_known"] = np.where(table["onset_to_imaging_min"].notna(), "known", "unknown")
+    table["tmax6_band"] = [tmax6_band(s) for s in table["infarct_tmax6_share"]]
     return table
+
+
+def visibility_comparison(table):
+    """infarct_tmax6_share for nnU-Net's Dice-0 misses vs the other cases: counts and medians, no IDs."""
+    miss = table["nnunet_dice"] == 0
+    out = {}
+    for name, rows in (("dice0_misses", table[miss]), ("rest", table[~miss])):
+        share = rows["infarct_tmax6_share"]
+        out[name] = {"cases": int(len(rows)), "with_reliable_data": int(share.notna().sum()),
+                     "median": _num(share.median()), "p25": _num(share.quantile(0.25)), "p75": _num(share.quantile(0.75))}
+    return out
 
 
 def _num(value, digits=3):
@@ -363,11 +401,57 @@ def build_metrics(table, config, git_commit):
         "better_volume": {str(k): int(v) for k, v in table["better_volume"].value_counts().sort_index().items()},
         "groups": summarise_features(table),
         "dice0_misses": miss_profile(table),
+        "tmax6_share_misses_vs_rest": visibility_comparison(table),
     }
     leaked = _ids_in(metrics, set(table["case"].astype(str)))
     if leaked:
         raise ValueError(f"{len(leaked)} case IDs reached metrics.json. Nothing was written.")
     return metrics
+
+
+def figure_cases(table, best=BEST_CASES):
+    """Which cases to draw, with anonymous labels: every Dice-0 miss ("Miss 1", ... largest reference
+    volume first), then the `best` cases with the highest nnU-Net Dice ("Best 1", ...).
+
+    Returns dicts with label, case and size_band. The case ID is for loading only: keep it on Drive.
+    """
+    misses = table[table["nnunet_dice"] == 0].sort_values("ref_ml", ascending=False)
+    top = table[table["nnunet_dice"] > 0].sort_values("nnunet_dice", ascending=False).head(best)
+    picks = []
+    for prefix, rows in (("Miss", misses), ("Best", top)):
+        for i, (_, row) in enumerate(rows.iterrows(), 1):
+            picks.append({"label": f"{prefix} {i}", "case": row["case"], "size_band": row["size_band"]})
+    return picks
+
+
+def case_figure(case, label, size_band=None, z=None):
+    """NCCT, CBF and Tmax at the slice with the most infarct, the final infarct outlined in red.
+
+    Titled only with the anonymous label and size band, never the case ID. Returns the figure.
+    """
+    import matplotlib.pyplot as plt
+
+    z = template.largest_infarct_slice(case) if z is None else z
+    infarct = np.asarray(case.arrays["infarct"][:, :, z], dtype=bool)
+    fig, axes = plt.subplots(1, len(FIGURE_PANELS), figsize=(3.2 * len(FIGURE_PANELS), 3.6))
+    for ax, (name, low, high) in zip(axes, FIGURE_PANELS):
+        low, high = template._window(case.arrays[name], low, high)
+        ax.imshow(case.arrays[name][:, :, z].T, cmap="gray", vmin=low, vmax=high, origin="lower")
+        if infarct.any():
+            ax.contour(infarct.T, levels=[0.5], colors="red", linewidths=0.8)
+        ax.set_title(name.upper(), fontsize=9)
+        ax.axis("off")
+    band = f", {size_band} mL" if size_band else ""
+    fig.suptitle(f"{label}{band}: final infarct in red", fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
+def figure_texts(fig):
+    """Every piece of text drawn in a figure, for checking that no case ID is in it."""
+    from matplotlib.text import Text
+
+    return [t.get_text() for t in fig.findobj(Text)]
 
 
 def write_metrics(run_dir, metrics):

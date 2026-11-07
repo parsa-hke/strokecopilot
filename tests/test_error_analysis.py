@@ -192,6 +192,54 @@ def test_case_features_tmax_no_data():
     assert f["infarct_tmax_unreliable_share"] == pytest.approx(0.5 + 0.5 * 2 / 8)
 
 
+def test_case_features_tmax6_share():
+    # Default case: the whole infarct is delayed (Tmax 10 s).
+    assert error_analysis.case_features(synthetic_case())["infarct_tmax6_share"] == 1.0
+    case = synthetic_case()
+    case.arrays["tmax"][24:29, 8:20, 6:14] = 3.0     # half the infarct: data, but no delay
+    case.arrays["tmax"][29:34, 8:20, 6:10] = -30.0   # a quarter: no data, left out of the share
+    f = error_analysis.case_features(case)
+    assert f["infarct_tmax6_share"] == pytest.approx(1 / 3)  # 1 delayed quarter of 3 reliable quarters
+    case.arrays["tmax"][case.arrays["infarct"]] = -30.0
+    assert error_analysis.case_features(case)["infarct_tmax6_share"] is None
+
+
+@pytest.mark.parametrize("share, band", [(None, "no data"), (float("nan"), "no data"), (0.0, "<25%"),
+                                         (0.25, "25%-50%"), (0.6, "50%-75%"), (0.75, ">=75%"), (1.0, ">=75%")])
+def test_tmax6_band(share, band):
+    assert error_analysis.tmax6_band(share) == band
+
+
+def test_visibility_comparison():
+    v = error_analysis.visibility_comparison(_step4_table())
+    assert v["dice0_misses"] == {"cases": 3, "with_reliable_data": 3, "median": 0.2, "p25": 0.15, "p75": 0.25}
+    assert v["rest"]["cases"] == 3 and v["rest"]["with_reliable_data"] == 2 and v["rest"]["median"] == 0.85
+
+
+def test_figure_cases_labels():
+    picks = error_analysis.figure_cases(_step4_table())
+    assert [p["label"] for p in picks] == ["Miss 1", "Miss 2", "Miss 3", "Best 1", "Best 2"]
+    assert picks[0]["size_band"] == ">=70"  # the 101 mL miss comes first
+    assert picks[3]["case"] == "sub-06"     # highest Dice; only 2 cases have Dice above 0
+
+
+def test_case_figure_is_anonymous():
+    mpl = pytest.importorskip("matplotlib")
+    mpl.use("Agg")
+    import matplotlib.pyplot as plt
+
+    case = synthetic_case()
+    case.id = case.clinical["case"] = "sub-stroke9999"
+    case.arrays["ncct"] = np.full(SHAPE, 30.0, dtype=np.float32)
+    fig = error_analysis.case_figure(case, "Miss 1", "5-21")
+    texts = error_analysis.figure_texts(fig)
+    assert "Miss 1, 5-21 mL: final infarct in red" in texts
+    assert {"NCCT", "CBF", "TMAX"} <= set(texts)
+    assert not any("sub-stroke9999" in t for t in texts)
+    assert len(fig.axes) == 3
+    plt.close(fig)
+
+
 def test_case_features_missing_inputs():
     case = synthetic_case(infarct_box=None)
     case.clinical["Onset to door"] = None  # unknown onset, as in wake-up strokes
@@ -239,6 +287,7 @@ def _step4_table():
         "infarct_tmax_missing_share": [0.0, 0.1, 0.6, 0.02, np.nan, 0.0],
         "infarct_tmax_unreliable_share": [0.0, 0.1, 0.7, 0.02, np.nan, 0.0],
         "infarct_reliable_share": [1.0, 0.9, 0.3, 0.98, np.nan, 1.0],
+        "infarct_tmax6_share": [0.1, 0.2, 0.3, 0.8, np.nan, 0.9],
     })
 
 

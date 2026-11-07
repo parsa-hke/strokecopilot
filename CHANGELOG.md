@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, step 6a, code only)
+- **`case_features`** adds `infarct_tmax6_share`: of the infarct voxels with reliable data, the share with Tmax > 6 s on the admission scan. It is None when no infarct voxel has reliable data.
+- **`tmax6_band`** groups that share as <25%, 25–50%, 50–75%, ≥75% or no data. It is the sixth group feature, and it is also in the largest-miss values.
+- **`visibility_comparison`** compares Dice-0 misses with the rest. It gives counts, the number with reliable data, and the median, p25 and p75 of that share. It is also saved in `metrics.json` as `tmax6_share_misses_vs_rest`.
+- **`figure_cases`** picks the cases to draw, with anonymous labels: every Dice-0 miss ("Miss 1" is the largest), then the 3 highest-Dice cases ("Best 1–3").
+- **`case_figure`** draws NCCT, CBF and Tmax at the slice with the most infarct, with the final infarct outlined. It reuses `template.largest_infarct_slice` and the template's windows. The title is the label and size band only, never the case ID. `figure_texts` returns every text in a figure, so the notebook can check for IDs.
+- **Notebook 12, new section 8:**
+  - draws and shows those figures, after checking each for its case ID;
+  - saves the figures as `figures/miss_<n>.png` and `best_<n>.png` in the EXP-15 folder;
+  - saves `figures/labels.csv`, which maps labels to cases, on Drive only and never printed;
+  - prints the Tmax > 6 s share for misses vs the rest.
+
+  `metrics.json` moves to section 9, still last. Prediction overlays wait for the regenerated fold-0 masks.
+- **Tests:** 11 new synthetic tests (45 in `test_error_analysis.py`), including one that the figure has no case ID. Not run on real data.
+- pytest on Windows: 433 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
+- **Notion sync:** none new.
+
 ## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, step 5, code only)
 - **`group_summary(table, by)`** gives one row per group with:
   - the number of cases;
