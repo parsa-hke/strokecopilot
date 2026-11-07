@@ -7,7 +7,7 @@ Lorna, Vision A. Task 1 of `docs/team/lorna_vision_a.md`.
 - The AI model (nnU-Net) completely missed the dead brain tissue in 9 of 26 test cases. The simple rule-based method missed all 9 too.
 - Most misses are small: 7 of the 9 are under 21 mL.
 - In most misses, the first scan showed little sign of trouble where the tissue later died: a median of 30% of the dead area, against 64% in the other cases.
-- One miss stands out as a likely AI error (Miss 4): the trouble sign was clear, and the AI still found nothing.
+- One miss stands out as a likely AI error (Miss 4): the trouble sign was clear, and the AI still missed it.
 - For the volume of dead tissue, which is what treatment decisions use, the simple method was closer than the AI in every size group except the largest.
 
 ## Terms used
@@ -56,7 +56,7 @@ All numbers below come from that run. No case IDs appear here.
 - **7 of the 9 misses are under 21 mL.**
 - **4 of the 9 misses had under 25% visible.**
 - **Miss 1 (101 mL)** had 22% visible, while 88% of it had usable data. So the data was there, but most of this infarct did not look at risk on the first scan.
-- **2 misses had 75% or more visible:** Miss 4 (88%) and Miss 8 (75%). The sign was there, and the AI still found nothing.
+- **2 misses had 75% or more visible:** Miss 4 (88%) and Miss 8 (75%). The sign was there, and the AI still missed it.
 
 ## Volume error
 
@@ -125,7 +125,7 @@ Miss 2 (21–70 mL, 62%): The dead area runs along the outer edge of the brain. 
 
 Miss 3 (5–21 mL, 65%): A thin, curvy strip near the front, plus two tiny spots. The trouble area on the scan is bigger than what died: it covers the strip and extends past it. So the sign was there, but it didn’t show exactly which part would die, and the thin shape may have made it even harder for the AI.
 
-Miss 4 (5–21 mL, 88%): A medium-sized patch deep inside the brain. It only looks slightly bright on this slice, but overall it showed the clearest trouble sign of all the misses. This is the strongest case of the AI missing something it could have seen.
+Miss 4 (5–21 mL, 88%): A small patch deep inside the brain. It only looks slightly bright on this slice, but overall it showed the clearest trouble sign of all the misses. This is the strongest case of the AI missing something it could have seen.
 
 Miss 5 (5–21 mL, 3%): A few small pieces spread across both sides. Almost none of it showed trouble on the first scan, and the scan looks noisy in the middle.
 

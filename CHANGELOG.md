@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-11-07 — Claude Code session (Lorna, error-analysis write-up wording fixes)
+- **`docs/ERROR_ANALYSIS_VISION_A.md`:**
+  - In the Summary and Results, "the AI still found nothing" becomes "the AI still missed it". Only 4 of the 9 misses are known to be empty predictions, and which ones is not known.
+  - The Miss 4 visual reading says "A small patch" instead of "A medium-sized patch", since Miss 4 is in the 5–21 mL group.
+- No code changes.
+- **Notion sync:** none new.
+
 ## 2026-11-07 — Claude Code session (Lorna, error-analysis write-up rewritten in plain English)
 - **`docs/ERROR_ANALYSIS_VISION_A.md` rewritten for non-specialists.** It has:
   - a 5-bullet summary;
