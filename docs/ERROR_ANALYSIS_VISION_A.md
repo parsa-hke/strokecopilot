@@ -8,7 +8,7 @@ Where and why does nnU-Net fail to find the final infarct? On fold 0, 9 of the 2
 
 ## Data and method
 
-- **Run:** EXP-15, notebook `notebooks/12_visionA_error_analysis.ipynb`, results at commit `6a2758c`. Outputs on Drive in `runs/EXP-15_visionA_error_analysis/`: `config.json`, `per_case.csv`, `metrics.json` and `figures/`.
+- **Run:** EXP-15, notebook `notebooks/12_visionA_error_analysis.ipynb`, results at commit `c442a54`. Outputs on Drive in `runs/EXP-15_visionA_error_analysis/`: `config.json`, `per_case.csv`, `metrics.json` and `figures/`.
 - **Cases:** the 26 development cases of fold 0, the nnU-Net validation fold. No held-out case was used.
 - **Scores:**
   - nnU-Net 3d_fullres, 300 epochs (EXP-14);
@@ -45,26 +45,31 @@ All numbers below are counts from that run. No case IDs appear in this document.
 
 The brief says volume error matters more than Dice, because the treatment rules are volume cut-offs (21, 31, 51 and 70 mL).
 
-**Mean absolute volume error by size band** (nnU-Net, from `metrics.json` at `6a2758c`):
+**Mean absolute volume error by size band** (mL, from `metrics.json` at `c442a54`):
 
-| Size band | nnU-Net mean absolute error |
-|---|---|
-| 70 mL and over | about 51 mL |
-| Other bands | *to copy from `metrics.json` → `groups.size_band`* |
+| Size band | nnU-Net | Threshold |
+|---|---|---|
+| Under 5 mL | 7.6 | 6.8 |
+| 5–21 mL | 8.7 | 5.7 |
+| 21–70 mL | 28.2 | 19.8 |
+| 70 mL and over | 50.7 | 70.2 |
 
-The largest infarcts carry the largest errors in mL, even though nnU-Net's Dice is best there. Miss 1 alone is a 101 mL error.
+- **The threshold has the lower volume error in every band except 70 mL and over**, even though nnU-Net has the higher Dice. A better overlap does not mean a better volume, and the treatment rules use the volume.
+- The largest infarcts carry the largest errors in mL for both methods. Miss 1 alone is a 101 mL error for nnU-Net.
 
-**Cases on the wrong side of each cut-off** (the prediction and the reference fall on different sides):
+**Cases on the wrong side of each cut-off** (the prediction and the reference fall on different sides; of 26 cases):
 
 | Cut-off | nnU-Net | Threshold | Both |
 |---|---|---|---|
-| 21 mL | *rerun* | *rerun* | *rerun* |
-| 31 mL | *rerun* | *rerun* | *rerun* |
-| 51 mL | *rerun* | *rerun* | *rerun* |
-| 70 mL | *rerun* | *rerun* | *rerun* |
-| Any | *rerun* | *rerun* | *rerun* |
+| 21 mL | 5 | 7 | 4 |
+| 31 mL | 5 | 6 | 4 |
+| 51 mL | 3 | 4 | 3 |
+| 70 mL | 3 | 3 | 2 |
+| Any | 7 | 8 | 6 |
 
-These counts were not in `metrics.json` at `6a2758c`. Notebook 12 now computes them (`wrong_side_of_cutoff`), together with the threshold's mean absolute error per group. **A rerun is needed before this table can be filled in.**
+- nnU-Net puts 7 of 26 cases on the wrong side of at least one cut-off, and the threshold 8. In 6 cases both do.
+- nnU-Net's counts per cut-off (5, 5, 3, 3) match EXP-14's own crossing counts, which is an independent check of the join.
+- At these sizes, nnU-Net is slightly less often on the wrong side than the threshold, but the two methods mostly fail on the same cases.
 
 ## Main failure groups
 

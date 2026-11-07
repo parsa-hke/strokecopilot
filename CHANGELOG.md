@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## 2026-11-07 — Claude Code session (Lorna, error-analysis write-up: volume error filled from the c442a54 run)
+- **`docs/ERROR_ANALYSIS_VISION_A.md`:** the volume-error section is filled from EXP-15 at `c442a54`, using numbers reported by Lorna from the Colab run.
+  - **Mean absolute error by size band, nnU-Net vs threshold (mL):**
+
+    | Size band | nnU-Net | Threshold |
+    |---|---|---|
+    | <5 mL | 7.6 | 6.8 |
+    | 5–21 mL | 8.7 | 5.7 |
+    | 21–70 mL | 28.2 | 19.8 |
+    | ≥70 mL | 50.7 | 70.2 |
+
+    The threshold has the lower error in every band except ≥70 mL, despite nnU-Net's higher Dice.
+  - **Cases on the wrong side of each cut-off, of 26 (nnU-Net / threshold / both):**
+
+    | Cut-off | nnU-Net / threshold / both |
+    |---|---|
+    | 21 mL | 5 / 7 / 4 |
+    | 31 mL | 5 / 6 / 4 |
+    | 51 mL | 3 / 4 / 3 |
+    | 70 mL | 3 / 3 / 2 |
+    | any | 7 / 8 / 6 |
+
+    nnU-Net's counts match EXP-14's 5/5/3/3.
+  - The run commit in the doc is now `c442a54`.
+- No code changes.
+- **Notion sync:** Experiments → EXP-15: commit `c442a54`, plus the volume-error and cut-off findings.
+
 ## 2026-11-07 — Claude Code session (Lorna, notebook 12 install fix)
 - **Problem:** in Colab, notebook 12 kept an old installed copy of the package ("error_analysis has no attribute figure_summary"). The package version never changes (0.0.1), so pip saw it as already installed.
 - **Notebook 12's install cell now:**
