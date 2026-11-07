@@ -117,11 +117,11 @@ The pictures are on Drive in `runs/EXP-15_visionA_error_analysis/figures/`. They
 
 *Drafted with AI help, checked by Lorna; one slice per case, not a clinical opinion.*
 
-How to read the pictures: the red outline is the brain tissue that died, seen on a scan days later. On the TMAX picture, bright means blood was arriving late, a sign of trouble at the time of the first scan. The % is how much of the dead area showed that sign, measured by the code over the whole brain, not just this one slice.
+How to read the pictures: the red outline is the brain tissue that died, seen on a scan days later. On the TMAX picture, bright means blood was arriving late, a sign of trouble at the time of the first scan. The % is how much of the dead area showed that sign, measured by the code across all slices of the dead area, not just this one slice.
 
 Miss 1 (70+ mL, 22%): A large area died, but on the first scan most of it looked normal. Only a small corner showed trouble. The scan quality was fine, so the damage just wasn’t showing yet when the scan was taken.
 
-Miss 2 (21–70 mL, 62%): The dead area runs along the outer edge of the brain. It looks normal on this one slice, but over the whole brain most of it did show trouble. This slice alone makes it look less visible than it was.
+Miss 2 (21–70 mL, 62%): The dead area is along the outer edge of the brain. On this slice, the blood-flow scans don’t seem to reach that edge, so much of the dead area appears to have no data here. Where data exists, across all slices, 62% showed trouble.
 
 Miss 3 (5–21 mL, 65%): A thin, curvy strip near the front, plus two tiny spots. The trouble area on the scan is bigger than what died: it covers the strip and extends past it. So the sign was there, but it didn’t show exactly which part would die, and the thin shape may have made it even harder for the AI.
 
@@ -167,7 +167,7 @@ These are untested ideas.
 ## Limits
 
 - **One slice per picture.** The slice with the most infarct may not show what went wrong elsewhere.
-- **One slice can disagree with the whole-brain number.** Miss 2 looks normal on its slice, but 62% of it was visible over the whole brain.
+- **One slice can disagree with the whole-brain number.** Miss 2 looks normal on its slice, but 62% of it was visible across all slices of the dead area.
 - **No AI outlines in the pictures yet.** The AI's fold-0 outlines were not kept and are being regenerated. Until then, we know *that* the AI missed, not *where* it looked.
 - **Only 26 cases,** from one fold. Groups of 2 to 7 cases show patterns, not proven causes.
 - **Visual readings are not a clinical opinion.**

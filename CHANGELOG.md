@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-11-07 — Claude Code session (Lorna, error-analysis write-up: Miss 2 reading)
+- **`docs/ERROR_ANALYSIS_VISION_A.md`:**
+  - The Miss 2 visual reading is replaced. The blood-flow scans don't seem to reach the outer edge on that slice, so much of the dead area appears to have no data there. Where data exists, across all slices, 62% showed trouble.
+  - "Over the whole brain" becomes "across all slices of the dead area" everywhere (2 places).
+- The Limits line still reads "One slice can disagree with the whole-brain number" and "Miss 2 looks normal on its slice". It is not changed here, and is left for Lorna to decide.
+- No code changes.
+- **Notion sync:** none new.
+
 ## 2026-11-07 — Claude Code session (Lorna, error-analysis write-up wording fixes)
 - **`docs/ERROR_ANALYSIS_VISION_A.md`:**
   - In the Summary and Results, "the AI still found nothing" becomes "the AI still missed it". Only 4 of the 9 misses are known to be empty predictions, and which ones is not known.
