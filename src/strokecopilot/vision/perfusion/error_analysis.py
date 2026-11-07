@@ -424,6 +424,20 @@ def figure_cases(table, best=BEST_CASES):
     return picks
 
 
+def figure_summary(table, picks):
+    """One row per figure from figure_cases(): label, size band, Dice-0 flag and Tmax > 6 s share.
+
+    Labels only: the case ID is used to look up the row and is not returned.
+    """
+    rows = table.set_index("case")
+    out = []
+    for pick in picks:
+        row = rows.loc[pick["case"]]
+        out.append({"label": pick["label"], "size_band": pick["size_band"], "dice0": bool(row["nnunet_dice"] == 0),
+                    "infarct_tmax6_share": _num(row["infarct_tmax6_share"], 2)})
+    return out
+
+
 def case_figure(case, label, size_band=None, z=None):
     """NCCT, CBF and Tmax at the slice with the most infarct, the final infarct outlined in red.
 

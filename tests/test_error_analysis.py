@@ -223,6 +223,15 @@ def test_figure_cases_labels():
     assert picks[3]["case"] == "sub-06"     # highest Dice; only 2 cases have Dice above 0
 
 
+def test_figure_summary_has_labels_not_ids():
+    table = _step4_table()
+    summary = error_analysis.figure_summary(table, error_analysis.figure_cases(table))
+    assert summary[0] == {"label": "Miss 1", "size_band": ">=70", "dice0": True, "infarct_tmax6_share": 0.3}
+    assert summary[3] == {"label": "Best 1", "size_band": ">=70", "dice0": False, "infarct_tmax6_share": 0.9}
+    assert all("case" not in row for row in summary)
+    assert not error_analysis._ids_in(summary, set(table["case"]))
+
+
 def test_case_figure_is_anonymous():
     mpl = pytest.importorskip("matplotlib")
     mpl.use("Agg")

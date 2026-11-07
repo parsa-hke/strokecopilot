@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, step 6c: label table and write-up draft)
+- **`error_analysis.figure_summary`** gives one row per figure: label, size band, Dice-0 flag and Tmax > 6 s share, with no case IDs. Notebook 12's section 8 displays it.
+- **`docs/ERROR_ANALYSIS_VISION_A.md`** (draft). It covers:
+  - the question, data and method (EXP-15, fold 0, 26 cases, results at `6a2758c`);
+  - code-measured results;
+  - four overlapping failure groups among the 9 Dice-0 misses:
+    - small infarcts under 21 mL (7);
+    - under 25% visible as Tmax > 6 s (4);
+    - the 101 mL miss with 22% visible and 88% reliable data (1);
+    - over 75% visible but still missed, likely true model errors (2);
+  - reperfusion context;
+  - example figures (Miss 1, Best 1; the PNGs are still on Drive);
+  - untested ideas for fixing each group;
+  - limits.
+
+  The numbers come from Lorna's Colab run. Other findings: no case was missed by nnU-Net only, and the misses had a median of 30% visible vs 64% for the rest.
+- The visual readings section is left for Lorna to fill in, kept apart from the measured numbers.
+- Plan §7's error-analysis item is not ticked yet: the write-up is a draft.
+- **Tests:** 1 new test (46 in `test_error_analysis.py`).
+- pytest on Windows: 434 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
+- **Notion sync:**
+  - Experiments → EXP-15: commit `6a2758c`, the findings above, and a link to the draft.
+  - Tasks → the error-analysis row stays In progress until the draft is final.
+
 ## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, step 6a, code only)
 - **`case_features`** adds `infarct_tmax6_share`: of the infarct voxels with reliable data, the share with Tmax > 6 s on the admission scan. It is None when no infarct voxel has reliable data.
 - **`tmax6_band`** groups that share as <25%, 25–50%, 50–75%, ≥75% or no data. It is the sixth group feature, and it is also in the largest-miss values.
