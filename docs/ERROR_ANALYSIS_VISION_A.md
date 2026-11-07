@@ -1,65 +1,82 @@
 # Vision A error analysis (EXP-15), draft
 
-Lorna, Vision A. Task 1 of `docs/team/lorna_vision_a.md`. Draft: the visual readings section is still to be filled in.
+Lorna, Vision A. Task 1 of `docs/team/lorna_vision_a.md`.
+
+## Summary
+
+- The AI model (nnU-Net) completely missed the dead brain tissue in 9 of 26 test cases. The simple rule-based method missed all 9 too.
+- Most misses are small: 7 of the 9 are under 21 mL.
+- In most misses, the first scan showed little sign of trouble where the tissue later died: a median of 30% of the dead area, against 64% in the other cases.
+- One miss stands out as a likely AI error (Miss 4): the trouble sign was clear, and the AI still found nothing.
+- For the volume of dead tissue, which is what treatment decisions use, the simple method was closer than the AI in every size group except the largest.
+
+## Terms used
+
+- **Infarct:** brain tissue that died after the stroke. Here, it is the area seen on a follow-up scan taken 2 to 9 days later.
+- **mL (millilitre):** the unit for the infarct's size. A teaspoon holds about 5 mL.
+- **nnU-Net:** the AI model that tries to outline the infarct from the first scan.
+- **Threshold baseline:** a simple method with no AI. It marks tissue with very low blood flow (under 30% of the healthy side) inside the area where blood arrives late. We compare the AI against it.
+- **Dice:** a score for how well an outline overlaps the true infarct, from 0 (no overlap at all) to 1 (perfect match).
+- **Tmax:** how late blood arrives at each spot in the brain on the first scan. Over 6 seconds (Tmax > 6 s) is a sign that the tissue is at risk.
+- **Fold 0:** our cases are split into five groups (folds). The AI was trained on four of them and tested on fold 0, which it had not seen. Fold 0 has 26 cases.
+- **Miss:** a case where the AI's Dice is 0, meaning its outline does not touch the infarct at all.
 
 ## The question
 
-Where and why does nnU-Net fail to find the final infarct? On fold 0, 9 of the 26 cases score Dice 0, including one 101 mL infarct that nnU-Net predicted as empty. Which cases are these, and is the problem the model or the input it was given?
+Where and why does the AI fail to find the infarct? On fold 0, 9 of the 26 cases score Dice 0. One of them is a 101 mL infarct that the AI marked as empty. Is the problem the AI, or what the first scan showed?
 
-## Data and method
+## How it was done
 
-- **Run:** EXP-15, notebook `notebooks/12_visionA_error_analysis.ipynb`, results at commit `c442a54`. Outputs on Drive in `runs/EXP-15_visionA_error_analysis/`: `config.json`, `per_case.csv`, `metrics.json` and `figures/`.
-- **Cases:** the 26 development cases of fold 0, the nnU-Net validation fold. No held-out case was used.
-- **Scores:**
-  - nnU-Net 3d_fullres, 300 epochs (EXP-14);
-  - the threshold baseline, rCBF < 30% within Tmax > 6 s (EXP-1, variant `within_tmax6`).
-
-  Both are scored against the same reference volumes.
-- **For each case, measured by code** (`strokecopilot.vision.perfusion.error_analysis`):
+- **Run:** EXP-15, using notebook `notebooks/12_visionA_error_analysis.ipynb`, with results at commit `c442a54`. The outputs are on Drive in `runs/EXP-15_visionA_error_analysis/`: `config.json`, `per_case.csv`, `metrics.json` and `figures/`.
+- **Cases:** the 26 fold-0 cases. No held-out case was used.
+- **Two methods, scored against the same true volumes:**
+  - the AI, nnU-Net 3d_fullres trained for 300 epochs (EXP-14);
+  - the threshold baseline (EXP-1, variant `within_tmax6`).
+- **Measured by code for each case** (`strokecopilot.vision.perfusion.error_analysis`):
   - infarct size;
-  - occlusion site and territory, from the Circle of Willis labels;
-  - onset to imaging;
-  - share of the infarct with no Tmax data;
-  - **share of the infarct visible as Tmax > 6 s on the admission scan**, counting only voxels with reliable data.
-- **Definitions:**
-  - a *miss* is nnU-Net Dice 0;
-  - "missed by both" means the threshold baseline also scored under 0.05.
-- **Figures:** for each miss and for the 3 best nnU-Net cases, NCCT, CBF and Tmax at the slice with the most infarct, with the final infarct outlined in red. Figures carry anonymous labels only (Miss 1 is the largest miss).
+  - where the blocked artery is, and whether it is in the front or back of the brain;
+  - time from stroke onset to the first scan;
+  - how much of the infarct had no Tmax data;
+  - **how much of the infarct showed Tmax > 6 s on the first scan**, counting only spots with usable data. Below, this is called "visible".
+- **"Missed by both"** means the threshold baseline also scored under 0.05.
+- **Pictures:** for each miss and for the AI's 3 best cases, one slice of the scan (the one with the most infarct), with the infarct outlined in red. Pictures carry labels only. Miss 1 is the largest miss.
 
-All numbers below are counts from that run. No case IDs appear in this document.
+All numbers below come from that run. No case IDs appear here.
 
 ## Results measured by code
 
-| | Misses (Dice 0) | Rest |
+| | Misses (Dice 0) | Other cases |
 |---|---|---|
 | Cases | 9 | 17 |
-| Median share of infarct visible as Tmax > 6 s | 30% | 64% |
+| Median share of infarct visible (Tmax > 6 s) | 30% | 64% |
 
-- **No case was missed by nnU-Net alone.** On all 9 misses the threshold baseline also scored under 0.05, and exactly 0 on 6 of them. Both methods read the same perfusion maps, so this suggests the problem lies in the input more than in the network. It is weak evidence, though: the threshold baseline is itself poor (mean Dice 0.12), so failing where it fails proves little.
+- **No case was missed by the AI alone.** On all 9 misses, the threshold baseline also scored under 0.05, and exactly 0 on 6 of them.
+  - Both methods read the same scan, so this suggests the problem lies more in what the scan showed than in the AI.
+  - This is weak evidence, though. The threshold baseline is poor itself (mean Dice 0.12), so failing where it fails proves little.
 - **7 of the 9 misses are under 21 mL.**
-- **4 of the 9 misses had under 25% of the infarct visible as Tmax > 6 s.**
-- **The 101 mL miss (Miss 1)** had 22% of its infarct visible as Tmax > 6 s, while 88% of it had reliable data. So the data was there, but most of this infarct did not look delayed on the admission scan.
-- **2 misses had over 75% visible.** The delay was there, and nnU-Net still found nothing.
+- **4 of the 9 misses had under 25% visible.**
+- **Miss 1 (101 mL)** had 22% visible, while 88% of it had usable data. So the data was there, but most of this infarct did not look at risk on the first scan.
+- **2 misses had 75% or more visible:** Miss 4 (88%) and Miss 8 (75%). The sign was there, and the AI still found nothing.
 
 ## Volume error
 
-The brief says volume error matters more than Dice, because the treatment rules are volume cut-offs (21, 31, 51 and 70 mL).
+The treatment rules use the infarct's volume, with cut-offs at 21, 31, 51 and 70 mL. So getting the volume right matters more than the Dice score.
 
-**Mean absolute volume error by size band** (mL, from `metrics.json` at `c442a54`):
+**Average volume error by size group** (mL; how far the predicted volume is from the true volume, ignoring direction):
 
-| Size band | nnU-Net | Threshold |
+| Size group | AI (nnU-Net) | Threshold baseline |
 |---|---|---|
 | Under 5 mL | 7.6 | 6.8 |
 | 5–21 mL | 8.7 | 5.7 |
 | 21–70 mL | 28.2 | 19.8 |
 | 70 mL and over | 50.7 | 70.2 |
 
-- **The threshold has the lower volume error in every band except 70 mL and over**, even though nnU-Net has the higher Dice. A better overlap does not mean a better volume, and the treatment rules use the volume.
-- The largest infarcts carry the largest errors in mL for both methods. Miss 1 alone is a 101 mL error for nnU-Net.
+- **The threshold baseline has the smaller volume error in every group except 70 mL and over,** even though the AI has the higher Dice. A better overlap does not mean a better volume, and the rules use the volume.
+- The largest infarcts have the largest errors in mL for both methods. Miss 1 alone is a 101 mL error for the AI.
 
-**Cases on the wrong side of each cut-off** (the prediction and the reference fall on different sides; of 26 cases):
+**Cases on the wrong side of each cut-off** (the predicted and true volumes fall on different sides of it; out of 26 cases):
 
-| Cut-off | nnU-Net | Threshold | Both |
+| Cut-off | AI | Threshold baseline | Both |
 |---|---|---|---|
 | 21 mL | 5 | 7 | 4 |
 | 31 mL | 5 | 6 | 4 |
@@ -67,62 +84,91 @@ The brief says volume error matters more than Dice, because the treatment rules 
 | 70 mL | 3 | 3 | 2 |
 | Any | 7 | 8 | 6 |
 
-- nnU-Net puts 7 of 26 cases on the wrong side of at least one cut-off, and the threshold 8. In 6 cases both do.
-- nnU-Net's counts per cut-off (5, 5, 3, 3) match EXP-14's own crossing counts, which is an independent check of the join.
-- At these sizes, nnU-Net is slightly less often on the wrong side than the threshold, but the two methods mostly fail on the same cases.
+- The AI puts 7 of 26 cases on the wrong side of at least one cut-off, and the threshold baseline puts 8. In 6 cases, both do.
+- The AI's counts per cut-off (5, 5, 3, 3) match EXP-14's own counts. That is an independent check that the tables were joined correctly.
+- The AI is wrong slightly less often, but the two methods mostly go wrong on the same cases.
 
 ## Main failure groups
 
-The groups overlap: a small infarct can also have little visible delay. Counts are of the 9 misses.
+The groups overlap: a small infarct can also have little of it visible. Counts are out of the 9 misses.
 
 | Group | Misses | What it means |
 |---|---|---|
-| Small infarcts (under 21 mL) | 7 | Small targets are easy to miss outright. |
-| Little visible delay (under 25% with Tmax > 6 s) | 4 | The admission scan barely shows the tissue that later died. Neither method had much to see. |
-| Large infarct, little visible delay (Miss 1, 101 mL) | 1 | Most of the infarct had reliable data but no delay on admission. It is the most costly miss for the volume cut-offs. |
-| Visible delay, still missed (over 75% visible) | 2 | Likely true model errors: the signal was in the input. |
+| Small infarcts (under 21 mL) | 7 | Small targets are easy to miss completely. |
+| Little of it visible (under 25%) | 4 | The first scan barely showed the tissue that later died. Neither method had much to see. |
+| Large infarct, little of it visible (Miss 1, 101 mL) | 1 | The data was usable, but most of it did not look at risk. It is the most costly miss for the volume cut-offs. |
+| Visible, still missed (75% or more) | 2 | Miss 4 (88%) is the clearest likely AI error. Miss 8 (75%) is borderline: a late-blood area marks tissue at risk, not tissue that will die. |
 
-**Context: why the final infarct and the delay can disagree.** Nearly every ISLES'24 patient was reperfused. Of the 99 cases with a TICI value, 97 were mTICI 2c or 3 and 2 were lower, and the rest have no value (plan §5.1). So the final infarct is, almost always, the tissue that died *despite* reperfusion. A large Tmax > 6 s area with a small final infarct is expected: most of the delayed tissue was saved. The reverse, an infarct with little delay on admission, may be tissue that died after the scan, or tissue whose delay the perfusion maps did not capture. This is an interpretation, not something the data here can prove.
+**Why the infarct and the late-blood area can disagree.**
+- Nearly every patient in this dataset (ISLES'24) had their artery successfully reopened (reperfusion). Of the 99 cases with a TICI value (a 0 to 3 grade of how well blood flow was restored), 97 were 2c or 3 (near-complete or complete), 2 were lower, and the rest have no value (plan §5.1).
+- So the infarct is, almost always, the tissue that died *even though* blood flow came back.
+- A large late-blood area with a small infarct is therefore expected: most of the tissue at risk was saved.
+- The reverse, an infarct that showed little late blood on the first scan, may be tissue that died after the scan, or tissue the scan did not capture well.
+- This is an interpretation. The data here cannot prove it.
 
 ## Example figures
 
-The figures are on Drive in `runs/EXP-15_visionA_error_analysis/figures/`. They will be copied into this document once chosen for the report (ISLES'24 images may go in the report).
+The pictures are on Drive in `runs/EXP-15_visionA_error_analysis/figures/`. They will be copied into this document once chosen for the report (ISLES'24 images may go in the report).
 
-- **Miss 1** (`miss_1.png`), ≥70 mL: the 101 mL infarct nnU-Net predicted as empty, with 22% visible as Tmax > 6 s.
-- **Best 1** (`best_1.png`): nnU-Net's highest-Dice case, for comparison.
+- **Miss 1** (`miss_1.png`, 70 mL and over): the 101 mL infarct the AI marked as empty, with 22% visible.
+- **Best 1** (`best_1.png`): the AI's best case, for comparison.
 
 ## Visual readings
 
-*To be filled in by Lorna from the figures.* These are one person's readings of one slice per case, kept apart from the measured numbers above. They are not a clinical opinion.
+*Drafted with AI help, checked by Lorna; one slice per case, not a clinical opinion.*
 
-- Miss 1:
-- Best 1:
-- Other misses:
+How to read the pictures: the red outline is the brain tissue that died, seen on a scan days later. On the TMAX picture, bright means blood was arriving late, a sign of trouble at the time of the first scan. The % is how much of the dead area showed that sign, measured by the code over the whole brain, not just this one slice.
+
+Miss 1 (70+ mL, 22%): A large area died, but on the first scan most of it looked normal. Only a small corner showed trouble. The scan quality was fine, so the damage just wasn’t showing yet when the scan was taken.
+
+Miss 2 (21–70 mL, 62%): The dead area runs along the outer edge of the brain. It looks normal on this one slice, but over the whole brain most of it did show trouble. This slice alone makes it look less visible than it was.
+
+Miss 3 (5–21 mL, 65%): A thin, curvy strip near the front, plus two tiny spots. The trouble area on the scan is bigger than what died: it covers the strip and extends past it. So the sign was there, but it didn’t show exactly which part would die, and the thin shape may have made it even harder for the AI.
+
+Miss 4 (5–21 mL, 88%): A medium-sized patch deep inside the brain. It only looks slightly bright on this slice, but overall it showed the clearest trouble sign of all the misses. This is the strongest case of the AI missing something it could have seen.
+
+Miss 5 (5–21 mL, 3%): A few small pieces spread across both sides. Almost none of it showed trouble on the first scan, and the scan looks noisy in the middle.
+
+Miss 6 (5–21 mL, 30%): Three small separate spots, one right at the edge of the brain. The scan looks noisy here, and the spots don’t stand out.
+
+Miss 7 (under 5 mL, 9%): A few tiny spots. There’s a large trouble area nearby, but the tissue that died was mostly outside it.
+
+Miss 8 (under 5 mL, 75%): One small spot inside a much larger trouble area. The trouble sign was there, but it covered far more brain than actually died, so it didn’t point to this spot. Most of that area likely recovered after treatment.
+
+Miss 9 (under 5 mL, 13%): One tiny spot near the back. It doesn’t show trouble on the scan; the trouble areas are somewhere else.
+
+Best 1 (70+ mL, 80%): A large dead area along one side that matches a large, obvious trouble area on the scan. Easy to spot.
+
+Best 2 (70+ mL, 64%): A large dead area that shows clear trouble over most of it.
+
+Best 3 (21–70 mL, 67%): A medium dead area, mostly covered by a clear trouble patch.
 
 ## What might fix each group
 
 These are untested ideas.
 
 - **Small infarcts.**
-  - Check whether nnU-Net predicts anything at all on these cases once the masks are back.
-  - Training that weights small lesions more.
-  - A lower probability threshold.
+  - Check whether the AI predicts anything at all on these cases, once its outlines are back.
+  - Train the AI to give small infarcts more weight.
+  - Lower the AI's probability threshold, so it marks tissue it is less sure about.
   - Judge these cases by volume error rather than Dice: a 3 mL miss rarely changes a decision at the 21 mL cut-off.
-- **Little visible delay.**
-  - The perfusion input may not hold the answer.
-  - Add NCCT as an extra channel, which plan §8.1 allows.
-  - Use the visible-delay share as a warning: a low share should mean low `confidence.core` (Task 2).
-- **Large infarct, little visible delay.**
-  - Look at the prediction overlay when the masks arrive.
-  - Check its onset-to-imaging time and occlusion site.
-  - If the tissue died after imaging, no model of the admission scan can be expected to find it. Report it as a limit.
-- **Visible delay, still missed.**
-  - These are the cases a better model should catch. Check them first with overlays, then with folds 1–4 and an ensemble.
+- **Little of it visible.**
+  - The first scan may simply not hold the answer.
+  - Add the plain CT scan (NCCT) as an extra input, which plan §8.1 allows.
+  - Use the visible share as a warning: a low share should mean low confidence in the AI's core estimate (`confidence.core`, Task 2).
+- **Large infarct, little of it visible (Miss 1).**
+  - Look at the AI's outline when it is back.
+  - Check its onset-to-scan time and where the blocked artery is.
+  - If the tissue died after the scan, no model of the first scan can be expected to find it. Report it as a limit.
+- **Visible, still missed (Miss 4, and Miss 8 as borderline).**
+  - These are the cases a better AI should catch.
+  - Check them first with the AI's outlines, then with folds 1 to 4 and a combination of all five models.
 
 ## Limits
 
-- **One slice per figure.** The slice with the most infarct may not show what went wrong elsewhere.
-- **No prediction overlays yet.** Fold 0's predicted masks were not kept and are being regenerated. Until then, we know *that* nnU-Net missed, not *where* it looked.
-- **Only 26 cases**, one fold. Groups of 2–7 cases show patterns, not proven causes.
+- **One slice per picture.** The slice with the most infarct may not show what went wrong elsewhere.
+- **One slice can disagree with the whole-brain number.** Miss 2 looks normal on its slice, but 62% of it was visible over the whole brain.
+- **No AI outlines in the pictures yet.** The AI's fold-0 outlines were not kept and are being regenerated. Until then, we know *that* the AI missed, not *where* it looked.
+- **Only 26 cases,** from one fold. Groups of 2 to 7 cases show patterns, not proven causes.
 - **Visual readings are not a clinical opinion.**
-- The territory and occlusion grouping use the TopCoW label numbering, which is not confirmed for this dataset (`docs/DATA.md`).
+- The front/back grouping and the artery grouping use a label numbering (TopCoW) that is not confirmed for this dataset (`docs/DATA.md`).

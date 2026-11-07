@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-11-07 — Claude Code session (Lorna, error-analysis write-up rewritten in plain English)
+- **`docs/ERROR_ANALYSIS_VISION_A.md` rewritten for non-specialists.** It has:
+  - a 5-bullet summary;
+  - a "Terms used" list: infarct, mL, nnU-Net, threshold baseline, Dice, Tmax, fold 0, miss;
+  - short sentences, and no em dashes.
+
+  Every number and limit is kept.
+- **Visual readings** are added with Lorna's exact text, labelled "drafted with AI help, checked by Lorna; one slice per case, not a clinical opinion".
+- **Correction:** the two misses with high visible delay are named, Miss 4 (88%) and Miss 8 (75%). The group is now "75% or more", since 0.75 is not over 75%.
+  - Miss 4 is the clearest likely model error.
+  - Miss 8 is borderline: a late-blood area marks tissue at risk, not tissue that will die.
+- **New limit:** one slice can disagree with the whole-brain number (Miss 2).
+- No code changes.
+- **Notion sync:** link the rewritten draft from the EXP-15 row and the error-analysis task.
+
 ## 2026-11-07 — Claude Code session (Lorna, error-analysis write-up: volume error filled from the c442a54 run)
 - **`docs/ERROR_ANALYSIS_VISION_A.md`:** the volume-error section is filled from EXP-15 at `c442a54`, using numbers reported by Lorna from the Colab run.
   - **Mean absolute error by size band, nnU-Net vs threshold (mL):**
