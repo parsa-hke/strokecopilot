@@ -5,6 +5,7 @@ strokecopilot.vision.perfusion.error_analysis as it is filled in.
 """
 
 import io
+import json
 
 import pytest
 
@@ -218,6 +219,90 @@ def test_size_band(ml, band):
     assert error_analysis.size_band(ml) == band
 
 
-def test_later_steps_not_built_yet():
-    with pytest.raises(NotImplementedError):
-        error_analysis.group_summary(None, "size_band")
+def _step4_table():
+    """A step-4 table by hand: six cases with known scores and features."""
+    return pd.DataFrame({
+        "case": ["sub-01", "sub-02", "sub-03", "sub-04", "sub-05", "sub-06"],
+        "ref_ml": [2.0, 3.0, 101.0, 40.0, 0.0, 120.0],
+        "nnunet_dice": [0.0, 0.0, 0.0, 0.5, np.nan, 0.7],
+        "nnunet_pred_ml": [0.0, 1.5, 0.0, 30.0, 0.0, 110.0],
+        "nnunet_abs_error_ml": [2.0, 1.5, 101.0, 10.0, 0.0, 10.0],
+        "threshold_dice": [0.0, 0.2, 0.0, 0.3, np.nan, 0.6],
+        "threshold_pred_ml": [0.0, 4.0, 5.0, 20.0, 0.0, 90.0],
+        "miss": ["both", "nnunet", "both", "neither", "neither", "neither"],
+        "better_volume": ["tie", "nnunet", "threshold", "nnunet", "tie", "nnunet"],
+        "size_band": ["<5", "<5", ">=70", "21-70", "none", ">=70"],
+        "territory": ["anterior", "posterior", "anterior", "anterior", "unknown", "anterior"],
+        "occlusion_site": ["unknown", "basilar", "ICA", "unknown", "unknown", "ICA"],
+        "occlusion_distance_mm": [3.0, 20.0, 1.0, 2.0, np.nan, 0.0],
+        "onset_to_imaging_min": [120.0, np.nan, 300.0, np.nan, np.nan, 90.0],
+        "infarct_tmax_missing_share": [0.0, 0.1, 0.6, 0.02, np.nan, 0.0],
+        "infarct_tmax_unreliable_share": [0.0, 0.1, 0.7, 0.02, np.nan, 0.0],
+        "infarct_reliable_share": [1.0, 0.9, 0.3, 0.98, np.nan, 1.0],
+    })
+
+
+@pytest.mark.parametrize("share, band", [(None, "no infarct"), (float("nan"), "no infarct"), (0.0, "none"),
+                                         (0.01, "<5%"), (0.05, "5%-25%"), (0.25, ">=25%"), (1.0, ">=25%")])
+def test_tmax_missing_band(share, band):
+    assert error_analysis.tmax_missing_band(share) == band
+
+
+def test_group_summary_by_size():
+    rows = {r["group"]: r for r in error_analysis.group_summary(_step4_table(), "size_band")}
+    assert set(rows) == {"<5", ">=70", "21-70", "none"}
+    small = rows["<5"]
+    assert small["cases"] == 2 and small["dice0"] == 2
+    assert small["missed_nnunet_only"] == 1 and small["missed_both"] == 1
+    assert small["nnunet_dice_mean"] == 0.0 and small["nnunet_abs_error_ml_mean"] == 1.8  # (2.0 + 1.5) / 2, 1 decimal
+    big = rows[">=70"]
+    assert big["cases"] == 2 and big["nnunet_dice_mean"] == 0.35 and big["nnunet_dice_median"] == 0.35
+    assert rows["none"]["nnunet_dice_mean"] is None  # no Dice when both masks are empty
+
+
+def test_summarise_features_derived_groups():
+    groups = error_analysis.summarise_features(_step4_table())
+    assert set(groups) == set(error_analysis.GROUP_FEATURES)
+    onset = {r["group"]: r["cases"] for r in groups["onset_known"]}
+    assert onset == {"known": 3, "unknown": 3}
+    tmax = {r["group"]: r["cases"] for r in groups["tmax_missing_band"]}
+    assert tmax == {"none": 2, "5%-25%": 1, ">=25%": 1, "<5%": 1, "no infarct": 1}
+    for feature in groups.values():  # every case is in exactly one group
+        assert sum(r["cases"] for r in feature) == 6
+
+
+def test_miss_profile():
+    profile = error_analysis.miss_profile(_step4_table())
+    assert profile["dice0"] == 3 and profile["threshold_also_dice0"] == 2
+    assert profile["nnunet_pred_empty"] == 2
+    assert profile["ref_ml"] == {"min": 2.0, "median": 3.0, "max": 101.0}
+    assert profile["groups"]["size_band"] == {"<5": 2, ">=70": 1}
+    largest = profile["largest_miss"]
+    assert largest["ref_ml"] == 101.0 and largest["nnunet_pred_ml"] == 0.0
+    assert largest["occlusion_site"] == "ICA" and largest["tmax_missing_band"] == ">=25%"
+    assert largest["onset_to_imaging_min"] == 300.0
+    assert "case" not in largest
+
+
+def test_build_and_write_metrics(tmp_path):
+    table = _step4_table()
+    config = {"experiment": "EXP-15", "git_commit": "abc1234", "folds": [0], "inputs": {"threshold_variant": "within_tmax6"}}
+    metrics = error_analysis.build_metrics(table, config, "def5678")
+    # The commit this run installed, and config.json's own, kept from an earlier run.
+    assert metrics["git_commit"] == "def5678" and metrics["config_git_commit"] == "abc1234"
+    with pytest.raises(ValueError, match="git_commit"):
+        error_analysis.build_metrics(table, config, "")
+    assert metrics["overall"]["cases"] == 6 and metrics["overall"]["dice0"] == 3
+    assert metrics["who_misses"] == {"both": 2, "neither": 3, "nnunet": 1}
+    assert metrics["threshold_variant"] == "within_tmax6"
+    path = error_analysis.write_metrics(tmp_path, metrics)
+    saved = path.read_text()
+    assert "sub-0" not in saved
+    assert json.loads(saved)["dice0_misses"]["largest_miss"]["ref_ml"] == 101.0
+
+
+def test_build_metrics_refuses_case_ids():
+    table = _step4_table()
+    table.loc[0, "territory"] = "sub-03"  # an ID where a group label should be
+    with pytest.raises(ValueError, match="case IDs"):
+        error_analysis.build_metrics(table, {}, "abc1234")

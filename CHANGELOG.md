@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, step 5, code only)
+- **`group_summary(table, by)`** gives one row per group with:
+  - the number of cases;
+  - nnU-Net Dice mean and median, leaving out cases with no Dice;
+  - mean absolute volume error;
+  - Dice-0 count;
+  - cases missed (Dice < 0.05) by nnU-Net only and by both models.
+
+  Missing values form their own group.
+- **`summarise_features`** runs `group_summary` for size band, territory, occlusion site, missing-Tmax band and onset known. The last two are derived by `add_groups`. The missing-Tmax bands are none, <5%, 5–25%, ≥25% and no infarct.
+- **`miss_profile`** describes nnU-Net's Dice-0 misses, as counts and values only:
+  - how many the threshold also scores 0;
+  - reference and predicted volume ranges;
+  - how many predictions are empty;
+  - counts per group;
+  - the largest miss by reference volume, as values with no ID.
+- **`build_metrics` / `write_metrics`** write `metrics.json`. Its contents:
+  - run details from `config.json`;
+  - overall scores;
+  - who misses;
+  - which model has the smaller volume error;
+  - the groups and the miss profile.
+
+  It refuses to write if any case ID appears in a key or text value.
+- **Commits in `metrics.json`:**
+  - `git_commit` is the commit the run actually installed, which `build_metrics` now requires.
+  - `config_git_commit` is the one `config.json` was written at. That can be older, because `config.json` is written once and kept on reruns.
+- **Notebook 12** gains sections 7 (groups) and 8 (miss profile, `metrics.json`, `OK:`). Section 6 now only saves `per_case.csv`.
+- **Tests:** 11 new synthetic tests (34 in `test_error_analysis.py`). Not run on real data.
+- pytest on Windows: 422 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
+- **Notion sync:** after the Colab run, fill in EXP-15 (commit, results) and set it to Done.
+
 ## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 4 fix after the first Colab run)
 - **First Colab run of notebook 12 stopped in `join_tables`:** "The threshold table has 129 repeated cases." EXP-1's `per_case.csv` has two rows per case, one per `variant` (`within_tmax6`, the default compared with EXP-14, and `unrestricted`; notebook 11).
 - **`join_tables`** now keeps only the `within_tmax6` rows when there is a `variant` column (`THRESHOLD_VARIANT`, overridable). It raises if that variant has no rows.

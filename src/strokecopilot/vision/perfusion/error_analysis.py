@@ -1,6 +1,6 @@
 """Vision A error analysis: where and why the infarct model fails (plan §7 Phase 3, §8.1; brief docs/team/lorna_vision_a.md).
 
-Built one step at a time. Functions not built yet raise NotImplementedError.
+Built one step at a time.
 
 1. Skeleton and synthetic tests (tests/test_error_analysis.py).
 2. write_config(): runs/EXP-15_visionA_error_analysis/config.json, written before the run
@@ -9,7 +9,8 @@ Built one step at a time. Functions not built yet raise NotImplementedError.
 3. case_features(): per-case possible causes of failure, from a loaded Case: size, occlusion site,
    territory, onset to imaging, and how much of the infarct has no Tmax data.
 4. (Colab) run case_features() over the development cases and join it to the step-2 table.
-5. group_summary(): scores per group of a feature, as counts and summaries.
+5. group_summary(): scores per group of a feature, as counts and summaries; miss_profile(): the
+   Dice-0 misses and the largest one, as values only; build_metrics() / write_metrics(): metrics.json.
 6. (Colab, then docs) images of failed cases and the write-up.
 
 Outputs that leave Drive carry counts and summaries only, never case IDs (docs/team/README.md §3).
@@ -56,6 +57,15 @@ TMAX_NO_DATA = -30.0
 # 11-12 ACAs, 15 third A2. The posterior communicating arteries (8, 9) join both, so they stay unknown.
 POSTERIOR_LABELS = frozenset({1, 2, 3})
 ANTERIOR_LABELS = frozenset({4, 5, 6, 7, 10, 11, 12, 15})
+
+# Step 5. Bands of the share of the infarct with Tmax at -30.
+TMAX_MISSING_EDGES = (0.05, 0.25)
+# The features the cases are grouped by. The last two are derived by add_groups().
+GROUP_FEATURES = ("size_band", "territory", "occlusion_site", "tmax_missing_band", "onset_known")
+# What the miss profile shows about the largest Dice-0 miss: values only, no case ID.
+LARGEST_MISS_KEYS = ("ref_ml", "nnunet_pred_ml", "threshold_dice", "threshold_pred_ml", *GROUP_FEATURES,
+                     "occlusion_distance_mm", "onset_to_imaging_min", "infarct_tmax_missing_share",
+                     "infarct_tmax_unreliable_share", "infarct_reliable_share")
 
 
 def write_config(run_dir, git_commit, folds=(0,), notes=""):
@@ -225,6 +235,143 @@ def case_features(case):
     }
 
 
+def tmax_missing_band(share):
+    """Group of the share of the infarct with Tmax at -30: none, <5%, 5-25%, >=25%, or no infarct."""
+    if share is None or (isinstance(share, float) and np.isnan(share)):
+        return "no infarct"
+    if share <= 0:
+        return "none"
+    lower = 0.0
+    for edge in TMAX_MISSING_EDGES:
+        if share < edge:
+            return f"<{edge:.0%}" if lower == 0 else f"{lower:.0%}-{edge:.0%}"
+        lower = edge
+    return f">={lower:.0%}"
+
+
+def add_groups(table):
+    """A copy of the step-4 table with the two derived group columns: tmax_missing_band and onset_known."""
+    table = table.copy()
+    table["tmax_missing_band"] = [tmax_missing_band(s) for s in table["infarct_tmax_missing_share"]]
+    table["onset_known"] = np.where(table["onset_to_imaging_min"].notna(), "known", "unknown")
+    return table
+
+
+def _num(value, digits=3):
+    """A JSON-safe number: None for missing, int for counts, rounded float otherwise."""
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return None
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    return round(float(value), digits)
+
+
+def _scores(rows):
+    """The step-5 numbers for a set of rows of the step-4 table."""
+    dice = rows["nnunet_dice"]
+    return {
+        "cases": int(len(rows)),
+        "nnunet_dice_mean": _num(dice.mean()),
+        "nnunet_dice_median": _num(dice.median()),
+        "nnunet_abs_error_ml_mean": _num(rows["nnunet_abs_error_ml"].mean(), 1),
+        "dice0": int((dice == 0).sum()),
+        "missed_nnunet_only": int((rows["miss"] == "nnunet").sum()),
+        "missed_both": int((rows["miss"] == "both").sum()),
+    }
+
+
 def group_summary(table, by):
-    """Step 5. Cases, Dice and absolute volume error per group of column `by`. No case IDs."""
-    raise NotImplementedError("Step 5")
+    """Step 5. One row per group of column `by` (missing values form their own group), as a list of dicts.
+
+    Each row: group, cases, nnU-Net Dice mean and median (cases with no Dice left out), mean absolute
+    volume error (mL), dice0 (nnU-Net Dice exactly 0), and missed_nnunet_only / missed_both by the
+    `miss` column of join_tables() (Dice < MISS_DICE). Counts and summaries only, no case IDs.
+    """
+    groups = table[by].astype(object).where(table[by].notna(), "missing").astype(str)
+    return [{"group": group, **_scores(table[groups == group])} for group in sorted(groups.unique())]
+
+
+def summarise_features(table, features=GROUP_FEATURES):
+    """group_summary() for each feature, on the step-4 table. Adds the derived group columns first."""
+    table = add_groups(table)
+    return {feature: group_summary(table, feature) for feature in features}
+
+
+def miss_profile(table, features=GROUP_FEATURES):
+    """Who the nnU-Net Dice-0 misses are, as counts and values only, never case IDs.
+
+    Returns the number of misses, how many the threshold also missed, their reference and predicted
+    volume ranges, counts per group of each feature, and the largest miss (by reference volume) as values.
+    """
+    table = add_groups(table)
+    misses = table[table["nnunet_dice"] == 0]
+    out = {"cases": int(len(table)), "dice0": int(len(misses))}
+    if misses.empty:
+        return {**out, "largest_miss": None}
+    stats = lambda s: {"min": _num(s.min(), 1), "median": _num(s.median(), 1), "max": _num(s.max(), 1)}
+    out.update({
+        "threshold_also_dice0": int((misses["threshold_dice"] == 0).sum()),
+        "ref_ml": stats(misses["ref_ml"]),
+        "nnunet_pred_ml": stats(misses["nnunet_pred_ml"]),
+        "nnunet_pred_empty": int((misses["nnunet_pred_ml"] == 0).sum()),
+        "groups": {f: {str(k): int(v) for k, v in misses[f].value_counts(dropna=False).sort_index().items()} for f in features},
+    })
+    largest = misses.loc[misses["ref_ml"].idxmax()]
+    out["largest_miss"] = {key: (_num(largest[key]) if key not in features else str(largest[key])) for key in LARGEST_MISS_KEYS}
+    return out
+
+
+def _strings(value):
+    """Every key and text value inside nested dicts and lists."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield str(key)
+            yield from _strings(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _strings(item)
+    elif isinstance(value, str):
+        yield value
+
+
+def _ids_in(value, ids):
+    """Case IDs found in `value`: a text equal to an ID, or containing an ID of 4 characters or more."""
+    long_ids = [i for i in ids if len(i) >= 4]
+    return sorted({i for s in _strings(value) for i in ([s] if s in ids else []) + [i for i in long_ids if i in s]})
+
+
+def build_metrics(table, config, git_commit):
+    """metrics.json for EXP-15: run details, group summaries and the miss profile.
+
+    git_commit: the commit this run installed, which can differ from config.json's when config.json
+    was kept from an earlier run; both are recorded. Raises if any case ID of the table appears
+    anywhere in the result.
+    """
+    if not git_commit:
+        raise ValueError("git_commit is required: the commit this run installed.")
+    metrics = {
+        "experiment": config.get("experiment", EXPERIMENT),
+        "git_commit": git_commit,
+        "config_git_commit": config.get("git_commit"),
+        "data_version": config.get("data_version", ISLES24_SLIM),
+        "folds": config.get("folds"),
+        "threshold_variant": config.get("inputs", {}).get("threshold_variant", THRESHOLD_VARIANT),
+        "overall": _scores(table),
+        "who_misses": {str(k): int(v) for k, v in table["miss"].value_counts().sort_index().items()},
+        "better_volume": {str(k): int(v) for k, v in table["better_volume"].value_counts().sort_index().items()},
+        "groups": summarise_features(table),
+        "dice0_misses": miss_profile(table),
+    }
+    leaked = _ids_in(metrics, set(table["case"].astype(str)))
+    if leaked:
+        raise ValueError(f"{len(leaked)} case IDs reached metrics.json. Nothing was written.")
+    return metrics
+
+
+def write_metrics(run_dir, metrics):
+    """Write metrics.json in the run folder, last, as it marks a finished run."""
+    path = Path(run_dir) / "metrics.json"
+    path.write_text(json.dumps(metrics, indent=1))
+    return path
