@@ -284,6 +284,20 @@ def add_groups(table):
     return table
 
 
+def crossing_counts(table):
+    """Per decision cut-off, how many cases each model puts on the wrong side of it (prediction and
+    reference on different sides), and how many both models do. Counts only, no case IDs."""
+    out = {}
+    for cutoff in DECISION_CUTOFFS_ML:
+        nn = table[f"nnunet_crosses_{cutoff:g}"].astype(bool)
+        th = table[f"threshold_crosses_{cutoff:g}"].astype(bool)
+        out[f"{cutoff:g}"] = {"nnunet": int(nn.sum()), "threshold": int(th.sum()), "both": int((nn & th).sum()), "of": int(len(table))}
+    nn_any = sum(table[f"nnunet_{c}"].astype(bool) for c in CROSSINGS) > 0
+    th_any = sum(table[f"threshold_{c}"].astype(bool) for c in CROSSINGS) > 0
+    out["any"] = {"nnunet": int(nn_any.sum()), "threshold": int(th_any.sum()), "both": int((nn_any & th_any).sum()), "of": int(len(table))}
+    return out
+
+
 def visibility_comparison(table):
     """infarct_tmax6_share for nnU-Net's Dice-0 misses vs the other cases: counts and medians, no IDs."""
     miss = table["nnunet_dice"] == 0
@@ -314,6 +328,7 @@ def _scores(rows):
         "nnunet_dice_mean": _num(dice.mean()),
         "nnunet_dice_median": _num(dice.median()),
         "nnunet_abs_error_ml_mean": _num(rows["nnunet_abs_error_ml"].mean(), 1),
+        "threshold_abs_error_ml_mean": _num(rows["threshold_abs_error_ml"].mean(), 1),
         "dice0": int((dice == 0).sum()),
         "missed_nnunet_only": int((rows["miss"] == "nnunet").sum()),
         "missed_both": int((rows["miss"] == "both").sum()),
@@ -400,6 +415,7 @@ def build_metrics(table, config, git_commit):
         "who_misses": {str(k): int(v) for k, v in table["miss"].value_counts().sort_index().items()},
         "better_volume": {str(k): int(v) for k, v in table["better_volume"].value_counts().sort_index().items()},
         "groups": summarise_features(table),
+        "wrong_side_of_cutoff": crossing_counts(table),
         "dice0_misses": miss_profile(table),
         "tmax6_share_misses_vs_rest": visibility_comparison(table),
     }

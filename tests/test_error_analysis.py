@@ -277,8 +277,8 @@ def test_size_band(ml, band):
 
 
 def _step4_table():
-    """A step-4 table by hand: six cases with known scores and features."""
-    return pd.DataFrame({
+    """A step-4 table by hand: six cases with known scores and features. Crossings follow from the volumes."""
+    table = pd.DataFrame({
         "case": ["sub-01", "sub-02", "sub-03", "sub-04", "sub-05", "sub-06"],
         "ref_ml": [2.0, 3.0, 101.0, 40.0, 0.0, 120.0],
         "nnunet_dice": [0.0, 0.0, 0.0, 0.5, np.nan, 0.7],
@@ -297,7 +297,12 @@ def _step4_table():
         "infarct_tmax_unreliable_share": [0.0, 0.1, 0.7, 0.02, np.nan, 0.0],
         "infarct_reliable_share": [1.0, 0.9, 0.3, 0.98, np.nan, 1.0],
         "infarct_tmax6_share": [0.1, 0.2, 0.3, 0.8, np.nan, 0.9],
+        "threshold_abs_error_ml": [2.0, 1.0, 96.0, 20.0, 0.0, 30.0],
     })
+    for model in ("nnunet", "threshold"):
+        for cutoff in evaluate.DECISION_CUTOFFS_ML:
+            table[f"{model}_crosses_{cutoff:g}"] = [evaluate.crosses(p, r, cutoff) for p, r in zip(table[f"{model}_pred_ml"], table["ref_ml"])]
+    return table
 
 
 @pytest.mark.parametrize("share, band", [(None, "no infarct"), (float("nan"), "no infarct"), (0.0, "none"),
@@ -342,6 +347,16 @@ def test_miss_profile():
     assert "case" not in largest
 
 
+def test_crossing_counts():
+    # The 101 mL miss (predicted 0 and 5 mL) crosses every cut-off for both models. The 40 mL case
+    # crosses 31 mL for nnU-Net (30 mL) and 21 and 31 mL for the threshold (20 mL).
+    c = error_analysis.crossing_counts(_step4_table())
+    assert c["21"] == {"nnunet": 1, "threshold": 2, "both": 1, "of": 6}
+    assert c["31"] == {"nnunet": 2, "threshold": 2, "both": 2, "of": 6}
+    assert c["51"] == c["70"] == {"nnunet": 1, "threshold": 1, "both": 1, "of": 6}
+    assert c["any"] == {"nnunet": 2, "threshold": 2, "both": 2, "of": 6}
+
+
 def test_build_and_write_metrics(tmp_path):
     table = _step4_table()
     config = {"experiment": "EXP-15", "git_commit": "abc1234", "folds": [0], "inputs": {"threshold_variant": "within_tmax6"}}
@@ -353,6 +368,9 @@ def test_build_and_write_metrics(tmp_path):
     assert metrics["overall"]["cases"] == 6 and metrics["overall"]["dice0"] == 3
     assert metrics["who_misses"] == {"both": 2, "neither": 3, "nnunet": 1}
     assert metrics["threshold_variant"] == "within_tmax6"
+    assert metrics["wrong_side_of_cutoff"]["70"]["nnunet"] == 1
+    big = {r["group"]: r for r in metrics["groups"]["size_band"]}[">=70"]
+    assert big["nnunet_abs_error_ml_mean"] == 55.5 and big["threshold_abs_error_ml_mean"] == 63.0
     path = error_analysis.write_metrics(tmp_path, metrics)
     saved = path.read_text()
     assert "sub-0" not in saved

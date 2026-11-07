@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, write-up fixes and cut-off counts)
+- **`docs/ERROR_ANALYSIS_VISION_A.md`:**
+  - "Points to the input" is softened to "suggests", because the threshold baseline is weak (Dice 0.12). It now says the threshold scored under 0.05 on all 9 misses and exactly 0 on 6.
+  - The reperfusion note gives 97 of 99 cases with a TICI value as 2c or 3, 2 lower and the rest unrecorded, citing plan §5.1.
+  - New volume-error section: nnU-Net's mean absolute error for the ≥70 mL band is about 51 mL. The other bands are still to be copied from `metrics.json`.
+  - The cut-off table is waiting for a rerun.
+  - Removed "one missed slice costs all of the Dice" and the dash in the title.
+- **`error_analysis.crossing_counts`:** per cut-off (21, 31, 51, 70 mL and any), how many cases nnU-Net, the threshold, and both put on the wrong side. It is saved in `metrics.json` as `wrong_side_of_cutoff`, and notebook 12's section 9 displays it.
+- **Group summaries** also give the threshold's mean absolute volume error.
+- **Needs a Colab rerun** to fill in the cut-off table.
+- **Tests:** 1 new test, plus checks in the metrics test (47 in `test_error_analysis.py`).
+- pytest on Windows: 435 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
+- **Notion sync:** none new.
+
 ## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, step 6c: label table and write-up draft)
 - **`error_analysis.figure_summary`** gives one row per figure: label, size band, Dice-0 flag and Tmax > 6 s share, with no case IDs. Notebook 12's section 8 displays it.
 - **`docs/ERROR_ANALYSIS_VISION_A.md`** (draft). It covers:

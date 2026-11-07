@@ -1,4 +1,4 @@
-# Vision A error analysis (EXP-15) — draft
+# Vision A error analysis (EXP-15), draft
 
 Lorna, Vision A. Task 1 of `docs/team/lorna_vision_a.md`. Draft: the visual readings section is still to be filled in.
 
@@ -35,11 +35,36 @@ All numbers below are counts from that run. No case IDs appear in this document.
 | Cases | 9 | 17 |
 | Median share of infarct visible as Tmax > 6 s | 30% | 64% |
 
-- **No case was missed by nnU-Net alone.** On every case where nnU-Net failed, the threshold baseline failed too. Both methods read the same perfusion maps, so this points to the input rather than to the network.
+- **No case was missed by nnU-Net alone.** On all 9 misses the threshold baseline also scored under 0.05, and exactly 0 on 6 of them. Both methods read the same perfusion maps, so this suggests the problem lies in the input more than in the network. It is weak evidence, though: the threshold baseline is itself poor (mean Dice 0.12), so failing where it fails proves little.
 - **7 of the 9 misses are under 21 mL.**
 - **4 of the 9 misses had under 25% of the infarct visible as Tmax > 6 s.**
 - **The 101 mL miss (Miss 1)** had 22% of its infarct visible as Tmax > 6 s, while 88% of it had reliable data. So the data was there, but most of this infarct did not look delayed on the admission scan.
 - **2 misses had over 75% visible.** The delay was there, and nnU-Net still found nothing.
+
+## Volume error
+
+The brief says volume error matters more than Dice, because the treatment rules are volume cut-offs (21, 31, 51 and 70 mL).
+
+**Mean absolute volume error by size band** (nnU-Net, from `metrics.json` at `6a2758c`):
+
+| Size band | nnU-Net mean absolute error |
+|---|---|
+| 70 mL and over | about 51 mL |
+| Other bands | *to copy from `metrics.json` → `groups.size_band`* |
+
+The largest infarcts carry the largest errors in mL, even though nnU-Net's Dice is best there. Miss 1 alone is a 101 mL error.
+
+**Cases on the wrong side of each cut-off** (the prediction and the reference fall on different sides):
+
+| Cut-off | nnU-Net | Threshold | Both |
+|---|---|---|---|
+| 21 mL | *rerun* | *rerun* | *rerun* |
+| 31 mL | *rerun* | *rerun* | *rerun* |
+| 51 mL | *rerun* | *rerun* | *rerun* |
+| 70 mL | *rerun* | *rerun* | *rerun* |
+| Any | *rerun* | *rerun* | *rerun* |
+
+These counts were not in `metrics.json` at `6a2758c`. Notebook 12 now computes them (`wrong_side_of_cutoff`), together with the threshold's mean absolute error per group. **A rerun is needed before this table can be filled in.**
 
 ## Main failure groups
 
@@ -47,12 +72,12 @@ The groups overlap: a small infarct can also have little visible delay. Counts a
 
 | Group | Misses | What it means |
 |---|---|---|
-| Small infarcts (under 21 mL) | 7 | Small targets are easy to miss outright, and one missed slice costs all of the Dice. |
+| Small infarcts (under 21 mL) | 7 | Small targets are easy to miss outright. |
 | Little visible delay (under 25% with Tmax > 6 s) | 4 | The admission scan barely shows the tissue that later died. Neither method had much to see. |
 | Large infarct, little visible delay (Miss 1, 101 mL) | 1 | Most of the infarct had reliable data but no delay on admission. It is the most costly miss for the volume cut-offs. |
 | Visible delay, still missed (over 75% visible) | 2 | Likely true model errors: the signal was in the input. |
 
-**Context: why the final infarct and the delay can disagree.** Every ISLES'24 patient was reperfused (mTICI 2c or 3, plan §13). So the final infarct is the tissue that died *despite* reperfusion. A large Tmax > 6 s area with a small final infarct is expected: most of the delayed tissue was saved. The reverse, an infarct with little delay on admission, may be tissue that died after the scan, or tissue whose delay the perfusion maps did not capture. This is an interpretation, not something the data here can prove.
+**Context: why the final infarct and the delay can disagree.** Nearly every ISLES'24 patient was reperfused. Of the 99 cases with a TICI value, 97 were mTICI 2c or 3 and 2 were lower, and the rest have no value (plan §5.1). So the final infarct is, almost always, the tissue that died *despite* reperfusion. A large Tmax > 6 s area with a small final infarct is expected: most of the delayed tissue was saved. The reverse, an infarct with little delay on admission, may be tissue that died after the scan, or tissue whose delay the perfusion maps did not capture. This is an interpretation, not something the data here can prove.
 
 ## Example figures
 
