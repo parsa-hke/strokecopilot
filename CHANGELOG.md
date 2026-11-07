@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-11-07 — Claude Code session (Lorna, notebook 12 install fix)
+- **Problem:** in Colab, notebook 12 kept an old installed copy of the package ("error_analysis has no attribute figure_summary"). The package version never changes (0.0.1), so pip saw it as already installed.
+- **Notebook 12's install cell now:**
+  1. installs the dependencies;
+  2. reinstalls the package from the exact commit with `--force-reinstall --no-deps --no-cache-dir`;
+  3. reads the commit the installed package came from (pip's `direct_url.json`, without printing the URL, which holds the token);
+  4. prints it next to the branch's commit, and stops with a clear error if they differ.
+
+  It also stops at the start if the package is already imported in the session, because a reinstall wouldn't take effect then. It asks for Runtime → Restart session.
+- **Checked locally:** a forced install from a commit records that commit (`vcs_info.commit_id`). This was not checked in Colab.
+- `00_template.ipynb` installs the same way as the old cell, so it could hit the same problem when `main` moves. It was not changed here.
+- No code or test changes. pytest is unchanged: 435 passed, 3 skipped, and the same 9 Windows failures.
+- **Notion sync:** none new.
+
 ## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, write-up fixes and cut-off counts)
 - **`docs/ERROR_ANALYSIS_VISION_A.md`:**
   - "Points to the input" is softened to "suggests", because the threshold baseline is weak (Dice 0.12). It now says the threshold scored under 0.05 on all 9 misses and exactly 0 on 6.
