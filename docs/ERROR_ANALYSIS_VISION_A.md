@@ -167,7 +167,7 @@ These are untested ideas.
 ## Limits
 
 - **One slice per picture.** The slice with the most infarct may not show what went wrong elsewhere.
-- **One slice can disagree with the whole-brain number.** Miss 2 looks normal on its slice, but 62% of it was visible across all slices of the dead area.
+- **One slice can disagree with the number across all slices.** On Miss 2's slice, much of the dead area appears to have no data, but where data exists across all slices, 62% showed trouble.
 - **No AI outlines in the pictures yet.** The AI's fold-0 outlines were not kept and are being regenerated. Until then, we know *that* the AI missed, not *where* it looked.
 - **Only 26 cases,** from one fold. Groups of 2 to 7 cases show patterns, not proven causes.
 - **Visual readings are not a clinical opinion.**

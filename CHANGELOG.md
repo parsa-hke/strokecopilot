@@ -4,7 +4,7 @@
 - **`docs/ERROR_ANALYSIS_VISION_A.md`:**
   - The Miss 2 visual reading is replaced. The blood-flow scans don't seem to reach the outer edge on that slice, so much of the dead area appears to have no data there. Where data exists, across all slices, 62% showed trouble.
   - "Over the whole brain" becomes "across all slices of the dead area" everywhere (2 places).
-- The Limits line still reads "One slice can disagree with the whole-brain number" and "Miss 2 looks normal on its slice". It is not changed here, and is left for Lorna to decide.
+- The Limits line now matches the new reading: "One slice can disagree with the number across all slices." On Miss 2's slice, much of the dead area appears to have no data, but where data exists across all slices, 62% showed trouble. Lorna approved this change.
 - No code changes.
 - **Notion sync:** none new.
 
