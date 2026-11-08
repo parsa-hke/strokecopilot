@@ -133,7 +133,8 @@ strokecopilot/
 │   │       ├── train.py
 │   │       ├── aggregate.py       # slice → scan, calibration
 │   │       ├── infer.py
-│   │       └── isles_check.py     # Phase 3: false-positive check on ISLES'24 native NCCT
+│   │       ├── isles_check.py     # Phase 3: false-positive check on ISLES'24 native NCCT
+│   │       └── operating_point.py # Phase 3: cross-fitted threshold on validation patients
 │   ├── contract/
 │   │   ├── schema.py              # pydantic model of vision_output.json
 │   │   ├── build.py               # assemble vision_output from A + B predictions
@@ -196,6 +197,7 @@ strokecopilot/
 │   ├── 11_visionA_thresholds.ipynb
 │   ├── 20_visionB_train.ipynb     # runs on Kaggle: RSNA split, slice classifier, scan calibration
 │   ├── 21_visionB_isles_check.ipynb # Colab: Vision B on ISLES'24 native NCCT (presumed no bleed)
+│   ├── 22_visionB_operating_point.ipynb # Kaggle: cross-fitted operating point on the RSNA validation split
 │   ├── 30_nlpA_corpus.ipynb
 │   ├── 31_nlpA_reasoner.ipynb
 │   ├── 40_nlpB_verifier.ipynb
@@ -511,7 +513,7 @@ Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the lo
 - [ ] `contract/build.py` produces valid `vision_output.json` for every non-held-out case; validate all
 
 **Vision B**
-- [ ] Tune aggregation and threshold for high sensitivity at acceptable specificity (false "no bleed" is the worst failure in the system — state the operating point and why)
+- [ ] Tune aggregation and threshold for high sensitivity at acceptable specificity (false "no bleed" is the worst failure in the system — state the operating point and why) — `operating_point.py` (tested) and `22_visionB_operating_point.ipynb` ready 8 Nov 2026: threshold cross-fitted on validation patient halves, 20 seeds, target sweep, proposal rule fixed before the run. The Kaggle run (Mohamed) and Parsa's decision are pending
 - [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate — `isles_check.py` (tested) and `21_visionB_isles_check.ipynb` ready 6 Nov 2026; the Colab run (Mohamed) is pending, so no rate yet
 - [ ] Optional: per-subtype outputs if time allows
 
