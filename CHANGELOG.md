@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## 2026-11-09 — Hana (NLP A: reasoner prompt v2 from the EXP-12 findings)
+- **`prompts/reasoner_v2.md`** (new; `reasoner_v1` unchanged and still the default). Built from Benny's labels of the 28 EXP-12 flags (22 real reasoner errors, 6 verifier mistakes):
+  - Right fact, wrong or missing citation (10): cite the passage that states the rule or threshold used; no same-topic padding.
+  - Blocking factors checked only against `rule_ids` (fx04, fx05): for a decision against a treatment, `rule_ids` include the passages setting the limits the patient fails.
+  - Uncertainties stating rules with no source (8): name what is unknown and the affected rule's ID in square brackets; no rule content there.
+  - Conclusions written as claims (6): new "What not to write" section ("is eligible", "the rulebook supports…").
+  - Inferences, predictions and added note details (5, two critical): no predictions, no general knowledge, no "only/never" summaries; nothing beyond the quoted note words.
+  - Rules applied when their conditions don't hold (fx03 BP, fx05 ASPECTS): check a rule's conditions before using it.
+  - The prompt's own instructions restated as rules (fx02 last-known-well): the instructions are not a source.
+  - Numbers copied exactly (0 cases in EXP-12; kept as prevention).
+  - One worked good/bad example with invented IDs and numbers (`PASSAGE-A/B`, 42.0 mL vs 60 mL) that appear in no passage, fixture or note.
+  - About 490 words longer than v1; the system prompt stays cached.
+- **`tests/test_reasoner_v2.py`** (7 tests, fake model, no network): v2 holds all 47 passage IDs; v1 kept and v2 contains its input section; one phrase per fix; the example shares no ID or number with any fixture; a fake reply assembles and validates as `reasoner_v2`; a bracketed-ID uncertainty is valid; a fixture run records `prompt_version` `reasoner_v2`.
+- **For Parsa:**
+  - Paid v1 against v2 run on the fixtures is yours (no paid calls made).
+  - Rulebook gap: "time counts from last known well when onset is not witnessed" is in the prompt but in no passage. v2 stops the model restating it; adding a passage is your call.
+  - Uncertainties have no sources field, so the verifier gives them no declared sources; whether it should read the bracketed IDs is for the verifier side.
+- **Windows fix in two tests:** `test_reasoner.py` (line 107) and the new v2 test read `system_prompt.md` back with `encoding="utf-8"`. It is written as UTF-8, and Windows' default encoding garbled characters such as `–`, so both failed on Windows only. No change on Mac, Linux or Colab.
+- pytest: on Windows (Python 3.14), `test_reasoner_v2.py` + `test_reasoner.py` 15 passed. Full suite on Linux: 409 passed, 4 skipped; 3 failed in `test_haemorrhage.py` only because PyTorch was not installed (unrelated).
+- **Notion sync:**
+  - done: Tasks → "Reasoner prompt v2 from the EXP-12 findings": note for Parsa on the last-known-well gap.
+  - pending: same task → In review once the pull request is open; Experiments row for the paid v1/v2 run (Parsa).
+
 ## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
 - **Roles agreed by Parsa:**
   - Parsa keeps the long GPU runs, the paid model runs, `contract/build.py`, the verifier fixes and the decisions.
