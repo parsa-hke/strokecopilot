@@ -102,6 +102,46 @@
 - pytest: `tests/test_isles_check.py` 19 passed.
 - **Notion sync:** Experiments → EXP-16 row already Done; Tasks → "Vision B false-positive check": In review, with the result.
 
+## 2026-11-12 — Parsa's review of PR #2 (EXP-17 recorded; one wilson; proposal rule documented)
+- **EXP-17 result**, from Drive `runs/EXP-17_visionB_operating_point/metrics.json` (Mohamed, Kaggle, commit `ff522bd`).
+  - 2,166 validation scans, 1,894 patients, 879 bleed scans. Scan AUC 0.9772, and EXP-6's 0.278 reproduces 0.951/0.917 on the same split.
+  - **Cross-fitted at a 95% target:** sensitivity 0.945, specificity 0.914. It fell below 95% in 11 of 20 seeds.
+  - **Proposed 0.175** (96% target): sensitivity 0.961 (95% CI 0.946–0.972), specificity 0.878 (0.859–0.895).
+  - **Strict alternative 0.125:** sensitivity 0.968, specificity 0.858.
+  - The previous entry's "not run" is superseded.
+- **ISLES'24 cost of each threshold, measured in review** from EXP-16's `per_case.csv` (counts only). Of 129 presumed bleed-free development scans, Vision B would flag:
+  - 45 at 0.278 (34.9%);
+  - 68 at 0.175 (52.7%);
+  - 87 at 0.125 (67.4%).
+
+  This is added as a dated note in `reasoning_EXP-17.md` on Drive, since that doc only estimated it. It matters for Parsa's threshold decision more than the RSNA specificity does.
+- **Fixes in review:**
+  - `wilson()` was defined twice; it now lives in `vision/haemorrhage/stats.py` (same constant, so recorded intervals reproduce), with a test.
+  - `propose()` documents that the median rule in practice steps up one candidate, so read 0.96 as a chosen safety margin, slightly optimistic until the RSNA test split.
+  - `seeds_below_target` is commented as counting against each row's own target.
+  - Notebook 22 notes that `REPO_REF` becomes `main` after merging.
+- **Merge:** PR #3's branch, with its review fixes, is merged into this one. The plan and CHANGELOG conflicts are resolved, and the plan's two Vision B items carry the EXP-16 and EXP-17 results, both unticked until the threshold decision.
+- pytest: 469 passed.
+- **Notion sync:** Experiments → EXP-17 row already Done; Decisions → the threshold, once Parsa decides.
+
+## 2026-11-08 — Claude Code session (Vision B Task 1: cross-fitted operating point, code and notebook)
+- **Scope:** Phase 3, Vision B, Task 1 from `docs/team/mohamed_vision_b.md`. Code and notebook only; the Kaggle run is Mohamed's, and the threshold decision is Parsa's.
+- **`vision/haemorrhage/operating_point.py`** (tested): EXP-6 set 0.278 for 95% sensitivity and measured it on the same validation scans. This module cross-fits instead:
+  - validation patients split into two halves with a fixed seed (20261108), whole patients per half, stratified by whether a patient has a bleeding scan;
+  - threshold chosen for ≥ 95% sensitivity on one half (`aggregate.threshold_for_sensitivity`), measured on the other, then swapped; the two held-out results are pooled;
+  - thresholds are set on the raw top-2 score. Platt calibration is monotonic (checked: temperature > 0), so the calls are identical and the calibrator, itself fit on the full validation split, does not leak into the held-out halves. The proposal is converted to the calibrated scale;
+  - 95% Wilson intervals and a patient-level bootstrap (scans of one patient are not independent); 20 seeds for the spread; a sweep of targets 0.90–0.99 for the specificity cost of each extra point of sensitivity;
+  - proposal rule, fixed before the run: the lowest full-split target (0.95–0.99) whose held-out sensitivity, median over seeds, reaches 0.95. A stricter alternative (lower Wilson bound ≥ 0.95) is reported beside it;
+  - `reasoning_text` drafts the written reasoning from the run's numbers, including EXP-16's ISLES'24 false-positive rate if it is entered.
+- **`notebooks/22_visionB_operating_point.ipynb`** (Kaggle): rebuilds the RSNA split and refuses to go on unless its fingerprint matches EXP-6's; keeps validation rows only; refuses to run if `ALLOW_RSNA_TEST` is set. It recomputes the validation slice predictions with EXP-6's `best.pt` from a private weights dataset, and stops if the scan AUC is more than 0.005 from 0.977. Writes `config.json` first; then `metrics.json`, `reasoning_draft.md` and `tradeoff.png`, after an ID check. `REPO_REF` is `mohamed/operating-point`.
+  - Sections 3–8 were dry-run locally on four small fake shards with a fake model. Not run on Kaggle or real data: every result and the timing are unmeasured.
+- **Plan:** layout lists `operating_point.py` and notebook 22; the §7 Vision B tuning item notes the code is ready and the run and decision pending (not ticked). README lists notebook 22.
+- pytest: 468 passed (13 new).
+- **Notion sync** (not done; for Mohamed or Parsa):
+  - Tasks → Vision B "Operating point": In progress; code and notebook on `mohamed/operating-point`.
+  - Experiments → a new row (Status *Running*) before the Kaggle run; afterwards the held-out sensitivity and specificity with intervals, the proposed threshold and the commit.
+  - Decisions → Parsa records the threshold once he has chosen between the proposed and strict values.
+
 ## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
 - **Roles agreed by Parsa:**
   - Parsa keeps the long GPU runs, the paid model runs, `contract/build.py`, the verifier fixes and the decisions.
