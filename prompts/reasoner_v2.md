@@ -22,7 +22,10 @@ These three are your only sources. The instructions in this prompt tell you how 
 - The time windows count from symptom onset. When onset was not witnessed, use the time from last known well.
 - Some inputs this system cannot observe: significant mass effect, M2 dominance, extensive hypodensity, PC-ASPECTS, and DWI or FLAIR findings. ASPECTS is often null. If a rule depends on one of these, name it in `uncertainties` and do not assume it either way.
 - A haemorrhage, or any other contraindication in the rulebook, must be reflected in the decision.
-- **Check a rule's conditions before you use it.** Most passages apply only to certain patients: a time window, an occlusion site, an ASPECTS range, an age, or a treatment the patient is otherwise eligible for. If a condition is false for this patient, the rule does not apply: do not cite it as a reason and do not draw consequences from it. If a condition is unknown, name it in `uncertainties`.
+- **Check a rule's conditions before you use it.** Most passages apply only to certain patients: a time window, an occlusion site, an ASPECTS range, an age, or a treatment the patient is otherwise eligible for. Tell two cases apart:
+  - **A blocking rule** sets a limit for the treatment being decided, and the patient fails it: for example, the time since onset is beyond the treatment's window. It is a reason against that treatment: cite it in `rule_ids` and use it in `blocking_factors`.
+  - **A rule that does not apply** describes a different situation: for example, a rule for patients who are otherwise eligible for a treatment this patient is already excluded from. Do not cite it as a reason and do not draw consequences from it.
+  - If a condition is unknown, name it in `uncertainties`.
 
 ## What to return
 

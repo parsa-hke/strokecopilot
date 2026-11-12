@@ -44,6 +44,7 @@ def test_v2_states_each_targeted_fix():
     for phrase in (
         "they are not a source",                          # 7: instructions are not claims
         "Check a rule's conditions before you use it",   # 6: rules applied when conditions don't hold
+        "A blocking rule sets a limit",                   # 6b: a failed limit is still cited, not dropped
         "include the passages that set the limits",     # 2: rule_ids cover blocking factors
         "Cite the passage that states the rule or threshold you use",  # 1: right fact, wrong citation
         "Do not add any detail that is not in the quoted words",       # 5: invented note details
