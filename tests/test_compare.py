@@ -73,3 +73,28 @@ def test_plot_table_writes_file(exp12_folder, tmp_path):
     plot_table(table, out)
     assert out.exists()
     assert out.stat().st_size > 0
+
+
+def test_current_runs_read_the_rescore_and_the_source(tmp_path):
+    """A run folder as pipeline/end_to_end.py writes it today: config `source`, per_case, and a rescore beside metrics.json."""
+    folder = tmp_path / "EXP-X"
+    folder.mkdir()
+    (folder / "config.json").write_text(json.dumps({"experiment": "EXP-X", "source": "scenarios", "reasoner": {"model": "m"}}))
+    stale = {"summary": {"hallucination_rate": {"value": 0.235, "ci95": None}}, "per_case": []}
+    fresh = {"summary": {"hallucination_rate": {"value": 0.054, "ci95": [0.03, 0.08]},
+                         "critical_hallucination_rate": {"value": 0.009, "ci95": None},
+                         "omission_rate": {"value": 0.0, "ci95": None}}, "per_case": [{"case": "s1"}]}
+    (folder / "metrics.json").write_text(json.dumps(stale))
+    (folder / "metrics_rescore.json").write_text(json.dumps(fresh))
+    (folder / "metrics_phase3_judge_v3.json").write_text(json.dumps(fresh))
+    run = load_run(folder)
+    assert run["source"] == "scenarios" and run["metrics_file"] == "metrics_rescore.json" and run["per_case"] == [{"case": "s1"}]
+    table = build_table([folder, (folder, "metrics.json"), (folder, "metrics_phase3_judge_v3.json")])
+    assert [r["hallucination_rate"] for r in table] == [0.054, 0.235, 0.054]
+    assert table[0]["critical_hallucination_rate"] == 0.009 and table[1]["metrics_file"] == "metrics.json"
+
+
+def test_unmeasured_rates_are_not_plotted_as_zero(exp12_folder, tmp_path):
+    table = build_table([exp12_folder])
+    assert table[0]["critical_hallucination_rate"] is None
+    plot_table(table, tmp_path / "f.png")  # draws n/a, does not fail on None

@@ -7,9 +7,12 @@ the verifier is right.
 
 ## What you will do
 
-You will receive a CSV. Each row is one claim the verifier flagged as a
-hallucination in a reasoner's output. You decide, on your own, whether the
-verifier was right or wrong.
+You will receive a CSV and a folder `cases/`. Each row is one claim the
+verifier flagged as a hallucination in a reasoner's output. The sheet shows
+the claim, the field it came from, the sources the model declared, and a case
+alias (`C001`, ...). It does not show which model wrote it or what the verifier
+said, so your reading stays independent. You decide, on your own, whether the
+claim is a real error.
 
 You will see these columns:
 
@@ -36,29 +39,45 @@ Every row gets exactly one of these two:
 - **`verifier_mistake`** — the claim is fine. The verifier was wrong to flag
   it. Use this if:
   - The claim is true and correctly cited.
-  - The claim is a general statement about medical reasoning that doesn't
-    need a specific rulebook passage.
+  - The claim only restates the output's own decision ("thrombolysis is not
+    recommended", "the rulebook does not support thrombectomy"). That is not a
+    claim: the decision is scored separately.
+
+Correct medicine is not enough. The metric scores claims against the
+reasoner's inputs, not against clinical truth: a true clinical rule that no
+rulebook passage states is still an error.
 
 ## How to decide each row
 
-You have three files to check against:
+You have two things to check against:
 
 1. `corpus/RULEBOOK.md` — every guideline passage the reasoner can cite.
-2. `fixtures/<fx>/` — the vision output for that case.
-3. `fixtures/notes/<fx>` — the triage note for that case.
+2. `cases/<case_alias>.md` — that case's imaging findings and triage note,
+   exactly as the reasoner received them.
+
+Rules the metric uses (`docs/HALLUCINATION_METRIC.md`):
+
+- **null means unknown.** A claim that a null finding is unknown or not
+  reported is fine; any value for it is an error.
+- **Numbers** are compared after rounding the true value to the precision the
+  claim states: "9 h" matches 9 h 0 min, "4 h" does not match 4 h 40 min.
+- **Uncertainties** have no sources in the output's format: judge only whether
+  their content is true, never their citation.
+- **Blocking factors** may rest on the rules cited for either decision.
 
 For each row:
 
-1. Read the claim text (in the `claim_id` and any context the sheet gives).
+1. Read the claim (`claim`) and the sources the model declared
+   (`declared_sources`).
 2. Ask: **is the content of this claim true** given the vision output, the
    note, and the rulebook?
 3. Ask: **does the source the model cited actually support it**?
 4. Pick `real_reasoner_error` if either is "no". Pick `verifier_mistake` if
    both are "yes".
 
-When you are unsure, pick `real_reasoner_error` if the error is material
-(would change a decision or a clinical fact). Pick `verifier_mistake` if the
-claim is technically fine but the verifier was pedantic.
+When you are unsure, pick the label these rules give and write why in your
+note column. Whether an error would change a decision is measured separately
+(criticality); it does not decide whether the claim is an error.
 
 ## Examples (from EXP-12)
 
@@ -70,7 +89,9 @@ claim is technically fine but the verifier was pedantic.
 
 ## What happens after
 
-Your labels go into `EXP-12_benny_labels.csv` (or its successor). We compute:
+Fill in your own label and note columns only, and return the sheet to Benny.
+Do not ask for the key file: it maps rows to models and stays with Benny and
+Parsa until both of you have finished. We compute:
 
 - **Cohen's κ** — how often you and your co-labeller agree. A kappa near 1
   means you agree a lot; near 0 means you agree as often as chance.

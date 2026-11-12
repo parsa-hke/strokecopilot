@@ -21,9 +21,9 @@ unit conversion.
 
 **Example.** Planted seed `fx01-1a`: the clean output says "2 h 30 min" from
 onset to imaging; the seed changes it to "3 h 30 min." Neither the note nor
-the vision output supports 3 h 30 min. (EXP-12 contains no wrong-number
-flags in the 28, because the regex numeric check catches these before they
-reach the flagged set.)
+the vision output supports 3 h 30 min. (EXP-12's 28 flags hold no wrong
+number. The regex number check does not filter wrong numbers out: a number it
+finds that no input supports becomes a wrong-number flag.)
 
 **How the verifier detects it.** Compares the claimed number in code against
 the traced source — a vision field, the note's fact sheet, or the corrected
@@ -69,9 +69,12 @@ The rule is reversed.
 
 **How the verifier detects it.** Retrieves candidate passages by embedding
 similarity (`BAAI/bge-base-en-v1.5`), then an LLM judge (`claude-haiku-5-5`
-with `judge_v2`) returns `supported`, `contradicted` or `not_addressed`. A
+with `judge_v3` since DEC-23, 12 Nov 2026) returns `supported`, `contradicted` or `not_addressed`. A
 claim is a wrong rule if every candidate is `contradicted` or
-`not_addressed`, or if a cited passage ID does not exist (§3c).
+`not_addressed`, or if a cited passage ID does not exist (§3c). Candidates
+are the cited passages, the retriever's top 5 above τ = 0.6, the passages the
+claim names (a trial, Table 3 or 8, an ASPECTS range) and, for an uncertainty,
+the passages its output's decisions cite (§9 point 14).
 
 **Critical?** Yes, if the wrong rule concerns a criterion that decided the
 case's treatment. Determined by checking whether the claim touches a
@@ -92,7 +95,7 @@ does not apply — the threshold is correct, the patient is wrong.
 
 **How the verifier detects it.** The judge returns `supported: true` but
 `scope_fits: false` for this patient. A claim that a rule does not apply is
-also checked: it fits when the inputs do fall outside the passage (`judge_v2`).
+also checked: it fits when the inputs do fall outside the passage (`judge_v3`).
 
 **Critical?** Yes, if the misapplied rule bears on a deciding criterion.
 
@@ -114,7 +117,9 @@ comparison's rule part, checks that each threshold it takes from a rule is
 stated in a passage — cited: supported; only retrieved: uncited; none: wrong
 rule.
 
-**Critical?** Yes, if the faulty derivation changes a treatment decision.
+**Critical?** Yes, if the claim concerns a criterion the rulebook lists as
+deciding for this case (§5). The verifier does not recompute the decision for
+a derivation; that substitution is only for wrong numbers and invented findings.
 
 ---
 
@@ -129,8 +134,11 @@ is below the threshold — but the DEFUSE-3 passage that states the threshold
 (`DEFUSE3-inclusion-imaging`) is not cited. The model cites eight sources,
 none of them the right one.
 
-Other examples in EXP-12: `fx02:uncertainties[3].0`, `[3].2`, `[4].2`,
-`fx05:blocking_factors[1].1`, `fx05:uncertainties[0].2`.
+Another example in EXP-12: `fx05:thrombectomy.blocking_factors[1].1`
+("DEFUSE-3 imaging criteria are not met"). Uncertainties are never charged
+uncited (6) or mis-attributed (7): the schema gives them no sources, so a rule
+named in an uncertainty is checked for content only (§9 point 11). The EXP-12
+uncertainty flags were wrong rules, not uncited rules.
 
 **How the verifier detects it.** Finds a passage that supports the rule, but
 notices the model cited no passage for it (§4).
@@ -176,8 +184,9 @@ fixture decisions were correct.)
 **How the verifier detects it.** Rule checks run against the recommendation
 booleans, independent of the claims in the rationale (§5).
 
-**Critical?** Always severe by nature. The whole point of an omission is
-that it changed a decision.
+**Critical?** Not applicable. An omission is a wrong decision, not a claim:
+it is counted in its own rate (omission rate, §6) and never enters the
+critical hallucination rate, which counts claims.
 
 ---
 
@@ -192,10 +201,10 @@ decision.
 | 2. Invented finding | Yes | Substitute claimed value; re-run the rulebook |
 | 3. Wrong rule | Yes | Check whether it touches a deciding criterion |
 | 4. Misapplied rule | Yes | Check whether it touches a deciding criterion |
-| 5. Faulty derivation | Yes | Recompute; check the correct result changes a decision |
+| 5. Faulty derivation | Yes | Check whether it touches a deciding criterion |
 | 6. Uncited rule | **Never** | Content is true |
 | 7. Mis-attributed source | **Never** | Content is true |
-| 8. Omission | **Always** | The decision itself was wrong |
+| 8. Omission | Not a claim | Counted in the omission rate, not the critical rate |
 
 ---
 
@@ -205,10 +214,11 @@ Two patterns recur in EXP-12 and are worth recording for future reviewers:
 
 - **Negative applications of a rule** ("BP is below 185/110, so no lowering is
   needed") are correctly traceable to the passage that states the rule in
-  positive form. The verifier has flagged these as wrong rule — a known
-  retrieval-judge issue (see `docs/HALLUCINATION_METRIC.md` §9 points 8–9).
-- **Uncertainty claims** currently carry no `sources` field in the schema, so
-  any requirement to cite is unenforceable. These were labelled
-  `real_reasoner_error` in EXP-12 under the strict reading, but whether they
-  should be is an open point (§9 point 11) for Parsa to confirm against the
-  current `flagged_rescore.json`.
+  positive form. The verifier flagged these as wrong rule in EXP-12; judge
+  prompt `judge_v3` (DEC-23, §9 point 15) now says how to judge them.
+- **Uncertainty claims** carry no `sources` field in the schema, so a citation
+  cannot be required there. This is settled (§9 point 11): their claims are
+  scored for content only, never as uncited or mis-attributed, and since
+  12 Nov 2026 their rule claims are judged against the passages their output's
+  decisions cite (§9 point 14). A restatement of the output's own decision is
+  not a claim (§9 point 13).

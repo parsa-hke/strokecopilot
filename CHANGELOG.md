@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## 2026-11-12 — Benny's NLP B work (PR #5), with Parsa's review fixes
+- **Benny's deliverables:**
+  - `docs/ERROR_TAXONOMY.md`: the 8 types with real examples, detection and criticality.
+  - His independent labels of the 28 EXP-12 flags (Drive `EXP-12_benny_labels.csv`): 22 real reasoner errors, 6 verifier mistakes. Parsa's earlier reading was about 9 and 19; the gap is mostly uncertainty claims and true-but-miscited claims.
+  - `pipeline/compare.py` and `notebooks/41_nlpB_model_comparison.ipynb` (Task 2).
+  - `nlp/verifier/adjudicate.py` and `docs/LABELLING_GUIDE.md` (Task 3).
+- **Review fixes (Parsa):**
+  - **Cohen's kappa** divided by (1 − po) instead of (1 − pe): it crashed on perfect agreement and returned 1.20 where the true value is 0.545. Fixed, with known-value tests; one of the original tests expected a negative kappa for two constant labellers, where the true value is 0.
+  - **`compare.py`** read `metrics.json`, which keeps a run's first scoring. For EXP-12 that showed 0.235 with no critical or omission rate; the current scoring is 0.054 (EXP-23). It now reads the newest scoring by default or a named file, records which file each row came from, takes the source from `source` (current runs) or `mode`, shows an unmeasured rate as n/a rather than 0, and imports matplotlib only to plot.
+  - **`adjudicate.py`** read an old run layout (`per_fixture`), so new runs gave no claims. It now:
+    - reads the flagged-claims files and refuses held-out cases through the split's own check;
+    - writes a blind sheet (claim text, field, declared sources and an opaque case alias; no model, run, case ID or verifier verdict, since showing the verifier's sub-type would anchor the labellers);
+    - writes a separate key file for unblinding, and the case inputs per alias;
+    - reports agreement with the verifier overall, per sub-type and per model.
+  - **Docs:** `ERROR_TAXONOMY.md` and `LABELLING_GUIDE.md` now match the metric:
+    - omissions are their own rate, not "always critical";
+    - uncertainties are never charged 6 or 7;
+    - faulty-derivation criticality follows §5;
+    - correct medicine with no source in the inputs is still an error;
+    - the null, rounding and restatement rules are stated;
+    - `judge_v3` (DEC-23) is named.
+  - **Notebook 41:** installs with `GITHUB_TOKEN` (the repo is private), reads EXP-12 at its current scoring, and writes the figure to `runs/comparison/`, not into a finished run.
+- **Back to Benny (spec in the PR #5 review comment):**
+  - **The sampling design.** It samples only flagged claims, so it measures the verifier's precision but never its misses. Metric §8 asks for a sample across claims, with a consensus label and agreement per sub-type.
+  - **The table's shape:** models × (source × arm).
+- pytest: 454 passed.
+- **Notion sync:** Tasks → Benny's taxonomy, comparison notebook and labelling kit: In review, with this note.
+
 ## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
 - **Roles agreed by Parsa:**
   - Parsa keeps the long GPU runs, the paid model runs, `contract/build.py`, the verifier fixes and the decisions.
