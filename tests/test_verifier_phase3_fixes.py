@@ -74,10 +74,10 @@ def test_decision_passages_helper():
 
 # --- fix 2: judge prompt v3 --------------------------------------------------------------------------------------
 
-def test_judge_v3_builds_and_v2_stays_the_default():
-    v3 = tr.Judge(lambda *a: {"verdicts": []}, "judge_v3")
-    v2 = tr.Judge(lambda *a: {"verdicts": []})
-    assert tr.JUDGE_PROMPT == "judge_v2" and v2.version == "judge_v2"  # DEC-20 until Parsa approves v3
+def test_judge_v3_is_the_default_and_keeps_v2s_rules():
+    v3 = tr.Judge(lambda *a: {"verdicts": []})
+    v2 = tr.Judge(lambda *a: {"verdicts": []}, "judge_v2")
+    assert tr.JUDGE_PROMPT == "judge_v3" and v3.version == "judge_v3"  # DEC-23, 12 Nov 2026 (amends DEC-20)
     for phrase in ("not needed, or already met", "Criteria that are not met", "Conditional and counterfactual",
                    "A reason for a decision", "an unknown is not a failed criterion"):
         assert phrase in v3.system and phrase not in v2.system
@@ -156,7 +156,8 @@ def test_recheck_runs_both_prompts_and_writes_a_comparison(tmp_path):
     out = rc.recheck(exp11, exp12, tmp_path / "out", lambda: made.append(Fake("judge")) or made[-1], retriever=retriever,
                      log=lambda *_: None)
     assert set(out["by_prompt"]) == {"judge_v2", "judge_v3"} and len(made) == 4
-    v3 = out["by_prompt"]["judge_v3"]
-    assert v3["exp11"]["judge_calls"] > 0 and v3["exp12"]["judge_calls"] > 0  # a new prompt version re-judges
+    other = out["by_prompt"]["judge_v2" if tr.JUDGE_PROMPT == "judge_v3" else "judge_v3"]  # not the runs' own prompt
+    assert other["exp11"]["judge_calls"] > 0 and other["exp12"]["judge_calls"] > 0  # a new prompt version re-judges
+    assert out["by_prompt"][tr.JUDGE_PROMPT]["exp12"]["judge_calls"] == 0  # the runs' own prompt: all cached
     assert (exp12 / "flagged_phase3_judge_v3.json").exists() and (exp11 / "metrics_phase3_judge_v2.json").exists()
     assert json.loads((tmp_path / "out" / "metrics.json").read_text())["tau"] == 0.6

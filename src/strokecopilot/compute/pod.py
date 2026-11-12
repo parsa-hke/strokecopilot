@@ -147,11 +147,14 @@ def remote_sh(state, script, capture=True, timeout=600):
     return out.stdout
 
 
-def rsync_up(state, local, remote_path):
+UPLOAD_LIMIT_S = 1800
+
+
+def rsync_up(state, local, remote_path, timeout=None):
     e = " ".join(shlex.quote(x) for x in ssh_base(state["host"], state["port"], state["user"])[:-1])
     # --timeout ends a transfer that moves no data for 5 min; on 12 Nov 2026 an upload to one host sat at 0 kB/s for
     # 18 min while the pod billed. A failed copy makes `up` destroy the pod.
-    run(["rsync", "-a", "--partial", "--timeout=300", "-e", e, str(local), f"{state['user']}@{state['host']}:{remote_path}"])
+    run(["rsync", "-a", "--partial", "--timeout=300", "-e", e, str(local), f"{state['user']}@{state['host']}:{remote_path}"], timeout=timeout)
 
 
 def rsync_down(state, remote_path, local, includes):
@@ -250,7 +253,7 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
     commit = commit or head_commit()
     instance_id = p.create(offer["id"], IMAGE, DISK_GB, label(exp))
     state = {"exp": exp, "provider": provider_name, "instance_id": instance_id, "offer": offer["id"],
-             "dph": offer["dph_total"], "created_utc": dt.datetime.now(dt.timezone.utc).isoformat(), "commit": commit,
+             "dph": offer["dph_total"], "machine_id": offer.get("machine_id"), "created_utc": dt.datetime.now(dt.timezone.utc).isoformat(), "commit": commit,
              "hours_limit": spec["hours"], "runs": jobs.chain(exp),
              "inputs_sha256": {dst: sha256(src) for src, dst in sources}, "destroyed": False}
     save_state(exp, state)
@@ -263,7 +266,9 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
         log(remote_sh(state, remote.BOOTSTRAP).strip())
         log(remote_sh(state, remote.start_watchdog(spec["hours"] * 3600)).strip())
         started = time.time()
-        rsync_up(state, tar, f"{remote.ROOT}/data/{TARBALL}")
+        # A host whose inbound link crawls costs pod time while nothing runs: on 12 Nov 2026 one took 38 min for 1.9 of
+        # 3.1 GB (EXP-14 took 15 min for all of it). Past UPLOAD_LIMIT_S the copy fails and the pod is destroyed.
+        rsync_up(state, tar, f"{remote.ROOT}/data/{TARBALL}", timeout=UPLOAD_LIMIT_S)
         archive = repo_archive(commit, RUNS / exp / "repo.tar")
         rsync_up(state, archive, f"{remote.ROOT}/repo.tar")
         archive.unlink(missing_ok=True)

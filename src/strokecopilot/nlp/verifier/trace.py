@@ -30,7 +30,9 @@ from strokecopilot.nlp.verifier.claims import UNOBSERVED_SUBJECTS, VISION_SUBJEC
 SUBTYPES = {1: "wrong_number", 2: "invented_finding", 3: "wrong_rule", 4: "misapplied_rule",
             5: "faulty_derivation", 6: "uncited_rule", 7: "misattributed_source"}
 CONTENT_FALSE = {1, 2, 3, 4, 5}
-JUDGE_PROMPT = "judge_v2"
+# DEC-23 (12 Nov 2026, EXP-23): judge_v3 judges negative, conditional and reason-giving applications; it kept the
+# EXP-11 seeded-error bar and removed 5 verifier false flags on EXP-12. Amends DEC-20, which chose judge_v2.
+JUDGE_PROMPT = "judge_v3"
 # DEC-20 (EXP-11 bake-off, 4 Nov 2026): the cheaper judge that meets the seeded-error bar, and the similarity a retrieved
 # passage needs before the judge sees it. The claim extractor is claims.EXTRACTOR_MODEL.
 JUDGE_MODEL = "claude-haiku-5-5"

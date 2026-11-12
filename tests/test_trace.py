@@ -196,8 +196,8 @@ def test_threshold_found_only_by_retrieval_is_uncited():
 
 
 def test_judge_v2_scope_covers_rules_that_do_not_apply():
-    system = tr.Judge(lambda *a: {"verdicts": []}).system
-    assert tr.JUDGE_PROMPT == "judge_v2" and "does not apply" in system and "{{" not in system
+    system = tr.Judge(lambda *a: {"verdicts": []}, "judge_v2").system
+    assert "does not apply" in system and "{{" not in system
 
 
 @pytest.mark.parametrize("claimed, unit, ok", [("2 h 30 min", None, True), ("2", "h 30 min", True), ("3 h 30 min", None, False), ("150", "min", True)])

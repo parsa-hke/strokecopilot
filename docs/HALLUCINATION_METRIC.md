@@ -1,6 +1,6 @@
 # Hallucination metric
 
-The definition the verifier implements (plan §8.4, DEC-10, DEC-11). Written before any verifier code, as §7 Phase 2 requires. Approved by Parsa on 3 November 2026, including §9 points 1–7; points 8–12, added after EXP-10 to EXP-12, were approved by Parsa on 12 November 2026. Mirrored to the Notion page "Hallucination metric". A change after approval needs a CHANGELOG entry, and any change after the first Phase 3 comparison run needs a Decisions row, because it changes the hallucination table.
+The definition the verifier implements (plan §8.4, DEC-10, DEC-11). Written before any verifier code, as §7 Phase 2 requires. Approved by Parsa on 3 November 2026, including §9 points 1–7; points 8–15, added after EXP-10 to EXP-12, were approved by Parsa on 12 November 2026. Mirrored to the Notion page "Hallucination metric". A change after approval needs a CHANGELOG entry, and any change after the first Phase 3 comparison run needs a Decisions row, because it changes the hallucination table.
 
 Everything here is scored against the reasoner's inputs, never against what is clinically true. A claim can be correct medicine and still be a hallucination if nothing the model was given supports it.
 
@@ -118,7 +118,7 @@ Recorded in every verifier run's `config.json`:
 
 - claim extractor: model, `claim_extractor_vN`;
 - judge: model, `judge_vN` prompt, effort level. One judge call per claim, with all its candidate passages. The model is chosen in Phase 2 by seeded-error recall: `claude-haiku-5-5` and `claude-opus-5-5` run on the same seeded set, and the cheaper one that meets the §8 bar is used, recorded in a Decisions row. The API budget is about $100, and an Opus judge for the full Phase 3 table is estimated, not measured, to cost more than that;
-- embedding model and τ. Since DEC-20 (4 Nov 2026, EXP-11): judge `claude-haiku-5-5` at effort medium with `judge_v2`, claim extractor `claude-sonnet-5-5` at effort medium, τ = 0.6;
+- embedding model and τ. Since DEC-20 (4 Nov 2026, EXP-11): judge `claude-haiku-5-5` at effort medium with `judge_v2`, since DEC-23 (12 Nov 2026, EXP-23) `judge_v3`, claim extractor `claude-sonnet-5-5` at effort medium, τ = 0.6;
 - corpus version (`passages.jsonl` sha256);
 - rulebook version (git commit of `scenarios.py`).
 
@@ -133,7 +133,7 @@ The verifier is a model and can be wrong (plan §10).
 
 ## 9. Points approved after the first draft
 
-Points 1–7 were approved on 3 November 2026 and points 8–12 on 12 November 2026, both by Parsa.
+Points 1–7 were approved on 3 November 2026 and points 8–15 on 12 November 2026, all by Parsa.
 
 1. Blocking factors and fact-stating uncertainties are scored as claims (§1). §8.4 names only the rationale.
 2. Decision `rule_ids` are scored as citation claims (§1).
@@ -161,6 +161,6 @@ Points 1–7 were approved on 3 November 2026 and points 8–12 on 12 November 2
    - for a subject outside the fact list, the note "mentions" it only if every word of the subject's name appears in the note;
    - numbers written as ranges with "to" are rule text, like "6-10";
    - a cited passage that no claim uses is charged (7) only to a claim that rests on a rule, never to a patient or imaging fact.
-13. **Proposed, 12 November 2026, from the EXP-12 flags (needs Parsa's OK):** a restatement of the output's own decision is not a claim (§2). In EXP-12, "The rulebook does not support thrombectomy for this patient" was scored as a wrong rule, though it only restates `recommend` = false.
-14. **Proposed, 12 November 2026 (needs Parsa's OK):** rule candidates also include the passages a claim names lexically (a trial, Table 3 or 8, an ASPECTS range), because embeddings miss rule rows that differ only in numbers (EXP-7), and for an uncertainty, the passages its output's decisions cite, like blocking factors (point 8). In EXP-12, "The ASPECTS 3 to 5 pathway excludes patients aged 80 or over" had no candidate at all.
-15. **Proposed, 12 November 2026 (needs Parsa's OK, and a Decisions row, because it amends DEC-20):** judge prompt `judge_v3`, which says how to judge a requirement that is not needed, criteria that are not met, a conditional or counterfactual claim, and a reason for a decision. It keeps v2's verdicts and adds that an unknown input is not a failed criterion. Its examples come from the EXP-12 flags, so its effect on EXP-12 is measured in-sample; EXP-11's seeded errors and the Phase 3 human labels are the fair checks.
+13. **Approved 12 November 2026, from the EXP-12 flags:** a restatement of the output's own decision is not a claim (§2). In EXP-12, "The rulebook does not support thrombectomy for this patient" was scored as a wrong rule, though it only restates `recommend` = false.
+14. **Approved 12 November 2026:** rule candidates also include the passages a claim names lexically (a trial, Table 3 or 8, an ASPECTS range), because embeddings miss rule rows that differ only in numbers (EXP-7), and for an uncertainty, the passages its output's decisions cite, like blocking factors (point 8). In EXP-12, "The ASPECTS 3 to 5 pathway excludes patients aged 80 or over" had no candidate at all.
+15. **Approved 12 November 2026, as DEC-23, which amends DEC-20:** judge prompt `judge_v3`, which says how to judge a requirement that is not needed, criteria that are not met, a conditional or counterfactual claim, and a reason for a decision. It keeps v2's verdicts and adds that an unknown input is not a failed criterion. Its examples come from the EXP-12 flags, so its effect on EXP-12 is measured in-sample; EXP-11's seeded errors and the Phase 3 human labels are the fair checks. EXP-23: the EXP-11 bar is unchanged (min recall 0.80, false flags 0.010), and EXP-12 goes from 23 to 19 flags of 350 against `judge_v2` with the same code fixes, with every reasoner error of the earlier reading still flagged.

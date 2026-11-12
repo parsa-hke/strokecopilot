@@ -20,26 +20,54 @@
 - **Free EXP-12 rescore** with the critical-rate denominator fix, at `7c67c5b`, before today's verifier changes. Run locally from the caches.
   - Results: rate 0.080 (28/351), content 0.060, **critical 0.014 (5/350)**, cases with a critical claim 3/5, attribution 0.979, no omissions.
   - The 0.185 recorded earlier divided by the wrong denominator. Saved to Drive as `metrics_rescore_7c67c5b.json` and `flagged_rescore_7c67c5b.json`.
-- **A2, the three verifier fixes from EXP-12** (tests in `tests/test_verifier_phase3_fixes.py`; metric doc §9 points 13–15, **proposed, need Parsa's OK**):
+- **A2, the three verifier fixes from EXP-12** (tests in `tests/test_verifier_phase3_fixes.py`; metric doc §9 points 13–15, approved 12 Nov 2026):
   - **Rules under uncertainties:** an uncertainty's rule claim also gets both decisions' cited passages as candidates, like blocking factors (point 8). Every rule claim also gets lexical candidates for a trial, Table 3/8 or an ASPECTS range it names (`trace.lexical_candidates`). τ stays 0.6 (DEC-20).
-  - **Judge errors on conditional and negative applications:** `prompts/judge_v3.md` adds rules for a requirement that is not needed, criteria that are not met, conditional and counterfactual claims, and a reason for a decision. `judge_v2` stays the default, because v3 amends DEC-20. Its examples come from the EXP-12 flags, so EXP-12 is an in-sample check.
+  - **Judge errors on conditional and negative applications:** `prompts/judge_v3.md` adds rules for a requirement that is not needed, criteria that are not met, conditional and counterfactual claims, and a reason for a decision. It became the default with DEC-23 (below). Its examples come from the EXP-12 flags, so EXP-12 is an in-sample check.
   - **Meta-statements:** a pure restatement of the output's own decision is not a claim (`claims.restatements`), because `recommend` is scored by correctness. A reason given with it stays a claim, and so does a statement that contradicts the output.
   - **Rescores take a judge prompt** and can call the judge for missing verdicts only (`run.rescore`, `end_to_end.rescore`). `nlp/verifier/recheck.py` and `notebooks/51_verifier_recheck.ipynb` re-check EXP-11 and EXP-12 under v2 and v3 (EXP-23).
   - **Measured so far, free:**
     - Fix 3 alone removes 1 of the 28 EXP-12 flags.
     - Fixes 1 and 2 need new verdicts: v2 7 + 31 calls, v3 60 + 82 calls (counted in a dry run). That is about $0.20, an estimate.
     - There is no API key on this Mac, so EXP-23 runs on Colab once the code is pushed. **The EXP-11 bar is not yet re-checked.**
-- pytest: 460 passed.
+- **EXP-23** (Parsa ran notebook 51 on Colab at `a9dcfe2`, about $0.15): the re-check of the three fixes.
+
+  | | EXP-11 min recall | EXP-11 false flags | EXP-12 flags | Rate | Critical |
+  |---|---|---|---|---|---|
+  | Before (rescore at `7c67c5b`) | 0.80 | 0.010 | 28 / 351 | 0.080 | 0.014 |
+  | Fixes 1 + 3, judge_v2 | 0.80 | 0.010 | 23 / 350 | 0.066 | 0.009 |
+  | Fixes 1 + 3, judge_v3 | 0.80 | 0.010 | 19 / 350 | 0.054 | 0.009 |
+
+  - EXP-11 misses the same seeded items as before (fx04-3a, fx03-6b, fx04-6b), so the bar holds under both prompts.
+  - All 9 reasoner errors from the earlier reading are still flagged under both.
+  - **v3 against v2:** it removes 5 verifier false flags (no BP lowering needed; M2 dominance definition; "not recommended because eligible for thrombectomy"; "meets ASPECTS 3 to 5 except mass effect"; the within-6-h counterfactual). It adds 1 citation-only flag (fx04 "appears eligible for thrombectomy" as uncited). v3's examples come from EXP-12, so that run is in-sample.
+  - **The 3 remaining critical flags look like verifier errors** on Claude's reading (not human adjudication): a truism ("treatment cannot start before imaging"), an imaging fact the extractor labelled a rule, and a correct negative application the judge still misreads.
+- **DEC-23, approved by Parsa:** the judge prompt is `judge_v3`, amending DEC-20; model, effort and τ are unchanged.
+  - `trace.JUDGE_PROMPT` is now `judge_v3`.
+  - Metric §9 points 13–15 are approved.
+  - Plan §2 has the DEC-23 row, and DEC-20 notes the amendment, in the plan and in Notion.
+- **A1, the folds launched (watcher cap raised by Parsa within the 8–15 USD budget):**
+  - The watcher now launches US/EU offers up to $0.47/h. A credit guard launches a run only if the credit covers every running pod's worst case plus the new one, with $0.50 to spare.
+  - It skips machines that failed setup. The tarball upload now has a 30-min limit (`pod.UPLOAD_LIMIT_S`), and pod state records the machine ID.
+  - **Two more failed attempts, both destroyed:**
+    - Oregon (machine 26487, $0.456/h): the upload crawled at 0.1–4 MB/s; 1.9 of 3.1 GB in 38 min. **$0.30 measured.**
+    - Poland offer 54489655: the same host as the first stall, stopped before upload, about $0.02.
+  - The home uplink measures about 50 Mbps. There is no VPN; the old SSH block was the university Wi-Fi (Parsa).
+  - **EXP-18** runs on New Jersey (instance 60383981, $0.376/h) from 17:42 UTC: 38.6 s per epoch, due about 20:55 UTC, watchdog at 23:15.
+  - **EXP-22, done on EXP-18's pod:** fold 0 Dice 0.218 ± 0.249 over 26 cases, the same as EXP-14. The masks come back with EXP-18's collect.
+  - EXP-19 was being set up on New Jersey ($0.376/h) at 17:57 UTC.
+- pytest: 461 passed.
 - **Spend so far:**
-  - GPU: $2.69 measured ($2.56 before, plus $0.13 today).
-  - API: no new calls today.
+  - GPU: $3.01 measured before EXP-18 ($2.56 before, plus $0.45 of failed attempts today); EXP-18 and EXP-19 are running.
+  - API: about $0.15 (EXP-23).
 - **Notion sync:**
   - done: Experiments → EXP-18 to EXP-22 rows, all Planned (EXP-18 notes the failed attempt and its $0.13);
   - done: Decisions → DEC-22 (RSNA split);
   - done: "Hallucination metric" page → points 8–12 approved, arms wording (rulebook, DEC-19);
   - done: EXP-12 row → corrected critical rate 0.014;
-  - pending: EXP-23 row once it runs;
-  - pending: Tasks → "Verifier fixes" In progress.
+  - done: EXP-23 row;
+  - done: EXP-18 Running (offer, price, commit `a9dcfe2`), EXP-22 Done;
+  - done: Decisions → DEC-23 (judge_v3); DEC-20 notes the amendment; metric page → points 8–15;
+  - done: Tasks → "Verifier fixes" In review, to be Done when the v3 default is committed.
 
 ## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
 - **Roles agreed by Parsa:**

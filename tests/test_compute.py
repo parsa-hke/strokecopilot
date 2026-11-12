@@ -201,7 +201,7 @@ def stubbed(tmp_path, monkeypatch):
     monkeypatch.setattr(pod, "repo_archive", lambda commit, out: (out.parent.mkdir(parents=True, exist_ok=True), out.write_bytes(b"r"), out)[2])
     sent = []
     monkeypatch.setattr(pod, "wait_ssh", lambda state: None)
-    monkeypatch.setattr(pod, "rsync_up", lambda state, local, remote_path: sent.append(("up", remote_path)))
+    monkeypatch.setattr(pod, "rsync_up", lambda state, local, remote_path, timeout=None: sent.append(("up", remote_path, timeout)[:2]))
     monkeypatch.setattr(pod, "rsync_down", lambda state, remote_path, local, inc: sent.append(("down", remote_path)))
     monkeypatch.setattr(pod, "drive_root", lambda: None)
     answers = {"status": "EXIT=0\n"}
@@ -272,9 +272,17 @@ def test_up_sends_inputs_and_collect_brings_every_run(stubbed, tmp_path, monkeyp
     assert prov.destroyed == [77]
 
 
+def test_tarball_upload_has_a_time_limit(stubbed, monkeypatch):
+    prov, sent, _ = stubbed
+    limits = {}
+    monkeypatch.setattr(pod, "rsync_up", lambda state, local, remote_path, timeout=None: limits.__setitem__(remote_path, timeout))
+    state = pod.up("EXP-13", 11, go=True, log=lambda m: None)
+    assert limits["/root/sc/data/isles24_slim_v1.tar"] == pod.UPLOAD_LIMIT_S and state["machine_id"] is None
+
+
 def test_failed_setup_destroys_pod(stubbed, monkeypatch):
     prov, _, _ = stubbed
-    monkeypatch.setattr(pod, "rsync_up", lambda *a: (_ for _ in ()).throw(pod.PodError("copy failed")))
+    monkeypatch.setattr(pod, "rsync_up", lambda *a, **k: (_ for _ in ()).throw(pod.PodError("copy failed")))
     with pytest.raises(pod.PodError, match="copy failed"):
         pod.up("EXP-13", 11, go=True, log=lambda m: None)
     assert prov.destroyed == [77] and prov.live == {}
