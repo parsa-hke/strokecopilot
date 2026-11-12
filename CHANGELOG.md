@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-11-12 — Parsa's review of PR #4 (reasoner prompt v2)
+- **One change to `prompts/reasoner_v2.md`** (not yet run on any model, so it is edited in place).
+  - "What not to write" banned any claim that the patient "is eligible" or "qualifies". But eligibility for thrombectomy is itself the reason extended-window thrombolysis does not apply (fx02 and fx05 expect it), so the ban could push that reasoning step out of the rationale.
+  - The bullet now bans only restating the output's own decision ("is recommended", "the rulebook supports"). It allows a step another decision depends on, stated with the passage that sets the criteria and the inputs that meet them.
+  - The bad example's explanation and `test_v2_states_each_targeted_fix` are updated to match.
+- **On the evidence behind v2:**
+  - Its targets come from Benny's labels of the 28 EXP-12 flags (22 real reasoner errors, 6 verifier mistakes). These are not yet adjudicated, and Parsa's earlier reading was about 9 real and 19 verifier errors.
+  - Some targets (rules named in uncertainties, restated decisions) are now handled by the verifier itself: DEC-23 and metric points 13–14, 12 Nov 2026.
+  - So the paid v1-vs-v2 comparison is scored with the current verifier (`judge_v3`, the code fixes), so that v2 is not credited for verifier artefacts.
+- **Rulebook gap Hana found:** "time counts from last known well when onset is not witnessed" is in the prompt but in no passage. Adding a passage is Parsa's call as rulebook owner.
+- Plan §7 note spacing tidied.
+- pytest: `tests/test_reasoner_v2.py` and `tests/test_reasoner.py` 15 passed (Mac).
+- **Notion sync:** Tasks → "Reasoner prompt v2": In review, with this change.
+
 ## 2026-11-12 — Hana (NLP A: reasoner prompt v2, conditions fix)
 - **`prompts/reasoner_v2.md`:** the "check a rule's conditions" bullet contradicted the `rule_ids` instruction. It said a rule whose condition is false must not be cited, while `rule_ids` must include the limits a patient fails (and the "9 h is beyond a 4.5 h window" example needs that passage). A model could drop the citation for a blocking factor, bringing back the "right fact, missing citation" error. The bullet now separates two cases: a **blocking rule** (the patient fails a limit for the treatment being decided) is cited in `rule_ids` and `blocking_factors`; a **rule that does not apply** (a different situation, as with the fx03 BP rule) is not cited. Not yet run on a model.
 - **`tests/test_reasoner_v2.py`:** one more phrase in `test_v2_states_each_targeted_fix` ("A blocking rule sets a limit").

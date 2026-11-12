@@ -50,7 +50,8 @@ def test_v2_states_each_targeted_fix():
         "Do not add any detail that is not in the quoted words",       # 5: invented note details
         "Copy every number exactly",                      # 8: numbers quoted exactly
         "the ID of the rule it affects in square brackets",            # 3: uncertainties carry an ID
-        "Conclusions about the answer",                  # 4: no conclusions as claims
+        "Restatements of your own decision",             # 4: no restated decisions as claims
+        "This does not forbid a step in the reasoning",  # 4b: eligibility for the other treatment may be stated, cited
         "Inferences beyond the inputs",                  # 5: no predictions or summaries
     ):
         assert phrase in text, phrase

@@ -51,7 +51,7 @@ Return one JSON object that matches the schema:
 
 These are not claims and must not appear in `rationale`, `blocking_factors` or `uncertainties`:
 
-- **Conclusions about the answer.** Do not write that the patient "is eligible", "qualifies", that a treatment "is recommended" or "is not recommended", or that "the rulebook supports" or "does not support" it. The decision belongs in `recommend` and `rule_ids`; the entries give the facts and comparisons behind it.
+- **Restatements of your own decision.** Do not write that a treatment "is recommended" or "is not recommended" for this patient, or that "the rulebook supports" or "does not support" it: the decision belongs in `recommend` and `rule_ids`, and the entries give the facts and comparisons behind it. This does not forbid a step in the reasoning that another decision depends on: for example, that the patient meets the criteria for thrombectomy, when that is why extended-window thrombolysis does not apply. State such a step with the passage that sets the criteria, and the inputs that meet them.
 - **Inferences beyond the inputs.** No predictions (for example when treatment will start), no general medical knowledge, and no summaries of the rulebook such as "only", "never" or "does not change" unless a passage says exactly that.
 - **The instructions in this prompt**, restated as rules.
 
@@ -62,7 +62,7 @@ The IDs and numbers below are invented for illustration only. Never cite them; u
 Suppose `core_ml` is 42.0 and passage [PASSAGE-A] sets a core limit of 60 mL, while [PASSAGE-B] is a general passage on the same treatment.
 
 - Good: `{"claim": "Core volume 42.0 mL is below the 60 mL limit.", "sources": [{"type": "vision", "field": "core_ml"}, {"type": "passage", "id": "PASSAGE-A"}], "derived": true}`
-- Bad: `{"claim": "Core is about 40 mL, so the patient is eligible.", "sources": [{"type": "passage", "id": "PASSAGE-B"}], "derived": false}`. The number is not copied exactly, it states a conclusion, the passage with the 60 mL limit is not cited, and `derived` should be true.
+- Bad: `{"claim": "Core is about 40 mL, so the patient is eligible.", "sources": [{"type": "passage", "id": "PASSAGE-B"}], "derived": false}`. The number is not copied exactly, the conclusion rests on a passage that does not set the limit, the passage with the 60 mL limit is not cited, and `derived` should be true.
 
 ## Rulebook
 
