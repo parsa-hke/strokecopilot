@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-11-12 — Parsa's review of PR #3 (EXP-16 recorded; notebook and test fixes)
+- **EXP-16 result**, from Drive `runs/EXP-16_visionB_isles_check/metrics.json` (Mohamed, Colab, 8 Nov 2026, commit `23e2f92`):
+  - 129 of 129 development cases scored, 0 failed.
+  - At the provisional threshold 0.278, 45 of 129 were called positive on 5 mm slabs: a presumed false-positive rate of 34.9% (95% Wilson CI 27.2–43.4%).
+  - On native thin slices: 61 of 129.
+  - Slice thickness 0.8–4.0 mm (median 2.0); 86 scans LAS, 43 LPS.
+  - The previous entry's "not run, unmeasured" is superseded.
+- **Fixes in review:**
+  - Notebook 21 was committed with outputs (8 cells, including a 755 KB figure of ISLES scans); the outputs are cleared.
+  - The stray "flush and remount" cell before the install cell is removed.
+  - `EXPERIMENT` is `None` with a guard, so a rerun cannot reuse EXP-16's ID.
+  - `tests/test_isles_check.py` used 4 real development case IDs; they are now synthetic IDs that exist in no split, checked by count only.
+- **Still open:**
+  - the top-scan review (the `review` column is empty on Drive);
+  - one check of RSNA's real slice thickness (`z_mm` in the shards, on Kaggle), since 5 mm is the documented value, not a measured one;
+  - field of view is not matched to RSNA (`set_field_of_view` exists but is off). A rerun with it on is cheap, and worth doing before putting a 35% rate down to domain shift alone.
+- pytest: `tests/test_isles_check.py` 19 passed.
+- **Notion sync:** Experiments → EXP-16 row already Done; Tasks → "Vision B false-positive check": In review, with the result.
+
 ## 2026-11-06 — Claude Code session (Vision B Task 2: ISLES'24 domain-shift check, code and notebook)
 - **Scope:** Phase 3, Vision B, Task 2 from `docs/team/mohamed_vision_b.md`. Code and notebook only; the real run is Mohamed's, on Colab.
 - **`vision/haemorrhage/isles_check.py`** (tested): scores each development case's `ncct_native` the way the RSNA shards were built:

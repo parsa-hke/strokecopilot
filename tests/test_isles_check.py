@@ -162,7 +162,7 @@ def test_summarise_counts_rates_and_histogram():
 
 # --- the whole check ------------------------------------------------------------------------------
 
-CASES = ["sub-stroke0101", "sub-stroke0102", "sub-stroke0103", "sub-stroke0104"]
+CASES = ["sub-stroke9001", "sub-stroke9002", "sub-stroke9003", "sub-stroke9004"]  # synthetic: in no split
 
 
 def _loader(missing=()):
