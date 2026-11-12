@@ -135,7 +135,8 @@ strokecopilot/
 │   │       ├── model.py           # 2D classifier with pretrained backbone
 │   │       ├── train.py
 │   │       ├── aggregate.py       # slice → scan, calibration
-│   │       └── infer.py
+│   │       ├── infer.py
+│   │       └── isles_check.py     # Phase 3: false-positive check on ISLES'24 native NCCT
 │   ├── contract/
 │   │   ├── schema.py              # pydantic model of vision_output.json
 │   │   ├── build.py               # assemble vision_output from A + B predictions
@@ -198,6 +199,7 @@ strokecopilot/
 │   ├── 10_visionA_nnunet.ipynb
 │   ├── 11_visionA_thresholds.ipynb
 │   ├── 20_visionB_train.ipynb     # runs on Kaggle: RSNA split, slice classifier, scan calibration
+│   ├── 21_visionB_isles_check.ipynb # Colab: Vision B on ISLES'24 native NCCT (presumed no bleed)
 │   ├── 30_nlpA_corpus.ipynb
 │   ├── 31_nlpA_reasoner.ipynb
 │   ├── 40_nlpB_verifier.ipynb
@@ -514,7 +516,7 @@ Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the lo
 
 **Vision B**
 - [ ] Tune aggregation and threshold for high sensitivity at acceptable specificity (false "no bleed" is the worst failure in the system — state the operating point and why)
-- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate
+- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate — EXP-16 (Mohamed, 8 Nov 2026, `23e2f92`): at the provisional 0.278, 45 of 129 development scans called positive (34.9%, 95% CI 27.2–43.4%) on 5 mm slabs, 61 of 129 on native thin slices; review of the top scans and a check of RSNA's slice thickness on Kaggle still open
 - [ ] Optional: per-subtype outputs if time allows
 
 **NLP A**
