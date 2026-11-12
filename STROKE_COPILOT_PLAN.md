@@ -513,8 +513,8 @@ Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the lo
 - [ ] `contract/build.py` produces valid `vision_output.json` for every non-held-out case; validate all
 
 **Vision B**
-- [ ] Tune aggregation and threshold for high sensitivity at acceptable specificity (false "no bleed" is the worst failure in the system — state the operating point and why) — `operating_point.py` (tested) and `22_visionB_operating_point.ipynb` ready 8 Nov 2026: threshold cross-fitted on validation patient halves, 20 seeds, target sweep, proposal rule fixed before the run. The Kaggle run (Mohamed) and Parsa's decision are pending
-- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate — `isles_check.py` (tested) and `21_visionB_isles_check.ipynb` ready 6 Nov 2026; the Colab run (Mohamed) is pending, so no rate yet
+- [ ] Tune aggregation and threshold for high sensitivity at acceptable specificity (false "no bleed" is the worst failure in the system — state the operating point and why) — EXP-17 (Mohamed, Kaggle, `ff522bd`): EXP-6's top-2 aggregation kept; threshold cross-fitted on validation patient halves (20 seeds). Proposed 0.175 (96% target): sensitivity 0.961 (95% CI 0.946–0.972), specificity 0.878 (0.859–0.895); on ISLES'24 it would flag 68 of 129 presumed bleed-free scans (52.7%). Parsa's threshold decision pending
+- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate — EXP-16 (Mohamed, 8 Nov 2026, `23e2f92`): at the provisional 0.278, 45 of 129 development scans called positive (34.9%, 95% CI 27.2–43.4%) on 5 mm slabs, 61 of 129 on native thin slices; review of the top scans and a check of RSNA's slice thickness on Kaggle still open
 - [ ] Optional: per-subtype outputs if time allows
 
 **NLP A**
