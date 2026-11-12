@@ -131,6 +131,21 @@ def test_jobs_registry():
     assert not any("tar" in p or "preprocessed" in p for p in jobs.COLLECT)
 
 
+def test_fold_jobs_and_the_carried_predict_run():
+    for k, exp in enumerate(("EXP-18", "EXP-19", "EXP-20", "EXP-21"), start=1):
+        spec = jobs.get(exp)
+        assert f"--mode train --fold {k} --epochs 300" == spec["args"] and spec["run_dir"] == f"{exp}_nnunet_fold{k}"
+    assert jobs.chain("EXP-18") == ["EXP-22", "EXP-18"] and jobs.chain("EXP-19") == ["EXP-19"]
+    cmd = jobs.command("EXP-18", "abc1234")
+    first, second = cmd.split("; python")
+    assert "--exp EXP-22 --mode predict --fold 0" in first and "> /root/sc/runs/EXP-22/job.log" in first
+    assert "echo $? > /root/sc/runs/EXP-22/job.exit" in first
+    assert "--exp EXP-18 --mode train --fold 1" in second and "EXP-22" not in second
+    assert jobs.inputs("EXP-18") == {jobs.EXP14_CHECKPOINT: "/root/sc/inputs/EXP-22/checkpoint_final.pth"}
+    assert jobs.inputs("EXP-19") == {}
+    assert "--checkpoint /root/sc/inputs/EXP-22/checkpoint_final.pth" in jobs.get("EXP-22")["args"]
+
+
 # --- pod lifecycle with a stub provider -------------------------------------------------------------
 
 class StubProvider:
@@ -235,6 +250,28 @@ def test_up_collect_down(stubbed):
     assert saved["destroyed"] and saved["cost_usd_estimate"] >= 0
 
 
+def test_up_sends_inputs_and_collect_brings_every_run(stubbed, tmp_path, monkeypatch):
+    prov, sent, answers = stubbed
+    drive = tmp_path / "drive"
+    monkeypatch.setattr(pod, "drive_root", lambda: drive)
+    with pytest.raises(pod.PodError, match="not on Drive"):
+        pod.up("EXP-18", 11, go=True, log=lambda m: None)
+    assert prov.created == []
+    ckpt = drive / jobs.EXP14_CHECKPOINT
+    ckpt.parent.mkdir(parents=True)
+    ckpt.write_bytes(b"w")
+    monkeypatch.setattr(pod, "run", lambda cmd, **k: sent.append(("drive", cmd[-1])))
+    state = pod.up("EXP-18", 11, go=True, log=lambda m: None)
+    assert ("up", "/root/sc/inputs/EXP-22/checkpoint_final.pth") in sent and state["runs"] == ["EXP-22", "EXP-18"]
+    assert list(state["inputs_sha256"]) == ["/root/sc/inputs/EXP-22/checkpoint_final.pth"]
+    pod.collect("EXP-18", log=lambda m: None)
+    assert ("down", "/root/sc/runs/EXP-22/") in sent and ("down", "/root/sc/runs/EXP-18/") in sent
+    drive_dests = [d for kind, d in sent if kind == "drive"]
+    assert any(d.endswith("EXP-22_nnunet_fold0_masks/") for d in drive_dests)
+    assert any(d.endswith("EXP-18_nnunet_fold1/") for d in drive_dests)
+    assert prov.destroyed == [77]
+
+
 def test_failed_setup_destroys_pod(stubbed, monkeypatch):
     prov, _, _ = stubbed
     monkeypatch.setattr(pod, "rsync_up", lambda *a: (_ for _ in ()).throw(pod.PodError("copy failed")))
@@ -252,6 +289,23 @@ def test_down_raises_if_still_listed(stubbed):
 
 
 # --- pod_job helpers --------------------------------------------------------------------------------
+
+def test_pod_job_predict_arguments_are_checked(tmp_path):
+    from strokecopilot.vision.perfusion import pod_job
+    base = ["--exp", "EXP-22", "--commit", "abc", "--tar", "t", "--run-dir", str(tmp_path / "r"), "--work", str(tmp_path / "w")]
+    with pytest.raises(SystemExit, match="needs --checkpoint"):
+        pod_job.main(base + ["--mode", "predict"])
+    with pytest.raises(SystemExit, match="predict only"):
+        pod_job.main(base + ["--mode", "train", "--epochs", "3", "--limit", "2"])
+    with pytest.raises(SystemExit, match="predict only"):
+        pod_job.main(base + ["--mode", "dummy", "--device", "cpu"])
+
+
+def test_gpu_name_is_empty_without_nvidia_smi(monkeypatch):
+    from strokecopilot.vision.perfusion import pod_job
+    monkeypatch.setattr(pod_job.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("nvidia-smi")))
+    assert pod_job.gpu_name() == ""
+
 
 def test_effective_cpus_from_cgroup(tmp_path):
     from strokecopilot.vision.perfusion import pod_job
