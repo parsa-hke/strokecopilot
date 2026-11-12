@@ -8,6 +8,10 @@ Three sources of claims, all with a pointer back to the field and entry they cam
 - a regex for numbers with units: a number the LLM's claims do not cover becomes a claim of its own;
 - each decision's rule_ids entry, as a citation claim.
 
+A restatement of the output's own decision ("Thrombolysis is not recommended", "The rulebook does not support
+thrombectomy for this patient") is not a claim: the `recommend` booleans are scored by recommendation correctness
+(docs/HALLUCINATION_METRIC.md §1-2). `restatements` finds them; a reason given with the decision stays a claim.
+
 The extractor gives numbers as written ("18.0"), because a number's stated precision decides how
 it is compared (§3b).
 """
@@ -90,6 +94,39 @@ def entries(rec):
         out += [(f"{decision}.blocking_factors", i, text, cited, False) for i, text in enumerate(rec[decision]["blocking_factors"])]
     out += [("uncertainties", i, text, [], False) for i, text in enumerate(rec["uncertainties"])]
     return out
+
+
+_TREATMENT = r"(?:iv |intravenous )?(?P<t>thrombolysis|thrombectomy|ivt|evt|mechanical thrombectomy)"
+_RESTATEMENT = (
+    re.compile(rf"^{_TREATMENT} (?:is|was) (?P<neg>not )?(?:recommended|indicated|advised|offered|supported)"
+               r"(?: (?:for|in) this patient)?$", re.I),
+    re.compile(rf"^the (?:rulebook|guideline|corpus) does (?P<neg>not )?support {_TREATMENT}(?: (?:for|in) this patient)?$", re.I),
+    re.compile(rf"^(?:the )?recommendation is (?P<neg>not |against )?{_TREATMENT}$", re.I),
+)
+_TREATMENT_NAME = {"ivt": "thrombolysis", "evt": "thrombectomy", "mechanical thrombectomy": "thrombectomy"}
+
+
+def restatement_of(claim, rec):
+    """The decision a claim only restates ("thrombolysis" or "thrombectomy"), or None. Only a rule claim from the
+    extractor that says nothing but the decision, with the same polarity as the output's own `recommend`, is a
+    restatement; one that contradicts the output stays a claim."""
+    if claim.origin != "llm" or claim.kind != "rule":
+        return None
+    text = re.sub(r"\s+", " ", claim.text).strip().rstrip(".")
+    for pattern in _RESTATEMENT:
+        m = pattern.match(text)
+        if m:
+            treatment = _TREATMENT_NAME.get(m.group("t").lower(), m.group("t").lower())
+            return treatment if (not m.group("neg")) == bool(rec[treatment]["recommend"]) else None
+    return None
+
+
+def restatements(claims, rec):
+    """(claims to score, restatements left out), in order."""
+    kept, dropped = [], []
+    for claim in claims:
+        (dropped if restatement_of(claim, rec) else kept).append(claim)
+    return kept, dropped
 
 
 def numbers(text):
@@ -225,4 +262,5 @@ def extract(rec, llm, version=EXTRACTOR_PROMPT):
     rec_entries = {(f, i): (sources, derived) for f, i, _, sources, derived in entries(rec)}
     counters = {}
     claims = [c for c in (_from_llm(item, rec_entries, counters) for item in reply["claims"]) if c is not None]
+    claims, _ = restatements(claims, rec)
     return claims + regex_claims(rec, claims) + citation_claims(rec)

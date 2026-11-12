@@ -105,16 +105,17 @@ class CachedRetriever:
         return [tuple(x) for x in hit]
 
 
-def fixture_inputs(stem, judge=None, retriever=None, tau=-1.0, corpus=None):
+def fixture_inputs(stem, judge=None, retriever=None, tau=-1.0, corpus=None, rec=None):
     note, sheet = fixture_note(stem)
     vision = json.loads((Path(FIXTURES_DIR) / f"{stem}.json").read_text())
     return tr.Inputs(vision=vision, note=note, facts=sheet, corpus=corpus or ingest.load(), judge=judge,
-                     retriever=retriever, tau=tau)
+                     retriever=retriever, tau=tau, decision_passages=tr.decision_passages(rec) if rec else [])
 
 
 def verify(rec, inputs, extractor):
     """(claims, traces) for one recommendation."""
     claims = cl.extract(rec, extractor)
+    inputs.decision_passages = tr.decision_passages(rec)
     return claims, tr.trace_all(claims, inputs)
 
 
@@ -163,16 +164,17 @@ def run_seeded(extractor_llm, judges, retriever, out_dir, seeds=None, stems=None
 
 def refresh_claims(rec, saved):
     """The model's extracted claims as saved, plus the regex and citation claims rebuilt with the current code."""
-    llm = [cl.Claim(**c) for c in saved if c.get("origin", "llm") == "llm"]
+    llm, _ = cl.restatements([cl.Claim(**c) for c in saved if c.get("origin", "llm") == "llm"], rec)
     return llm + cl.regex_claims(rec, llm) + cl.citation_claims(rec)
 
 
-def replay(items, claims_by_id, out_dir, judge_name, corpus=None, retriever=None):
-    """Seeded-error scores at every τ in TAU_GRID. Judge verdicts come from the cache only; retrieval comes from the
-    cache, or from `retriever` (no API) for a text not retrieved before."""
+def replay(items, claims_by_id, out_dir, judge_name, corpus=None, retriever=None, judge=None):
+    """Seeded-error scores at every τ in TAU_GRID. Judge verdicts come from the cache only, unless `judge` (a
+    CachedJudge that may call the model for missing verdicts) is given; retrieval comes from the cache, or from
+    `retriever` (no API) for a text not retrieved before."""
     out = Path(out_dir)
     corpus = corpus or ingest.load()
-    judge = CachedJudge(None, JsonCache(out / f"judge_{judge_name}_cache.json"), offline=True)
+    judge = judge or CachedJudge(None, JsonCache(out / f"judge_{judge_name}_cache.json"), offline=True)
     retriever = CachedRetriever(retriever, JsonCache(out / "retrieval_cache.json"), offline=retriever is None)
     grid = {}
     for tau in TAU_GRID:
@@ -181,7 +183,7 @@ def replay(items, claims_by_id, out_dir, judge_name, corpus=None, retriever=None
             if item["id"] not in claims_by_id:
                 continue
             claims = refresh_claims(item["rec"], claims_by_id[item["id"]])
-            traces = [t.to_dict() for t in tr.trace_all(claims, fixture_inputs(item["fixture"], judge, retriever, tau, corpus))]
+            traces = [t.to_dict() for t in tr.trace_all(claims, fixture_inputs(item["fixture"], judge, retriever, tau, corpus, item["rec"]))]
             if item["subtype"] is None:
                 clean.append({"fixture": item["fixture"], "traces": traces})
             else:
@@ -196,23 +198,32 @@ def _items(stems=None, seeds=None):
     return items + [x for x in se.seeded_set(seeds) if stems is None or x["fixture"] in stems]
 
 
-def rescore(out_dir, judge_names, stems=None, seeds=None, metrics_name="metrics_rescore.json", retriever=None):
-    """Re-score an earlier run with the current tracing code, from its saved model claims and the caches. No API
-    calls: a claim that would need a judge verdict that is not cached raises KeyError. `retriever` (the local
-    embedding model) answers retrievals the cache does not hold."""
+def rescore(out_dir, judge_names, stems=None, seeds=None, metrics_name="metrics_rescore.json", retriever=None,
+            judge_llms=None, judge_prompt=tr.JUDGE_PROMPT):
+    """Re-score an earlier run with the current tracing code, from its saved model claims and the caches.
+
+    With no `judge_llms` it makes no API calls: a claim that needs a verdict that is not cached raises KeyError.
+    `judge_llms` ({name: llm}) lets the judge answer only the verdicts the cache lacks, for example new candidate
+    passages or a new `judge_prompt` (the version is part of the cache key). `retriever` (the local embedding model)
+    answers retrievals the cache does not hold."""
     out = Path(out_dir)
     corpus = ingest.load()
     items = _items(stems, seeds)
-    metrics = {"outputs": len(items), "rescored": True, "judges": {}}
+    metrics = {"outputs": len(items), "rescored": True, "judge_prompt": judge_prompt, "judges": {}}
     for name in judge_names:
         claims_by_id = {}
         for item in items:
             path = out / "traces" / name / f"{item['id']}.json"
             if path.exists():
                 claims_by_id[item["id"]] = json.loads(path.read_text())["claims"]
-        metrics["judges"][name] = {"failures": [], "judge_calls": 0, "verdicts_cached": len(JsonCache(out / f"judge_{name}_cache.json")),
-                                   "usage": {}, "cost_usd_estimate": 0.0, "outputs_rescored": len(claims_by_id),
-                                   "by_tau": replay(items, claims_by_id, out, name, corpus, retriever)}
+        llm = (judge_llms or {}).get(name)
+        cache = JsonCache(out / f"judge_{name}_cache.json")
+        judge = CachedJudge(tr.Judge(llm, judge_prompt) if llm else None, cache, offline=llm is None, version=judge_prompt)
+        grid = replay(items, claims_by_id, out, name, corpus, retriever, judge)
+        usage = dict(getattr(llm, "usage", {}) or {}) if llm else {}
+        metrics["judges"][name] = {"failures": [], "judge_calls": judge.calls, "verdicts_cached": len(cache), "usage": usage,
+                                   "cost_usd_estimate": cost_usd(getattr(llm, "model", name), usage) if llm else 0.0,
+                                   "outputs_rescored": len(claims_by_id), "by_tau": grid}
     metrics["extractor"] = {"calls": 0, "usage": {}, "cost_usd_estimate": 0.0}
     (out / metrics_name).write_text(json.dumps(metrics, indent=1))
     return metrics

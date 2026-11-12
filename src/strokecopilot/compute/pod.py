@@ -149,7 +149,9 @@ def remote_sh(state, script, capture=True, timeout=600):
 
 def rsync_up(state, local, remote_path):
     e = " ".join(shlex.quote(x) for x in ssh_base(state["host"], state["port"], state["user"])[:-1])
-    run(["rsync", "-a", "--partial", "-e", e, str(local), f"{state['user']}@{state['host']}:{remote_path}"])
+    # --timeout ends a transfer that moves no data for 5 min; on 12 Nov 2026 an upload to one host sat at 0 kB/s for
+    # 18 min while the pod billed. A failed copy makes `up` destroy the pod.
+    run(["rsync", "-a", "--partial", "--timeout=300", "-e", e, str(local), f"{state['user']}@{state['host']}:{remote_path}"])
 
 
 def rsync_down(state, remote_path, local, includes):
@@ -191,6 +193,16 @@ def search(p, rounds=6):
     return sorted(seen.values(), key=lambda o: o.get("dph_total", 1e9))
 
 
+def find_offer(p, offer_id, rounds=25):
+    """The offer if it still passes the filters. Searches until it appears, because a search shows a varying sample:
+    on 12 Nov 2026 a rentable offer appeared in only 2 of 10 searches."""
+    for _ in range(rounds):
+        for o in p.offers(limit=64):
+            if str(o["id"]) == str(offer_id):
+                return o
+    return None
+
+
 def offers(exp, provider_name="vast", log=print, show=6):
     """The cheapest offers that pass the filters, US and EU hosts first."""
     spec = jobs.get(exp)
@@ -216,7 +228,7 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
     p = provider(provider_name)
     if any(i.get("label") == label(exp) for i in p.instances()):
         raise PodError(f"An instance labelled {label(exp)} already exists. Run down first.")
-    offer = next((o for o in search(p, rounds=10) if str(o["id"]) == str(offer_id)), None)
+    offer = find_offer(p, offer_id)
     if offer is None:
         raise PodError(f"Offer {offer_id} no longer passes the filters or is gone. Run offers again.")
     if provider_name == "vast" and vast.contract_hours(offer) < spec["hours"] + 1:

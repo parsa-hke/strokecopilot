@@ -5,8 +5,10 @@ sources are compared with what was found:
 - (a) vision fields and (b) note facts are compared in code, a number after rounding the true value
   to the precision the claim states, in the claim's unit;
 - (c) rules go to an LLM judge with the passages the claim cites plus the retriever's top 5 above a
-  similarity threshold tau. The judge returns supported / contradicted / not_addressed per passage
-  and, for a claim that applies a rule to this patient, whether the passage's scope fits;
+  similarity threshold tau, the passages it names lexically (a trial, a table, an ASPECTS range: see
+  lexical_candidates) and, for an uncertainty, the passages its output's decisions cite. The judge
+  returns supported / contradicted / not_addressed per passage and, for a claim that applies a rule
+  to this patient, whether the passage's scope fits;
 - comparisons are recomputed in code from the true values of their inputs.
 
 Each hallucination gets one sub-type, the first that applies: 1 wrong number, 2 invented finding,
@@ -65,6 +67,7 @@ class Inputs:
     judge: object = None  # callable(claim_text, passages, case_inputs, applied) -> {id: (verdict, scope_fits)}
     retriever: object = None  # callable(text, k) -> [(passage id, similarity)]
     tau: float = TAU
+    decision_passages: list = field(default_factory=list)  # both decisions' rule_ids: candidates for uncertainties
 
 
 @dataclass
@@ -380,14 +383,17 @@ def check_threshold(claim, inputs):
     missing = [pid for pid in cited if pid not in inputs.corpus]
     if missing:
         return 3, [], f"Cites passages that do not exist: {', '.join(missing)}."
+    if claim.field == "uncertainties":  # no sources in the schema: its output's decision passages stand in for them
+        cited += [pid for pid in inputs.decision_passages if pid in inputs.corpus and pid not in cited]
     found = [pid for pid in cited if all(_states_number(inputs.corpus[pid]["text"], v) for v in values)]
     if found:
         return None, found, "The threshold is stated in a cited passage."
+    others = lexical_candidates(claim.text, inputs.corpus)
     if inputs.retriever is not None:
-        found = [pid for pid, score in inputs.retriever(claim.text, TOP_K) if score >= inputs.tau
-                 and all(_states_number(inputs.corpus[pid]["text"], v) for v in values)]
-        if found:
-            return None, found, "The threshold is stated in a passage the claim does not cite."
+        others += [pid for pid, score in inputs.retriever(claim.text, TOP_K) if score >= inputs.tau]
+    found = [pid for pid in dict.fromkeys(others) if all(_states_number(inputs.corpus[pid]["text"], v) for v in values)]
+    if found:
+        return None, found, "The threshold is stated in a passage the claim does not cite."
     return 3, [], f"No passage states the threshold {', '.join(values)}."
 
 
@@ -428,12 +434,52 @@ def _case_inputs(inputs):
     return {"vision_output": vision, "triage_note": inputs.note}
 
 
-def check_rule(text, cited, applied, inputs):
-    """(sub-type, supported passage ids, reason) for the rule part of a claim."""
+def decision_passages(rec):
+    """Both decisions' rule_ids, thrombolysis first, without repeats."""
+    return list(dict.fromkeys(rec["thrombolysis"]["rule_ids"] + rec["thrombectomy"]["rule_ids"]))
+
+
+# Names a claim can use for a group of passages. Embeddings cannot tell apart rule rows that differ only in numbers or
+# trial (EXP-7), so a rule named this way is often outside the top 5 (EXP-12: "DEFUSE-3 and DAWN criteria are not met").
+_NAMED = (
+    (re.compile(r"\bDEFUSE[- ]?3\b", re.I), lambda pid, p: p.get("source") == "DEFUSE3"),
+    (re.compile(r"\bDAWN\b"), lambda pid, p: p.get("source") == "DAWN"),
+    (re.compile(r"\bEXTEND\b"), lambda pid, p: pid == "AHA2026-T3-extend"),
+    (re.compile(r"\b(?:TRACE[- ]?(?:III|3)|TIMELESS)\b", re.I), lambda pid, p: pid == "AHA2026-T3-trace3"),
+    (re.compile(r"\bTable 3\b", re.I), lambda pid, p: pid.startswith("AHA2026-T3-")),
+    (re.compile(r"\bTable 8\b", re.I), lambda pid, p: pid.startswith("AHA2026-T8-")),
+)
+_RANGE = re.compile(r"(?<![\d.])(\d+)\s*(?:to|-|–)\s*(\d+)(?![\d.])(?!\s*(?:h\b|hours?|hrs?|min|mL|ml|mm|%|years?))")
+
+
+def lexical_candidates(text, corpus, limit=8):
+    """Passages a rule claim names: a trial (DEFUSE-3, DAWN, EXTEND, TRACE-III), a guideline table (3 or 8), or an
+    ASPECTS range ("ASPECTS 3 to 5 or 0 to 2"), which must appear with ASPECTS in the passage. Deterministic, so the
+    candidate set does not depend on the embedding model."""
+    out = []
+    for pattern, wanted in _NAMED:
+        if pattern.search(text):
+            out += [pid for pid, p in corpus.items() if wanted(pid, p)]
+    if re.search(r"\bASPECTS\b", text):
+        for a, b in _RANGE.findall(text):
+            rng = re.compile(rf"(?<![\d.]){a}\s*(?:to|-|–)\s*{b}(?![\d.])")
+            out += [pid for pid, p in corpus.items() if "ASPECTS" in p["text"] and rng.search(p["text"])]
+    return list(dict.fromkeys(out))[:limit]
+
+
+def check_rule(text, cited, applied, inputs, field_name=None):
+    """(sub-type, supported passage ids, reason) for the rule part of a claim.
+
+    Candidates: the passages the claim cites, those of its output's decisions for an uncertainty (the schema gives
+    uncertainties no sources, EXP-12), the passages it names (lexical_candidates), and the retriever's top 5 above
+    tau. Only passages the claim cites can make attribution clean; the rest can show the rule is real (uncited, 6)."""
     missing = [pid for pid in cited if pid not in inputs.corpus]
     if missing:
         return 3, [], f"Cites passages that do not exist: {', '.join(missing)}."
     candidates = list(dict.fromkeys(cited))
+    if field_name == "uncertainties":
+        candidates += [pid for pid in inputs.decision_passages if pid in inputs.corpus and pid not in candidates]
+    candidates += [pid for pid in lexical_candidates(text, inputs.corpus) if pid not in candidates]
     if inputs.retriever is not None:
         candidates += [pid for pid, score in inputs.retriever(text, TOP_K) if score >= inputs.tau and pid not in candidates]
     if not candidates:
@@ -587,7 +633,7 @@ def trace_claim(claim, inputs):
         if claim.kind == "comparison":
             rule_subtype, supported, rule_reason = check_threshold(claim, inputs)
         else:
-            rule_subtype, supported, rule_reason = check_rule(claim.text, cited, claim.applies_to_patient, inputs)
+            rule_subtype, supported, rule_reason = check_rule(claim.text, cited, claim.applies_to_patient, inputs, claim.field)
         if rule_subtype is not None:
             subtype, reason = rule_subtype, rule_reason
         elif subtype is None:

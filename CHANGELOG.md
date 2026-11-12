@@ -1,5 +1,46 @@
 # CHANGELOG
 
+## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes)
+- **Phase 3, Parsa's tasks A1–A3.** Nothing below used a held-out case; `folds.json` was checked by sha256 only.
+- **A1, nnU-Net folds 1–4 (commit `7c67c5b`):**
+  - `compute/jobs.py`: EXP-18 to EXP-21 are folds 1–4, 300 epochs each. EXP-22 regenerates fold 0's validation masks from EXP-14's `checkpoint_final.pth`, on EXP-18's pod before fold 1 trains. A run can carry others (`with`), each with its own folder, log and exit code; `collect` brings all of them back.
+  - `pod_job.py --mode predict`: nnU-Net's own validation (`--val`) on a finished checkpoint. It refuses a checkpoint whose plan or fold differs, deletes the copied checkpoint afterwards, and leak-checks the mask file names too.
+  - **Dummy, free (Mac, MPS, 3 fold-0 cases):** per-case Dice matched EXP-14 within 0.0001 and volume within 0.004 mL.
+  - **Launch, not done.** Parsa approved 4 offers at $0.363/h in parallel, and topped up the credit to $10.44.
+    - By launch time, all four offers had been rented, and two replacements were taken within minutes.
+    - One pod (Poland, $0.363/h) was created, but its tarball upload stalled at 0 kB/s for 18 min. I stopped it, and `up` destroyed the pod. **Measured cost $0.13** (credit $10.44 → $10.31; $10.29 an hour later).
+    - Parsa chose to wait for offers at $0.363/h or less rather than pay up to $0.50/h.
+    - `runs/offerwatch.py` (not committed) checks every 10 min and launches each fold on the cheapest US or EU offer that passes, skipping the stalled host. It then starts the run's monitor page and auto-collector, and stops after 14 h or 2 failed setups.
+  - **`pod.py` fixes (not committed):**
+    - an upload that moves no data for 5 min aborts (`rsync --timeout=300`), so `up` destroys the pod;
+    - `up` searches up to 25 rounds for the offer, because a rentable offer appeared in only 2 of 10 searches.
+- **A3, approved by Parsa on 12 Nov 2026:**
+  - `docs/HALLUCINATION_METRIC.md` §9 points 8–12;
+  - the RSNA split, now DEC-22 in plan §2 and in Notion Decisions.
+- **Free EXP-12 rescore** with the critical-rate denominator fix, at `7c67c5b`, before today's verifier changes. Run locally from the caches.
+  - Results: rate 0.080 (28/351), content 0.060, **critical 0.014 (5/350)**, cases with a critical claim 3/5, attribution 0.979, no omissions.
+  - The 0.185 recorded earlier divided by the wrong denominator. Saved to Drive as `metrics_rescore_7c67c5b.json` and `flagged_rescore_7c67c5b.json`.
+- **A2, the three verifier fixes from EXP-12** (tests in `tests/test_verifier_phase3_fixes.py`; metric doc §9 points 13–15, **proposed, need Parsa's OK**):
+  - **Rules under uncertainties:** an uncertainty's rule claim also gets both decisions' cited passages as candidates, like blocking factors (point 8). Every rule claim also gets lexical candidates for a trial, Table 3/8 or an ASPECTS range it names (`trace.lexical_candidates`). τ stays 0.6 (DEC-20).
+  - **Judge errors on conditional and negative applications:** `prompts/judge_v3.md` adds rules for a requirement that is not needed, criteria that are not met, conditional and counterfactual claims, and a reason for a decision. `judge_v2` stays the default, because v3 amends DEC-20. Its examples come from the EXP-12 flags, so EXP-12 is an in-sample check.
+  - **Meta-statements:** a pure restatement of the output's own decision is not a claim (`claims.restatements`), because `recommend` is scored by correctness. A reason given with it stays a claim, and so does a statement that contradicts the output.
+  - **Rescores take a judge prompt** and can call the judge for missing verdicts only (`run.rescore`, `end_to_end.rescore`). `nlp/verifier/recheck.py` and `notebooks/51_verifier_recheck.ipynb` re-check EXP-11 and EXP-12 under v2 and v3 (EXP-23).
+  - **Measured so far, free:**
+    - Fix 3 alone removes 1 of the 28 EXP-12 flags.
+    - Fixes 1 and 2 need new verdicts: v2 7 + 31 calls, v3 60 + 82 calls (counted in a dry run). That is about $0.20, an estimate.
+    - There is no API key on this Mac, so EXP-23 runs on Colab once the code is pushed. **The EXP-11 bar is not yet re-checked.**
+- pytest: 460 passed.
+- **Spend so far:**
+  - GPU: $2.69 measured ($2.56 before, plus $0.13 today).
+  - API: no new calls today.
+- **Notion sync:**
+  - done: Experiments → EXP-18 to EXP-22 rows, all Planned (EXP-18 notes the failed attempt and its $0.13);
+  - done: Decisions → DEC-22 (RSNA split);
+  - done: "Hallucination metric" page → points 8–12 approved, arms wording (rulebook, DEC-19);
+  - done: EXP-12 row → corrected critical rate 0.014;
+  - pending: EXP-23 row once it runs;
+  - pending: Tasks → "Verifier fixes" In progress.
+
 ## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
 - **Roles agreed by Parsa:**
   - Parsa keeps the long GPU runs, the paid model runs, `contract/build.py`, the verifier fixes and the decisions.

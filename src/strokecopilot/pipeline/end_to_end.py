@@ -67,9 +67,9 @@ def flagged_claims(case_id, claims, traces):
     return out
 
 
-def _inputs(case, judge, retriever, tau, corpus):
+def _inputs(case, judge, retriever, tau, corpus, rec=None):
     return tr.Inputs(vision=case["vision"], note=case["note"], facts=case["facts"], corpus=corpus, judge=judge,
-                     retriever=retriever, tau=tau)
+                     retriever=retriever, tau=tau, decision_passages=tr.decision_passages(rec) if rec else [])
 
 
 def _score(case, rec, claims, traces):
@@ -83,7 +83,8 @@ def _score(case, rec, claims, traces):
     return record, check, found, missing
 
 
-def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU, log=print, extra_config=None, source=None):
+def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU, log=print, extra_config=None, source=None,
+              judge_prompt=tr.JUDGE_PROMPT):
     """Writes config.json, metrics.json, flagged.json, and outputs/, traces/ and calls/ per case; returns the metrics.
     reasoner, extractor and judge are llm(system, user, schema) callables (providers.ClaudeJSON)."""
     out = Path(out_dir)
@@ -92,12 +93,12 @@ def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU,
     system = rp.system_prompt()
     corpus = ingest.load()
     cached_extractor = vr.CachedExtractor(extractor, vr.JsonCache(out / "extraction_cache.json"))
-    cached_judge = vr.CachedJudge(tr.Judge(judge), vr.JsonCache(out / "judge_cache.json"))
+    cached_judge = vr.CachedJudge(tr.Judge(judge, judge_prompt), vr.JsonCache(out / "judge_cache.json"), version=judge_prompt)
     cached_retriever = vr.CachedRetriever(retriever, vr.JsonCache(out / "retrieval_cache.json"))
     describe = lambda llm: getattr(llm, "describe", lambda: {"model": getattr(llm, "model", "unknown")})()
     config = {"source": source, "cases": [c["id"] for c in cases], "reasoner": describe(reasoner),
               "prompt_version": rp.REASONER_PROMPT, "extractor": describe(extractor), "judge": describe(judge),
-              "judge_prompt": tr.JUDGE_PROMPT, "tau": tau, "top_k": tr.TOP_K, "corpus_sha256": ingest.version(),
+              "judge_prompt": judge_prompt, "tau": tau, "top_k": tr.TOP_K, "corpus_sha256": ingest.version(),
               "corpus_draft": ingest.unchecked(ingest.read()), **(extra_config or {})}
     if source == "scenarios":
         config["scenarios"] = sc.manifest(sc.generate())
@@ -115,7 +116,7 @@ def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU,
             continue
         (out / "outputs" / f"{case['id']}.json").write_text(json.dumps(rec, indent=1, ensure_ascii=False))
         try:
-            claims, traces = vr.verify(rec, _inputs(case, cached_judge, cached_retriever, tau, corpus), cached_extractor)
+            claims, traces = vr.verify(rec, _inputs(case, cached_judge, cached_retriever, tau, corpus, rec), cached_extractor)
         except (RefusalError, RuntimeError, json.JSONDecodeError, KeyError) as e:
             row["error"] = f"verifier failed: {str(e)[:300]}"
             rows.append(row)
@@ -150,16 +151,20 @@ def run_fixtures(reasoner, extractor, judge, retriever, out_dir, stems=None, tau
                      extra_config, source="fixtures")
 
 
-def rescore(out_dir, retriever=None, tau=tr.TAU, metrics_name="metrics_rescore.json", log=print, source=None):
+def rescore(out_dir, retriever=None, tau=tr.TAU, metrics_name="metrics_rescore.json", log=print, source=None,
+            judge_llm=None, judge_prompt=tr.JUDGE_PROMPT, flagged_name="flagged_rescore.json"):
     """Re-score a finished run with the current verifier and rulebook code: the saved reasoner outputs and model
-    claims, the regex and citation claims rebuilt, judge verdicts from the cache only (no API calls). `retriever`
-    answers retrievals the cache does not hold. Writes metrics_rescore.json and flagged_rescore.json."""
+    claims, the regex and citation claims rebuilt. Judge verdicts come from the cache only (no API calls), unless
+    `judge_llm` is given: then the judge answers only the verdicts the cache lacks (new candidates, or a new
+    `judge_prompt`, whose version is part of the cache key). `retriever` answers retrievals the cache does not hold.
+    Writes metrics_rescore.json and flagged_rescore.json (or the names given)."""
     out = Path(out_dir)
     config = json.loads((out / "config.json").read_text()) if (out / "config.json").exists() else {}
     source = source or config.get("source") or config.get("mode") or "fixtures"
     cases = {c["id"]: c for c in load_cases(source)}
     corpus = ingest.load()
-    judge = vr.CachedJudge(None, vr.JsonCache(out / "judge_cache.json"), offline=True)
+    judge = vr.CachedJudge(tr.Judge(judge_llm, judge_prompt) if judge_llm else None, vr.JsonCache(out / "judge_cache.json"),
+                           offline=judge_llm is None, version=judge_prompt)
     cached_retriever = vr.CachedRetriever(retriever, vr.JsonCache(out / "retrieval_cache.json"), offline=retriever is None)
     records, rows, flagged = [], [], []
     for call in sorted((out / "calls").glob("*.json")):
@@ -174,7 +179,7 @@ def rescore(out_dir, retriever=None, tau=tr.TAU, metrics_name="metrics_rescore.j
             continue
         rec = json.loads(output.read_text())
         claims = vr.refresh_claims(rec, json.loads(saved.read_text())["claims"])
-        traces = [t.to_dict() for t in tr.trace_all(claims, _inputs(case, judge, cached_retriever, tau, corpus))]
+        traces = [t.to_dict() for t in tr.trace_all(claims, _inputs(case, judge, cached_retriever, tau, corpus, rec))]
         record, check, found, missing = _score(case, rec, claims, traces)
         mine = flagged_claims(call.stem, claims, traces)
         flagged += mine
@@ -182,8 +187,10 @@ def rescore(out_dir, retriever=None, tau=tr.TAU, metrics_name="metrics_rescore.j
         rows.append({"case": call.stem, "claims": len(traces), "hallucinated": len(mine), "flagged": mine, "decisions": check,
                      "omissions": found, "uncertainty_omissions": missing})
         log(f"{call.stem}: {len(mine)} of {len(traces)} claims flagged" + (f"; omissions: {'; '.join(found)}" if found else ""))
-    metrics = {"rescored": True, "source": source, "tau": tau, "summary": vm.summarise(records) if records else None,
-               "per_case": rows, "cost_usd_estimate": {"reasoner": 0.0, "extractor": 0.0, "judge": 0.0}}
+    judge_cost = cost_usd(getattr(judge_llm, "model", ""), _usage(judge_llm)) if judge_llm else 0.0
+    metrics = {"rescored": True, "source": source, "tau": tau, "judge_prompt": judge_prompt, "judge_calls": judge.calls,
+               "summary": vm.summarise(records) if records else None, "per_case": rows,
+               "cost_usd_estimate": {"reasoner": 0.0, "extractor": 0.0, "judge": judge_cost}}
     (out / metrics_name).write_text(json.dumps(metrics, indent=1, default=str))
-    (out / "flagged_rescore.json").write_text(json.dumps(flagged, indent=1, ensure_ascii=False))
+    (out / flagged_name).write_text(json.dumps(flagged, indent=1, ensure_ascii=False))
     return metrics
