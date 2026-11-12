@@ -50,13 +50,16 @@ class JsonCache:
 
 
 class CachedExtractor:
-    """Wraps an extractor llm(system, user, schema); identical requests are answered from the cache."""
+    """Wraps an extractor llm(system, user, schema); identical requests to the same model are answered from the cache.
+
+    The model is part of the key (since 12 Nov 2026), so a run with another extractor never reuses these claims."""
 
     def __init__(self, llm, cache):
         self.llm, self.cache, self.calls = llm, cache, 0
 
     def __call__(self, system, user, schema):
-        key = _hash([system, user])
+        model = getattr(self.llm, "model", None)
+        key = _hash([system, user]) if model in (None, "claude-sonnet-5-5") else _hash([model, system, user])
         hit = self.cache.get(key)
         if hit is None:
             hit = self.llm(system, user, schema)

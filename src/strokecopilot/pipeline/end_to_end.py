@@ -145,6 +145,41 @@ def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU,
     return metrics
 
 
+def reverify(out_dir, extractor, judge, retriever=None, tau=tr.TAU, log=print, source="fixtures", judge_prompt=tr.JUDGE_PROMPT):
+    """Verify a finished run's saved reasoner outputs again with another claim extractor (EXP-24): fresh extraction,
+    tracing with the current code, and the judge for verdicts the cache lacks. `out_dir` holds the run's outputs/ and
+    calls/ (a copy, so the original keeps its own claims). Writes metrics_reverify.json and flagged_reverify.json."""
+    out = Path(out_dir)
+    cases = {c["id"]: c for c in load_cases(source)}
+    corpus = ingest.load()
+    cached_extractor = vr.CachedExtractor(extractor, vr.JsonCache(out / "extraction_cache.json"))
+    cached_judge = vr.CachedJudge(tr.Judge(judge, judge_prompt), vr.JsonCache(out / "judge_cache.json"), version=judge_prompt)
+    cached_retriever = vr.CachedRetriever(retriever, vr.JsonCache(out / "retrieval_cache.json"))
+    (out / "traces_reverify").mkdir(exist_ok=True)
+    records, rows, flagged = [], [], []
+    for output in sorted((out / "outputs").glob("*.json")):
+        case, rec = cases[output.stem], json.loads(output.read_text())
+        claims, traces = vr.verify(rec, _inputs(case, cached_judge, cached_retriever, tau, corpus, rec), cached_extractor)
+        traces = [t.to_dict() for t in traces]
+        (out / "traces_reverify" / output.name).write_text(json.dumps(
+            {"claims": [c.to_dict() for c in claims], "traces": traces}, indent=1, ensure_ascii=False))
+        record, check, found, missing = _score(case, rec, claims, traces)
+        mine = flagged_claims(output.stem, claims, traces)
+        flagged += mine
+        records.append(record)
+        rows.append({"case": output.stem, "claims": len(traces), "hallucinated": len(mine), "flagged": mine, "decisions": check,
+                     "omissions": found, "uncertainty_omissions": missing})
+        log(f"{output.stem}: {len(mine)} of {len(traces)} claims flagged")
+    costs = {name: cost_usd(getattr(llm, "model", ""), _usage(llm)) for name, llm in (("extractor", extractor), ("judge", judge))}
+    metrics = {"reverified": True, "source": source, "tau": tau, "judge_prompt": judge_prompt,
+               "extractor": getattr(extractor, "model", None), "summary": vm.summarise(records) if records else None,
+               "per_case": rows, "cost_usd_estimate": {"reasoner": 0.0, **costs},
+               "judge_calls": cached_judge.calls, "extractor_calls": cached_extractor.calls}
+    (out / "metrics_reverify.json").write_text(json.dumps(metrics, indent=1, default=str))
+    (out / "flagged_reverify.json").write_text(json.dumps(flagged, indent=1, ensure_ascii=False))
+    return metrics
+
+
 def run_fixtures(reasoner, extractor, judge, retriever, out_dir, stems=None, tau=tr.TAU, log=print, extra_config=None):
     """The Phase 2 acceptance run on the five fixtures (EXP-12)."""
     return run_cases(load_cases("fixtures", stems), reasoner, extractor, judge, retriever, out_dir, tau, log,

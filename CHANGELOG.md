@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes)
+## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes, model list)
 - **Phase 3, Parsa's tasks A1–A3.** Nothing below used a held-out case; `folds.json` was checked by sha256 only.
 - **A1, nnU-Net folds 1–4 (commit `7c67c5b`):**
   - `compute/jobs.py`: EXP-18 to EXP-21 are folds 1–4, 300 epochs each. EXP-22 regenerates fold 0's validation masks from EXP-14's `checkpoint_final.pth`, on EXP-18's pod before fold 1 trains. A run can carry others (`with`), each with its own folder, log and exit code; `collect` brings all of them back.
@@ -45,6 +45,19 @@
   - `trace.JUDGE_PROMPT` is now `judge_v3`.
   - Metric §9 points 13–15 are approved.
   - Plan §2 has the DEC-23 row, and DEC-20 notes the amendment, in the plan and in Notion.
+- **B6, the model list (DEC-24, approved by Parsa)**, from Hana's shortlist:
+  - The models: Claude Sonnet 5.5, Qwen3.5-27B, MedGemma 27B text, and Gemma 3 27B as MedGemma's base, for a paired comparison. Open models run on a rented 4090 with vLLM at 4-bit and constrained JSON.
+  - **No non-Claude frontier model for now.** Three of the four are non-Claude, and verifier-vs-human agreement is reported per model.
+  - **MedGemma waits for Parsa's reading of HAI-DEF terms §3.2.** Their "Clinical Use" includes research studies; the fallback is Baichuan-M2-32B with Qwen2.5-32B. It is a gated download, so the Hugging Face token question is decided at the paid-run step.
+  - **Budget finding.** Verifying an output costs about $0.08 with the Sonnet extractor (EXP-12: extractor $0.064, judge about $0.015), more than the reasoner call ($0.046). Four models at about 410 outputs each would need about $150 of API against about $96 left.
+  - **The fix depends on EXP-24.** With a Haiku 5.5 extractor (about $0.003 per output), the main runs cost about $52. The project would then total about $65–77 of API and $12.5–15 of GPU (estimates). Haiku becomes the extractor only if EXP-24 keeps the seeded-error bar.
+  - Notion: the DEC-24 row; Hana's shortlist task Done, with her questions answered and a link to DEC-24; her adapters task Next up, with the models.
+- **`providers.py`:** Sonnet 5.5 cache reads are now priced at $0.10/M, not $0.20/M (Hana's finding), so earlier logged Sonnet costs were slightly high.
+  - `CachedExtractor` now keys the cache by model for any extractor but Sonnet, so another extractor never reuses Sonnet's claims. Sonnet keeps its old key.
+- **EXP-24 prepared:**
+  - `end_to_end.reverify` re-extracts a run's saved outputs with another extractor.
+  - `recheck.extractor_check` runs EXP-11 and EXP-12 that way in `runs/EXP-24_haiku_extractor/`, seeded with copies of the original caches. It resumes without losing paid verdicts.
+  - `notebooks/52_haiku_extractor_check.ipynb`: about $0.50–1.00, estimated.
 - **A1, the folds launched (watcher cap raised by Parsa within the 8–15 USD budget):**
   - The watcher now launches US/EU offers up to $0.47/h. A credit guard launches a run only if the credit covers every running pod's worst case plus the new one, with $0.50 to spare.
   - It skips machines that failed setup. The tarball upload now has a 30-min limit (`pod.UPLOAD_LIMIT_S`), and pod state records the machine ID.
@@ -55,7 +68,7 @@
   - **EXP-18** runs on New Jersey (instance 60383981, $0.376/h) from 17:42 UTC: 38.6 s per epoch, due about 20:55 UTC, watchdog at 23:15.
   - **EXP-22, done on EXP-18's pod:** fold 0 Dice 0.218 ± 0.249 over 26 cases, the same as EXP-14. The masks come back with EXP-18's collect.
   - EXP-19 was being set up on New Jersey ($0.376/h) at 17:57 UTC.
-- pytest: 461 passed.
+- pytest: 465 passed.
 - **Spend so far:**
   - GPU: $3.01 measured before EXP-18 ($2.56 before, plus $0.45 of failed attempts today); EXP-18 and EXP-19 are running.
   - API: about $0.15 (EXP-23).
@@ -67,7 +80,8 @@
   - done: EXP-23 row;
   - done: EXP-18 Running (offer, price, commit `a9dcfe2`), EXP-22 Done;
   - done: Decisions → DEC-23 (judge_v3); DEC-20 notes the amendment; metric page → points 8–15;
-  - done: Tasks → "Verifier fixes" In review, to be Done when the v3 default is committed.
+  - done: Tasks → "Verifier fixes" Done (commits `502a769`, `6bf370b`);
+  - done: Decisions → DEC-24; Tasks → shortlist Done, adapters Next up;
 
 ## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
 - **Roles agreed by Parsa:**

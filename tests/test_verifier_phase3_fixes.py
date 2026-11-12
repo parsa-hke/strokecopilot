@@ -161,3 +161,67 @@ def test_recheck_runs_both_prompts_and_writes_a_comparison(tmp_path):
     assert out["by_prompt"][tr.JUDGE_PROMPT]["exp12"]["judge_calls"] == 0  # the runs' own prompt: all cached
     assert (exp12 / "flagged_phase3_judge_v3.json").exists() and (exp11 / "metrics_phase3_judge_v2.json").exists()
     assert json.loads((tmp_path / "out" / "metrics.json").read_text())["tau"] == 0.6
+
+
+# --- DEC-24: prices and extractor caches ---------------------------------------------------------------------------
+
+def test_sonnet_cache_reads_cost_ten_cents_per_million():
+    from strokecopilot.nlp.reasoner.providers import cost_usd
+    assert cost_usd("claude-sonnet-5-5", {"cache_read_input_tokens": 1_000_000}) == pytest.approx(0.10)
+    assert cost_usd("claude-haiku-5-5", {"cache_read_input_tokens": 1_000_000}) == pytest.approx(0.01)
+
+
+def test_extraction_cache_is_kept_apart_per_model(tmp_path):
+    from strokecopilot.nlp.verifier import run as vr
+
+    class LLM:
+        def __init__(self, model):
+            self.model, self.calls = model, 0
+
+        def __call__(self, system, user, schema):
+            self.calls += 1
+            return {"claims": [], "by": self.model}
+
+    cache = vr.JsonCache(tmp_path / "x.json")
+    sonnet, haiku = LLM("claude-sonnet-5-5"), LLM("claude-haiku-5-5")
+    assert vr.CachedExtractor(sonnet, cache)("s", "u", {})["by"] == "claude-sonnet-5-5"
+    assert vr.CachedExtractor(haiku, cache)("s", "u", {})["by"] == "claude-haiku-5-5"  # not Sonnet's cached reply
+    assert vr.CachedExtractor(sonnet, cache)("s", "u", {})["by"] == "claude-sonnet-5-5" and sonnet.calls == 1
+    assert vr._hash(["s", "u"]) in cache.data  # Sonnet keeps the key its existing caches use
+
+
+def test_extractor_check_reverifies_in_its_own_folder(tmp_path):
+    pytest.importorskip("numpy")
+    from strokecopilot.nlp.verifier import recheck as rc
+    from strokecopilot.nlp.verifier import run as vr
+    from strokecopilot.pipeline import end_to_end as e2e
+    from test_end_to_end import Fake, retriever
+
+    exp12 = tmp_path / "exp12"
+    e2e.run_fixtures(Fake("reasoner"), Fake("extractor"), Fake("judge"), retriever, exp12, log=lambda *_: None)
+    exp11 = tmp_path / "exp11"
+    vr.run_seeded(Fake("extractor"), {rc.JUDGE_NAME: Fake("judge")}, retriever, exp11, stems=["fx02_thrombectomy_large_mismatch"],
+                  log=lambda *_: None)
+    before = sorted(p.name for p in exp12.iterdir())
+
+    def haiku():
+        f = Fake("extractor")
+        f.model = "claude-haiku-5-5"
+        return f
+
+    out = rc.extractor_check(exp11, exp12, tmp_path / "exp24", haiku, lambda: Fake("judge"), retriever, log=lambda *_: None)
+    assert out["extractor"] == "claude-haiku-5-5" and out["exp12"]["claims"] > 0 and "min_recall" in out["exp11"]
+    assert out["exp12"]["judge_calls"] == 0  # same claim texts as the original run: every verdict is cached
+    assert (tmp_path / "exp24" / "exp12" / "flagged_reverify.json").exists() and (tmp_path / "exp24" / "metrics.json").exists()
+    assert sorted(p.name for p in exp12.iterdir()) == before  # the source run is untouched
+
+
+def test_seed_keeps_what_a_stopped_recheck_already_has(tmp_path):
+    from strokecopilot.nlp.verifier import recheck as rc
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    src.mkdir(); dst.mkdir()
+    (src / "judge_cache.json").write_text('{"a": 1}')
+    (dst / "judge_cache.json").write_text('{"a": 1, "new": 2}')
+    (src / "outputs").mkdir(); (src / "outputs" / "x.json").write_text("{}")
+    rc._seed(src, dst, ["judge_cache.json", "outputs", "missing.json"])
+    assert (dst / "judge_cache.json").read_text() == '{"a": 1, "new": 2}' and (dst / "outputs" / "x.json").exists()
