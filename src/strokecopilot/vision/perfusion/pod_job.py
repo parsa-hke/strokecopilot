@@ -7,6 +7,12 @@ Same steps and checks as notebooks/10_visionA_nnunet.ipynb: tarball and split ch
 only (counts printed, never IDs), our folds in splits_final.json, plan saved, train with resume, our metrics on the
 fold's validation cases, a held-out leak check, then config.json, per_case.csv and metrics.json (last: it marks a
 finished run). It also samples GPU use every 10 s, which shows whether the data workers keep the GPU busy.
+
+`--mode predict` trains nothing: it puts a finished run's checkpoint_final.pth (`--checkpoint`) in the fold folder
+and runs nnU-Net's own validation, which writes the fold's validation masks, then scores them like a training run.
+It refuses a checkpoint whose plan or fold differs from this run's. The copied checkpoint is deleted afterwards, so
+collect does not bring a second copy back. `--limit n` keeps the first n validation cases, and `--device cpu|mps`
+lets that dummy run on a laptop.
 """
 
 import argparse
@@ -30,6 +36,7 @@ ITERATIONS_PER_EPOCH = 250
 MODES = {
     "dummy": {"epochs": 2, "resume_epochs": 3, "save_every": 1},
     "train": {"epochs": None, "resume_epochs": None, "save_every": 10},
+    "predict": {"epochs": 1, "resume_epochs": None, "save_every": 1},
 }
 
 
@@ -85,6 +92,15 @@ class GpuSampler:
         return summarise_gpu(self.samples)
 
 
+def gpu_name():
+    """The GPU's name and memory from nvidia-smi, or "" where there is none (a laptop dummy)."""
+    try:
+        return subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
+                              capture_output=True, text=True).stdout.strip()
+    except FileNotFoundError:
+        return ""
+
+
 def summarise_gpu(samples):
     if not samples:
         return None
@@ -122,24 +138,32 @@ def main(argv=None):
     ap.add_argument("--run-dir", required=True)
     ap.add_argument("--work", required=True)
     ap.add_argument("--n-proc-da", type=int)
+    ap.add_argument("--checkpoint", help="predict: a finished run's checkpoint_final.pth")
+    ap.add_argument("--source-exp", help="predict: the run that checkpoint came from, for the record")
+    ap.add_argument("--limit", type=int, help="predict: keep only the first n validation cases (a dummy)")
+    ap.add_argument("--device", choices=("cuda", "cpu", "mps"), default="cuda")
     a = ap.parse_args(argv)
     settings = dict(MODES[a.mode])
     if a.mode == "train":
         if not a.epochs:
             raise SystemExit("--epochs is required in train mode.")
         settings["epochs"] = a.epochs
+    if a.mode == "predict" and not (a.checkpoint and os.path.isfile(a.checkpoint)):
+        raise SystemExit("--mode predict needs --checkpoint pointing at a checkpoint_final.pth.")
+    if a.mode != "predict" and (a.checkpoint or a.limit or a.device != "cuda"):
+        raise SystemExit("--checkpoint, --limit and --device are for --mode predict only.")
     os.makedirs(a.run_dir, exist_ok=True)
     if os.path.exists(os.path.join(a.run_dir, "metrics.json")):
         raise SystemExit(f"{a.run_dir} already holds a finished run.")
 
-    gpu = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"], capture_output=True, text=True).stdout.strip()
+    gpu = gpu_name()
     import torch
     cpus = effective_cpus()
     n_proc, n_proc_da = workers(cpus)
     n_proc_da = a.n_proc_da or n_proc_da
     print(f"{a.exp} {a.mode} at {a.commit[:7]}; nnU-Net {nw.NNUNET_VERSION}; torch {torch.__version__}; GPU {gpu or 'none'}; "
           f"{cpus} CPUs usable ({os.cpu_count()} on the host); RAM {nw.memory_gib()} GiB; workers {n_proc}/{n_proc_da}.", flush=True)
-    if not gpu or not torch.cuda.is_available():
+    if a.device == "cuda" and (not gpu or not torch.cuda.is_available()):
         raise SystemExit("No GPU visible to torch.")
 
     if al.sha256_of(splits.FOLDS_PATH) != FOLDS_SHA256:
@@ -176,11 +200,13 @@ def main(argv=None):
     if os.path.exists(saved_plan) and json.load(open(saved_plan)) != plan:
         raise ValueError("This run planned a different network from the one it started with.")
     json.dump(plan, open(saved_plan, "w"), indent=1)
-    splits_path = nw.write_splits(preprocessed, folds)
+    splits_path = nw.write_splits(preprocessed, folds, val_limit=a.limit)
     print(f"Preprocessed in {timings['preprocess_s']} s. Patch {plan['patch_size']}, batch {plan['batch_size']}, "
           f"spacing {plan['spacing']}. Our folds written to splits_final.json.", flush=True)
 
     fold_path = nw.fold_dir(results, a.fold)
+    if a.mode == "predict":
+        return predict(a, settings, plan, fold_path, env, slim_root, folds, splits_path, dataset, timings, gpu, cpus, torch)
     resume = os.path.isdir(fold_path) and any(nw.checkpoint_state(fold_path).values())
     sampler = GpuSampler().start()
     started = time.time()
@@ -220,18 +246,65 @@ def main(argv=None):
         "epoch_seconds": times, "epoch_seconds_median": round(sorted(times)[len(times) // 2], 1) if times else None,
         "gpu_use": gpu_use, "timings_s": timings,
     }
+    save(a, config, metrics, rows, folds, splits_path, dataset, fold_path)
+    print(f"OK: {a.exp} {a.mode} at {a.commit[:7]}; {gpu}; epoch median {metrics['epoch_seconds_median']} s; "
+          f"GPU use {gpu_use}; fold {a.fold} Dice {s['dice']['mean']:.3f} ± {s['dice']['std']:.3f} over {s['dice']['n']} cases; "
+          f"timings {timings}.", flush=True)
+    return 0
+
+
+def save(a, config, metrics, rows, folds, splits_path, dataset, fold_path):
+    """Leak-check, then write config.json, per_case.csv and metrics.json (last: it marks a finished run)."""
     import pandas as pd
     texts = {"config.json": json.dumps(config, indent=1), "per_case.csv": pd.DataFrame(rows).to_csv(index=False),
              "metrics.json": json.dumps(metrics, indent=1)}
-    checked = [*texts.values(), open(splits_path).read(), open(f"{dataset}/dataset.json").read()]
+    validation = os.path.join(fold_path, "validation")
+    names = os.listdir(validation) if os.path.isdir(validation) else []
+    checked = [*texts.values(), open(splits_path).read(), open(f"{dataset}/dataset.json").read(), *names]
     if leaked(checked, folds) or any(case in os.listdir(f"{dataset}/labelsTr") for case in folds["heldout"]):
         raise ValueError("A held-out ID reached the outputs or the nnU-Net dataset. Nothing was saved. Stop and check.")
     for name in ("config.json", "per_case.csv", "metrics.json"):
         with open(os.path.join(a.run_dir, name), "w") as f:
             f.write(texts[name])
-    print(f"OK: {a.exp} {a.mode} at {a.commit[:7]}; {gpu}; epoch median {metrics['epoch_seconds_median']} s; "
-          f"GPU use {gpu_use}; fold {a.fold} Dice {s['dice']['mean']:.3f} ± {s['dice']['std']:.3f} over {s['dice']['n']} cases; "
-          f"timings {timings}.", flush=True)
+
+
+def predict(a, settings, plan, fold_path, env, slim_root, folds, splits_path, dataset, timings, gpu, cpus, torch):
+    """Validation masks from a finished run's checkpoint, scored like a training run (see the module docstring)."""
+    trained_plan, trained_fold = nw.checkpoint_plan(a.checkpoint)
+    if trained_fold != a.fold or not nw.same_plan(trained_plan, plan):
+        raise ValueError(f"The checkpoint was trained on fold {trained_fold} with a different plan or fold from this run "
+                         f"(fold {a.fold}). Its masks would not be the run's. Stop and check.")
+    ckpt_sha = al.sha256_of(a.checkpoint)
+    os.makedirs(fold_path, exist_ok=True)
+    target = os.path.join(fold_path, "checkpoint_final.pth")
+    shutil.copyfile(a.checkpoint, target)
+    val = list(folds["folds"][str(a.fold)])[: a.limit or None]
+    print(f"Checkpoint matches this run's plan and fold {a.fold}; validating {len(val)} cases on {a.device}.", flush=True)
+    sampler = GpuSampler().start() if a.device == "cuda" else None
+    started = time.time()
+    code = nw.run_streaming(nw.validate_command(a.fold, a.device), env)
+    timings["validate_s"] = round(time.time() - started)
+    gpu_use = sampler.stop() if sampler else None
+    os.remove(target)
+    if code:
+        raise RuntimeError(nw.explain_exit(code, "Validation"))
+    rows = nw.score_predictions(os.path.join(fold_path, "validation"), slim_root, val, a.fold, folds)
+    summary = evaluate.summarise(rows)
+    s = summary["per_fold"][str(a.fold)]
+    config = {
+        "experiment": a.exp, "mode": a.mode, "runner": "strokecopilot.vision.perfusion.pod_job (DEC-21 pod)", "git_commit": a.commit,
+        "data_version": "isles24_slim_v1.tar", "data_sha256": SLIM_SHA256, "folds_sha256": FOLDS_SHA256, "fold": a.fold,
+        "source_experiment": a.source_exp, "checkpoint": "checkpoint_final.pth", "checkpoint_sha256": ckpt_sha,
+        "cases_limit": a.limit, "device": a.device, "nnunet_version": nw.NNUNET_VERSION, "dataset": nw.DATASET_NAME,
+        "configuration": nw.CONFIGURATION, "trainer": nw.TRAINER, "channels": nw.CHANNELS, "label": "final infarct, whole mask",
+        "patch_size": plan["patch_size"], "batch_size": plan["batch_size"], "spacing": plan["spacing"],
+        "torch": torch.__version__, "gpu": gpu, "cpus_usable": cpus,
+    }
+    metrics = {"experiment": a.exp, "git_commit": a.commit, "data_version": "isles24_slim_v1.tar", "fold": a.fold,
+               "source_experiment": a.source_exp, "summary": summary, "gpu_use": gpu_use, "timings_s": timings}
+    save(a, config, metrics, rows, folds, splits_path, dataset, fold_path)
+    print(f"OK: {a.exp} predict at {a.commit[:7]} from {a.source_exp or 'a checkpoint'}; fold {a.fold} Dice "
+          f"{s['dice']['mean']:.3f} ± {s['dice']['std']:.3f} over {s['dice']['n']} cases; timings {timings}.", flush=True)
     return 0
 
 

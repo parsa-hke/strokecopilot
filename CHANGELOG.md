@@ -1,5 +1,107 @@
 # CHANGELOG
 
+## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes, model list)
+- **Phase 3, Parsa's tasks A1–A3.** Nothing below used a held-out case; `folds.json` was checked by sha256 only.
+- **A1, nnU-Net folds 1–4 (commit `7c67c5b`):**
+  - `compute/jobs.py`: EXP-18 to EXP-21 are folds 1–4, 300 epochs each. EXP-22 regenerates fold 0's validation masks from EXP-14's `checkpoint_final.pth`, on EXP-18's pod before fold 1 trains. A run can carry others (`with`), each with its own folder, log and exit code; `collect` brings all of them back.
+  - `pod_job.py --mode predict`: nnU-Net's own validation (`--val`) on a finished checkpoint. It refuses a checkpoint whose plan or fold differs, deletes the copied checkpoint afterwards, and leak-checks the mask file names too.
+  - **Dummy, free (Mac, MPS, 3 fold-0 cases):** per-case Dice matched EXP-14 within 0.0001 and volume within 0.004 mL.
+  - **Launch, not done.** Parsa approved 4 offers at $0.363/h in parallel, and topped up the credit to $10.44.
+    - By launch time, all four offers had been rented, and two replacements were taken within minutes.
+    - One pod (Poland, $0.363/h) was created, but its tarball upload stalled at 0 kB/s for 18 min. I stopped it, and `up` destroyed the pod. **Measured cost $0.13** (credit $10.44 → $10.31; $10.29 an hour later).
+    - Parsa chose to wait for offers at $0.363/h or less rather than pay up to $0.50/h.
+    - `runs/offerwatch.py` (not committed) checks every 10 min and launches each fold on the cheapest US or EU offer that passes, skipping the stalled host. It then starts the run's monitor page and auto-collector, and stops after 14 h or 2 failed setups.
+  - **`pod.py` fixes (not committed):**
+    - an upload that moves no data for 5 min aborts (`rsync --timeout=300`), so `up` destroys the pod;
+    - `up` searches up to 25 rounds for the offer, because a rentable offer appeared in only 2 of 10 searches.
+- **A3, approved by Parsa on 12 Nov 2026:**
+  - `docs/HALLUCINATION_METRIC.md` §9 points 8–12;
+  - the RSNA split, now DEC-22 in plan §2 and in Notion Decisions.
+- **Free EXP-12 rescore** with the critical-rate denominator fix, at `7c67c5b`, before today's verifier changes. Run locally from the caches.
+  - Results: rate 0.080 (28/351), content 0.060, **critical 0.014 (5/350)**, cases with a critical claim 3/5, attribution 0.979, no omissions.
+  - The 0.185 recorded earlier divided by the wrong denominator. Saved to Drive as `metrics_rescore_7c67c5b.json` and `flagged_rescore_7c67c5b.json`.
+- **A2, the three verifier fixes from EXP-12** (tests in `tests/test_verifier_phase3_fixes.py`; metric doc §9 points 13–15, approved 12 Nov 2026):
+  - **Rules under uncertainties:** an uncertainty's rule claim also gets both decisions' cited passages as candidates, like blocking factors (point 8). Every rule claim also gets lexical candidates for a trial, Table 3/8 or an ASPECTS range it names (`trace.lexical_candidates`). τ stays 0.6 (DEC-20).
+  - **Judge errors on conditional and negative applications:** `prompts/judge_v3.md` adds rules for a requirement that is not needed, criteria that are not met, conditional and counterfactual claims, and a reason for a decision. It became the default with DEC-23 (below). Its examples come from the EXP-12 flags, so EXP-12 is an in-sample check.
+  - **Meta-statements:** a pure restatement of the output's own decision is not a claim (`claims.restatements`), because `recommend` is scored by correctness. A reason given with it stays a claim, and so does a statement that contradicts the output.
+  - **Rescores take a judge prompt** and can call the judge for missing verdicts only (`run.rescore`, `end_to_end.rescore`). `nlp/verifier/recheck.py` and `notebooks/51_verifier_recheck.ipynb` re-check EXP-11 and EXP-12 under v2 and v3 (EXP-23).
+  - **Measured so far, free:**
+    - Fix 3 alone removes 1 of the 28 EXP-12 flags.
+    - Fixes 1 and 2 need new verdicts: v2 7 + 31 calls, v3 60 + 82 calls (counted in a dry run). That is about $0.20, an estimate.
+    - There is no API key on this Mac, so EXP-23 runs on Colab once the code is pushed. **The EXP-11 bar is not yet re-checked.**
+- **EXP-23** (Parsa ran notebook 51 on Colab at `a9dcfe2`, about $0.15): the re-check of the three fixes.
+
+  | | EXP-11 min recall | EXP-11 false flags | EXP-12 flags | Rate | Critical |
+  |---|---|---|---|---|---|
+  | Before (rescore at `7c67c5b`) | 0.80 | 0.010 | 28 / 351 | 0.080 | 0.014 |
+  | Fixes 1 + 3, judge_v2 | 0.80 | 0.010 | 23 / 350 | 0.066 | 0.009 |
+  | Fixes 1 + 3, judge_v3 | 0.80 | 0.010 | 19 / 350 | 0.054 | 0.009 |
+
+  - EXP-11 misses the same seeded items as before (fx04-3a, fx03-6b, fx04-6b), so the bar holds under both prompts.
+  - All 9 reasoner errors from the earlier reading are still flagged under both.
+  - **v3 against v2:** it removes 5 verifier false flags (no BP lowering needed; M2 dominance definition; "not recommended because eligible for thrombectomy"; "meets ASPECTS 3 to 5 except mass effect"; the within-6-h counterfactual). It adds 1 citation-only flag (fx04 "appears eligible for thrombectomy" as uncited). v3's examples come from EXP-12, so that run is in-sample.
+  - **The 3 remaining critical flags look like verifier errors** on Claude's reading (not human adjudication): a truism ("treatment cannot start before imaging"), an imaging fact the extractor labelled a rule, and a correct negative application the judge still misreads.
+- **DEC-23, approved by Parsa:** the judge prompt is `judge_v3`, amending DEC-20; model, effort and τ are unchanged.
+  - `trace.JUDGE_PROMPT` is now `judge_v3`.
+  - Metric §9 points 13–15 are approved.
+  - Plan §2 has the DEC-23 row, and DEC-20 notes the amendment, in the plan and in Notion.
+- **B6, the model list (DEC-24, approved by Parsa)**, from Hana's shortlist:
+  - The models: Claude Sonnet 5.5, Qwen3.5-27B, MedGemma 27B text, and Gemma 3 27B as MedGemma's base, for a paired comparison. Open models run on a rented 4090 with vLLM at 4-bit and constrained JSON.
+  - **No non-Claude frontier model for now.** Three of the four are non-Claude, and verifier-vs-human agreement is reported per model.
+  - **MedGemma waits for Parsa's reading of HAI-DEF terms §3.2.** Their "Clinical Use" includes research studies; the fallback is Baichuan-M2-32B with Qwen2.5-32B. It is a gated download, so the Hugging Face token question is decided at the paid-run step.
+  - **Budget finding.** Verifying an output costs about $0.08 with the Sonnet extractor (EXP-12: extractor $0.064, judge about $0.015), more than the reasoner call ($0.046). Four models at about 410 outputs each would need about $150 of API against about $96 left.
+  - **The fix depends on EXP-24.** With a Haiku 5.5 extractor (about $0.003 per output), the main runs cost about $52. The project would then total about $65–77 of API and $12.5–15 of GPU (estimates). Haiku becomes the extractor only if EXP-24 keeps the seeded-error bar.
+  - Notion: the DEC-24 row; Hana's shortlist task Done, with her questions answered and a link to DEC-24; her adapters task Next up, with the models.
+- **`providers.py`:** Sonnet 5.5 cache reads are now priced at $0.10/M, not $0.20/M (Hana's finding), so earlier logged Sonnet costs were slightly high.
+  - `CachedExtractor` now keys the cache by model for any extractor but Sonnet, so another extractor never reuses Sonnet's claims. Sonnet keeps its old key.
+- **EXP-24 prepared:**
+  - `end_to_end.reverify` re-extracts a run's saved outputs with another extractor.
+  - `recheck.extractor_check` runs EXP-11 and EXP-12 that way in `runs/EXP-24_haiku_extractor/`, seeded with copies of the original caches. It resumes without losing paid verdicts.
+  - `notebooks/52_haiku_extractor_check.ipynb`: about $0.50–1.00, estimated.
+- **A1, the folds launched (watcher cap raised by Parsa within the 8–15 USD budget):**
+  - The watcher now launches US/EU offers up to $0.47/h. A credit guard launches a run only if the credit covers every running pod's worst case plus the new one, with $0.50 to spare.
+  - It skips machines that failed setup. The tarball upload now has a 30-min limit (`pod.UPLOAD_LIMIT_S`), and pod state records the machine ID.
+  - **Two more failed attempts, both destroyed:**
+    - Oregon (machine 26487, $0.456/h): the upload crawled at 0.1–4 MB/s; 1.9 of 3.1 GB in 38 min. **$0.30 measured.**
+    - Poland offer 54489655: the same host as the first stall, stopped before upload, about $0.02.
+  - The home uplink measures about 50 Mbps. There is no VPN; the old SSH block was the university Wi-Fi (Parsa).
+  - **EXP-18** runs on New Jersey (instance 60383981, $0.376/h) from 17:42 UTC: 38.6 s per epoch, due about 20:55 UTC, watchdog at 23:15.
+  - **EXP-22, done on EXP-18's pod:** fold 0 Dice 0.218 ± 0.249 over 26 cases, the same as EXP-14. The masks come back with EXP-18's collect.
+  - EXP-19 was being set up on New Jersey ($0.376/h) at 17:57 UTC.
+- pytest: 465 passed.
+- **Spend so far:**
+  - GPU: $3.01 measured before EXP-18 ($2.56 before, plus $0.45 of failed attempts today); EXP-18 and EXP-19 are running.
+  - API: about $0.15 (EXP-23).
+- **Notion sync:**
+  - done: Experiments → EXP-18 to EXP-22 rows, all Planned (EXP-18 notes the failed attempt and its $0.13);
+  - done: Decisions → DEC-22 (RSNA split);
+  - done: "Hallucination metric" page → points 8–12 approved, arms wording (rulebook, DEC-19);
+  - done: EXP-12 row → corrected critical rate 0.014;
+  - done: EXP-23 row;
+  - done: EXP-18 Running (offer, price, commit `a9dcfe2`), EXP-22 Done;
+  - done: Decisions → DEC-23 (judge_v3); DEC-20 notes the amendment; metric page → points 8–15;
+  - done: Tasks → "Verifier fixes" Done (commits `502a769`, `6bf370b`);
+  - done: Decisions → DEC-24; Tasks → shortlist Done, adapters Next up;
+
+## 2026-11-12 — Parsa's review of PR #3 (EXP-16 recorded; notebook and test fixes)
+- **EXP-16 result**, from Drive `runs/EXP-16_visionB_isles_check/metrics.json` (Mohamed, Colab, 8 Nov 2026, commit `23e2f92`):
+  - 129 of 129 development cases scored, 0 failed.
+  - At the provisional threshold 0.278, 45 of 129 were called positive on 5 mm slabs: a presumed false-positive rate of 34.9% (95% Wilson CI 27.2–43.4%).
+  - On native thin slices: 61 of 129.
+  - Slice thickness 0.8–4.0 mm (median 2.0); 86 scans LAS, 43 LPS.
+  - The previous entry's "not run, unmeasured" is superseded.
+- **Fixes in review:**
+  - Notebook 21 was committed with outputs (8 cells, including a 755 KB figure of ISLES scans); the outputs are cleared.
+  - The stray "flush and remount" cell before the install cell is removed.
+  - `EXPERIMENT` is `None` with a guard, so a rerun cannot reuse EXP-16's ID.
+  - `tests/test_isles_check.py` used 4 real development case IDs; they are now synthetic IDs that exist in no split, checked by count only.
+- **Still open:**
+  - the top-scan review (the `review` column is empty on Drive);
+  - one check of RSNA's real slice thickness (`z_mm` in the shards, on Kaggle), since 5 mm is the documented value, not a measured one;
+  - field of view is not matched to RSNA (`set_field_of_view` exists but is off). A rerun with it on is cheap, and worth doing before putting a 35% rate down to domain shift alone.
+- pytest: `tests/test_isles_check.py` 19 passed.
+- **Notion sync:** Experiments → EXP-16 row already Done; Tasks → "Vision B false-positive check": In review, with the result.
+
 ## 2026-11-12 — Parsa's review of PR #2 (EXP-17 recorded; one wilson; proposal rule documented)
 - **EXP-17 result**, from Drive `runs/EXP-17_visionB_operating_point/metrics.json` (Mohamed, Kaggle, commit `ff522bd`).
   - 2,166 validation scans, 1,894 patients, 879 bleed scans. Scan AUC 0.9772, and EXP-6's 0.278 reproduces 0.951/0.917 on the same split.
@@ -22,25 +124,6 @@
 - pytest: 469 passed.
 - **Notion sync:** Experiments → EXP-17 row already Done; Decisions → the threshold, once Parsa decides.
 
-## 2026-11-12 — Parsa's review of PR #3 (EXP-16 recorded; notebook and test fixes)
-- **EXP-16 result**, from Drive `runs/EXP-16_visionB_isles_check/metrics.json` (Mohamed, Colab, 8 Nov 2026, commit `23e2f92`):
-  - 129 of 129 development cases scored, 0 failed.
-  - At the provisional threshold 0.278, 45 of 129 were called positive on 5 mm slabs: a presumed false-positive rate of 34.9% (95% Wilson CI 27.2–43.4%).
-  - On native thin slices: 61 of 129.
-  - Slice thickness 0.8–4.0 mm (median 2.0); 86 scans LAS, 43 LPS.
-  - The previous entry's "not run, unmeasured" is superseded.
-- **Fixes in review:**
-  - Notebook 21 was committed with outputs (8 cells, including a 755 KB figure of ISLES scans); the outputs are cleared.
-  - The stray "flush and remount" cell before the install cell is removed.
-  - `EXPERIMENT` is `None` with a guard, so a rerun cannot reuse EXP-16's ID.
-  - `tests/test_isles_check.py` used 4 real development case IDs; they are now synthetic IDs that exist in no split, checked by count only.
-- **Still open:**
-  - the top-scan review (the `review` column is empty on Drive);
-  - one check of RSNA's real slice thickness (`z_mm` in the shards, on Kaggle), since 5 mm is the documented value, not a measured one;
-  - field of view is not matched to RSNA (`set_field_of_view` exists but is off). A rerun with it on is cheap, and worth doing before putting a 35% rate down to domain shift alone.
-- pytest: `tests/test_isles_check.py` 19 passed.
-- **Notion sync:** Experiments → EXP-16 row already Done; Tasks → "Vision B false-positive check": In review, with the result.
-
 ## 2026-11-08 — Claude Code session (Vision B Task 1: cross-fitted operating point, code and notebook)
 - **Scope:** Phase 3, Vision B, Task 1 from `docs/team/mohamed_vision_b.md`. Code and notebook only; the Kaggle run is Mohamed's, and the threshold decision is Parsa's.
 - **`vision/haemorrhage/operating_point.py`** (tested): EXP-6 set 0.278 for 95% sensitivity and measured it on the same validation scans. This module cross-fits instead:
@@ -58,24 +141,6 @@
   - Tasks → Vision B "Operating point": In progress; code and notebook on `mohamed/operating-point`.
   - Experiments → a new row (Status *Running*) before the Kaggle run; afterwards the held-out sensitivity and specificity with intervals, the proposed threshold and the commit.
   - Decisions → Parsa records the threshold once he has chosen between the proposed and strict values.
-
-## 2026-11-06 — Claude Code session (Vision B Task 2: ISLES'24 domain-shift check, code and notebook)
-- **Scope:** Phase 3, Vision B, Task 2 from `docs/team/mohamed_vision_b.md`. Code and notebook only; the real run is Mohamed's, on Colab.
-- **`vision/haemorrhage/isles_check.py`** (tested): scores each development case's `ncct_native` the way the RSNA shards were built:
-  - turned to RAS, then laid out as DICOM stores axial slices (front of the head at the top, patient's right on the left). ISLES'24 sources are LAS or LPS, so this matters;
-  - averaged into 5 mm slabs in HU, each native slice weighted by its overlap. 5 mm is RSNA's documented thickness (plan §5.2), not measured: the shards' `z_mm` could confirm it on Kaggle;
-  - padded to a square with air, then `rsna.window_hu` (brain, subdural, bone) at 320 px, then JPEG at quality 95 and back, as the shards were stored;
-  - scored with EXP-6's top-2 mean and Platt calibration through `infer`, against the calibrated threshold in `calibration.json`.
-  - The native thin slices are scored too, as a second reading, to show what the reformatting changes.
-  - Reports hold counts, rates with 95% Wilson intervals, percentiles and a histogram. The per-case table holds case IDs and is saved only to Drive. Figures are labelled by rank and score. A held-out request stops the run; any other failure is kept in the table and counted.
-- **`notebooks/21_visionB_isles_check.ipynb`:** thin Colab notebook: install, checksums, `config.json` before the run, scoring, results, the top-scored scans with a list of common false-alarm causes, then `metrics.json`, `per_case.csv` (with an empty `review` column), two figures and a read-back. `REPO_REF` is `mohamed/isles-check` until the pull request is merged.
-  - Sections 4–8 were dry-run locally on synthetic volumes with a random-weight model and a stubbed Drive. It has not run on Colab or on real data, so its timing and every result are unmeasured.
-- **Known limits, to state with the result:** no bleed labels, so positives are *presumed* false positives; the threshold (0.278) is provisional until Task 1; in-plane field of view is not matched to RSNA's (ISLES'24 spacing is 0.305–0.562 mm, `docs/DATA.md`), and is recorded per case so it can be checked. `set_field_of_view` exists for that check but is off.
-- **Plan:** layout lists `isles_check.py` and notebook 21; the §7 domain-shift item notes the code is ready and the run pending (not ticked). README lists notebook 21.
-- pytest: 455 passed (19 new).
-- **Notion sync** (not done; for Mohamed or Parsa):
-  - Tasks → Vision B "Domain shift check": In progress; code and notebook ready on `mohamed/isles-check`.
-  - Experiments → a new row (Status *Running*) before the Colab run; its ID goes in `EXPERIMENT`. Afterwards: the presumed false-positive rate at 0.278 with its interval, the top-scan review by count, and the commit.
 
 ## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
 - **Roles agreed by Parsa:**
@@ -98,6 +163,24 @@
   - The two existing Phase 3 rows are assigned to Parsa.
   - The onboarding row is In progress, and the template row is In review.
   - The charter's Person column is filled in.
+
+## 2026-11-06 — Claude Code session (Vision B Task 2: ISLES'24 domain-shift check, code and notebook)
+- **Scope:** Phase 3, Vision B, Task 2 from `docs/team/mohamed_vision_b.md`. Code and notebook only; the real run is Mohamed's, on Colab.
+- **`vision/haemorrhage/isles_check.py`** (tested): scores each development case's `ncct_native` the way the RSNA shards were built:
+  - turned to RAS, then laid out as DICOM stores axial slices (front of the head at the top, patient's right on the left). ISLES'24 sources are LAS or LPS, so this matters;
+  - averaged into 5 mm slabs in HU, each native slice weighted by its overlap. 5 mm is RSNA's documented thickness (plan §5.2), not measured: the shards' `z_mm` could confirm it on Kaggle;
+  - padded to a square with air, then `rsna.window_hu` (brain, subdural, bone) at 320 px, then JPEG at quality 95 and back, as the shards were stored;
+  - scored with EXP-6's top-2 mean and Platt calibration through `infer`, against the calibrated threshold in `calibration.json`.
+  - The native thin slices are scored too, as a second reading, to show what the reformatting changes.
+  - Reports hold counts, rates with 95% Wilson intervals, percentiles and a histogram. The per-case table holds case IDs and is saved only to Drive. Figures are labelled by rank and score. A held-out request stops the run; any other failure is kept in the table and counted.
+- **`notebooks/21_visionB_isles_check.ipynb`:** thin Colab notebook: install, checksums, `config.json` before the run, scoring, results, the top-scored scans with a list of common false-alarm causes, then `metrics.json`, `per_case.csv` (with an empty `review` column), two figures and a read-back. `REPO_REF` is `mohamed/isles-check` until the pull request is merged.
+  - Sections 4–8 were dry-run locally on synthetic volumes with a random-weight model and a stubbed Drive. It has not run on Colab or on real data, so its timing and every result are unmeasured.
+- **Known limits, to state with the result:** no bleed labels, so positives are *presumed* false positives; the threshold (0.278) is provisional until Task 1; in-plane field of view is not matched to RSNA's (ISLES'24 spacing is 0.305–0.562 mm, `docs/DATA.md`), and is recorded per case so it can be checked. `set_field_of_view` exists for that check but is off.
+- **Plan:** layout lists `isles_check.py` and notebook 21; the §7 domain-shift item notes the code is ready and the run pending (not ticked). README lists notebook 21.
+- pytest: 455 passed (19 new).
+- **Notion sync** (not done; for Mohamed or Parsa):
+  - Tasks → Vision B "Domain shift check": In progress; code and notebook ready on `mohamed/isles-check`.
+  - Experiments → a new row (Status *Running*) before the Colab run; its ID goes in `EXPERIMENT`. Afterwards: the presumed false-positive rate at 0.278 with its interval, the top-scan review by count, and the commit.
 
 ## 2026-11-05 — Claude Code session (DEC-21 rented GPU, EXP-13 and EXP-14, notes, trial passages checked; Phase 2 closed)
 - **DEC-21 pod tooling** (commit `5767cd4`): `src/strokecopilot/compute/` and `scripts/pod` (`offers`, `up`, `status`, `collect`, `down`, `monitor`).
