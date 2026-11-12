@@ -179,3 +179,9 @@ def test_reasoning_text_is_filled_with_numbers_and_no_ids():
     assert "ID_" not in text and "{" not in text
     assert "missed bleed" in text and "3.1%" in text and f"{metrics['scans']:,}" in text
     assert op.reasoning_text(metrics).count("ISLES") == 0
+
+
+def test_one_wilson_for_both_vision_b_checks():
+    from strokecopilot.vision.haemorrhage import isles_check as ic
+    from strokecopilot.vision.haemorrhage import stats
+    assert op.wilson is stats.wilson and ic.wilson is stats.wilson

@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## 2026-11-12 — Parsa's review of PR #2 (EXP-17 recorded; one wilson; proposal rule documented)
+- **EXP-17 result**, from Drive `runs/EXP-17_visionB_operating_point/metrics.json` (Mohamed, Kaggle, commit `ff522bd`).
+  - 2,166 validation scans, 1,894 patients, 879 bleed scans. Scan AUC 0.9772, and EXP-6's 0.278 reproduces 0.951/0.917 on the same split.
+  - **Cross-fitted at a 95% target:** sensitivity 0.945, specificity 0.914. It fell below 95% in 11 of 20 seeds.
+  - **Proposed 0.175** (96% target): sensitivity 0.961 (95% CI 0.946–0.972), specificity 0.878 (0.859–0.895).
+  - **Strict alternative 0.125:** sensitivity 0.968, specificity 0.858.
+  - The previous entry's "not run" is superseded.
+- **ISLES'24 cost of each threshold, measured in review** from EXP-16's `per_case.csv` (counts only). Of 129 presumed bleed-free development scans, Vision B would flag:
+  - 45 at 0.278 (34.9%);
+  - 68 at 0.175 (52.7%);
+  - 87 at 0.125 (67.4%).
+
+  This is added as a dated note in `reasoning_EXP-17.md` on Drive, since that doc only estimated it. It matters for Parsa's threshold decision more than the RSNA specificity does.
+- **Fixes in review:**
+  - `wilson()` was defined twice; it now lives in `vision/haemorrhage/stats.py` (same constant, so recorded intervals reproduce), with a test.
+  - `propose()` documents that the median rule in practice steps up one candidate, so read 0.96 as a chosen safety margin, slightly optimistic until the RSNA test split.
+  - `seeds_below_target` is commented as counting against each row's own target.
+  - Notebook 22 notes that `REPO_REF` becomes `main` after merging.
+- **Merge:** PR #3's branch, with its review fixes, is merged into this one. The plan and CHANGELOG conflicts are resolved, and the plan's two Vision B items carry the EXP-16 and EXP-17 results, both unticked until the threshold decision.
+- pytest: 469 passed.
+- **Notion sync:** Experiments → EXP-17 row already Done; Decisions → the threshold, once Parsa decides.
+
 ## 2026-11-12 — Parsa's review of PR #3 (EXP-16 recorded; notebook and test fixes)
 - **EXP-16 result**, from Drive `runs/EXP-16_visionB_isles_check/metrics.json` (Mohamed, Colab, 8 Nov 2026, commit `23e2f92`):
   - 129 of 129 development cases scored, 0 failed.

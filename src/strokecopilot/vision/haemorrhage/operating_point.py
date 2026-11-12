@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from strokecopilot.vision.haemorrhage import aggregate as agg
+from strokecopilot.vision.haemorrhage.stats import wilson  # noqa: F401  (kept as op.wilson)
 
 SEED = 20261108
 REPEAT_SEEDS = tuple(range(SEED, SEED + 20))
@@ -60,16 +61,6 @@ def counts(called, labels):
     called, labels = np.asarray(called).astype(bool), np.asarray(labels).astype(bool)
     return {"tp": int((called & labels).sum()), "fn": int((~called & labels).sum()),
             "tn": int((~called & ~labels).sum()), "fp": int((called & ~labels).sum())}
-
-
-def wilson(k, n, z=Z95):
-    """Wilson score interval for a proportion. (None, None) when n is 0."""
-    if n == 0:
-        return None, None
-    p = k / n
-    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
-    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
-    return max(0.0, centre - half), min(1.0, centre + half)
 
 
 def rates(c):
@@ -134,7 +125,7 @@ def repeat(scores, labels, patients, target=TARGET, seeds=REPEAT_SEEDS):
     spec = np.array([p["specificity"] for p in pooled])
     spread = lambda v: {"min": _r(v.min()), "median": _r(np.median(v)), "max": _r(v.max())}  # noqa: E731
     return {"target": target, "seeds": len(seeds), "sensitivity": spread(sens), "specificity": spread(spec),
-            "seeds_below_target": int((sens < target).sum())}
+            "seeds_below_target": int((sens < target).sum())}  # below this row's own target (e.g. 0.96), not 0.95
 
 
 def full_split_threshold(scores, labels, target, calibrator=None):
@@ -169,6 +160,11 @@ def propose(sweep_rows, target=TARGET, candidates=CANDIDATE_TARGETS):
     Strict rule (for comparison): the lowest candidate whose fixed-seed Wilson lower bound is at least
     `target`. It gives up more specificity; Parsa can choose it instead.
     Either rule can fail (no candidate passes); then the proposal is None and the report says so.
+
+    Note added in review (12 Nov 2026): a threshold chosen for exactly X% sensitivity lands near X% on the held-out half
+    about half the time by construction, so the median rule in practice steps up one candidate (0.95 -> 0.96 in EXP-17).
+    Read the proposal as a chosen safety margin. Its cross-fitted figures were seen when the target was chosen, so they
+    are slightly optimistic; the final figures for the chosen threshold come from the RSNA test split.
     """
     by_target = {round(row["target"], 4): row for row in sweep_rows}
     rows = [by_target[round(c, 4)] for c in candidates if round(c, 4) in by_target]
