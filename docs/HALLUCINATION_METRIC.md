@@ -1,6 +1,6 @@
 # Hallucination metric
 
-The definition the verifier implements (plan §8.4, DEC-10, DEC-11). Written before any verifier code, as §7 Phase 2 requires. Approved by Parsa on 3 November 2026, including the open points in §9, and mirrored to the Notion page "Hallucination metric". A change after approval needs a CHANGELOG entry, and any change after the first Phase 3 comparison run needs a Decisions row, because it changes the hallucination table.
+The definition the verifier implements (plan §8.4, DEC-10, DEC-11). Written before any verifier code, as §7 Phase 2 requires. Approved by Parsa on 3 November 2026, including §9 points 1–7; points 8–15, added after EXP-10 to EXP-12, were approved by Parsa on 12 November 2026. Mirrored to the Notion page "Hallucination metric". A change after approval needs a CHANGELOG entry, and any change after the first Phase 3 comparison run needs a Decisions row, because it changes the hallucination table.
 
 Everything here is scored against the reasoner's inputs, never against what is clinically true. A claim can be correct medicine and still be a hallucination if nothing the model was given supports it.
 
@@ -19,7 +19,7 @@ A **claim** is one atomic assertion about a number, an imaging finding, a patien
 
 - **Extraction.** An LLM with `prompts/claim_extractor_v1.md` splits each field into atomic claims. A regex extractor finds every number with its unit in the same text. If a number the regex finds is in none of the LLM's claims, it becomes a claim of its own, so no number escapes checking.
 - **Atomic** means one checkable proposition. "Core is 18.0 mL and penumbra 95.0 mL" is two claims. "18.0 mL is within the DEFUSE-3 limit of 70 mL" is one derived claim with two sources.
-- **Not claims:** hedge words ("may", "likely"), restatements of a claim already counted in the same output, headings and formatting. A hedged proposition is still a claim once the hedge is stripped. "The occlusion may be M2" becomes "the occlusion is M2", which is checked.
+- **Not claims:** hedge words ("may", "likely"), restatements of a claim already counted in the same output, headings and formatting, and a restatement of the output's own decision ("thrombolysis is not recommended", "the rulebook does not support thrombectomy for this patient"), because the `recommend` booleans are scored by recommendation correctness (§1). A reason given with the decision is still a claim, and a statement that contradicts the output's own decision is too. The check is in code (`claims.restatements`), after extraction. A hedged proposition is still a claim once the hedge is stripped. "The occlusion may be M2" becomes "the occlusion is M2", which is checked.
 - **Unit of counting.** Rates count atomic claims, not rationale entries. A rationale entry that bundles three facts gives three claims, so bundling neither hides nor inflates errors.
 - Each claim keeps a pointer to the field and entry it came from, and to the sources the model declared for that entry.
 
@@ -40,7 +40,7 @@ The verifier traces every claim on its own, ignoring the model's declared source
 - **Negations** ("no anticoagulant use") must match a stated negative in the fact sheet. If the note is silent on something, nothing supports a claim either way.
 
 **(c) Corpus passage.** A passage in `passages.jsonl`, checked in two steps.
-1. **Candidates:** the passages the claim cites, plus the top 5 corpus passages by embedding similarity to the claim (`BAAI/bge-base-en-v1.5`; the reasoner itself gets the whole rulebook, DEC-19). A passage above a similarity threshold τ, set on the fixtures and seeded errors in Phase 2 and recorded, is a candidate.
+1. **Candidates:** the passages the claim cites, plus the top 5 corpus passages by embedding similarity to the claim (`BAAI/bge-base-en-v1.5`; the reasoner itself gets the whole rulebook, DEC-19). A passage above a similarity threshold τ, set on the fixtures and seeded errors in Phase 2 and recorded, is a candidate. So are the passages a claim names (a trial, a guideline table, an ASPECTS range: `trace.lexical_candidates`), and, for an uncertainty, which has no sources in the schema, the passages both of its output's decisions cite. Only a passage the claim cites makes its attribution clean.
 2. **Judgement:** an LLM judge (decided 3 November 2026; model and prompt version in §7) reads the claim, the candidate passage and the case inputs, and returns a structured verdict:
    - `supported`: the passage states this rule;
    - `contradicted`: the passage states something different;
@@ -118,7 +118,7 @@ Recorded in every verifier run's `config.json`:
 
 - claim extractor: model, `claim_extractor_vN`;
 - judge: model, `judge_vN` prompt, effort level. One judge call per claim, with all its candidate passages. The model is chosen in Phase 2 by seeded-error recall: `claude-haiku-5-5` and `claude-opus-5-5` run on the same seeded set, and the cheaper one that meets the §8 bar is used, recorded in a Decisions row. The API budget is about $100, and an Opus judge for the full Phase 3 table is estimated, not measured, to cost more than that;
-- embedding model and τ. Since DEC-20 (4 Nov 2026, EXP-11): judge `claude-haiku-5-5` at effort medium with `judge_v2`, claim extractor `claude-sonnet-5-5` at effort medium, τ = 0.6;
+- embedding model and τ. Since DEC-20 (4 Nov 2026, EXP-11): judge `claude-haiku-5-5` at effort medium with `judge_v2`, since DEC-23 (12 Nov 2026, EXP-23) `judge_v3`, claim extractor `claude-sonnet-5-5` at effort medium, τ = 0.6;
 - corpus version (`passages.jsonl` sha256);
 - rulebook version (git commit of `scenarios.py`).
 
@@ -131,7 +131,9 @@ The verifier is a model and can be wrong (plan §10).
 - **Seeded errors** (`seeded_errors.py`): plant fabrications of each sub-type into rationales that are otherwise clean. Report recall per sub-type and the false-flag rate on clean rationales. Proposed bar before the Phase 3 table is trusted: recall ≥ 0.80 for every sub-type and a false-flag rate ≤ 0.10. If the verifier misses the bar, the table is still reported, with the measured recall next to it.
 - **Human adjudication** (Phase 3): about 100 claims, stratified by model and blind to it, labelled by two people with this document as the guide. Report Cohen's κ between them, and agreement of the verifier with their consensus, per sub-type where counts allow.
 
-## 9. Open points for approval
+## 9. Points approved after the first draft
+
+Points 1–7 were approved on 3 November 2026 and points 8–15 on 12 November 2026, all by Parsa.
 
 1. Blocking factors and fact-stating uncertainties are scored as claims (§1). §8.4 names only the rationale.
 2. Decision `rule_ids` are scored as citation claims (§1).
@@ -159,3 +161,6 @@ The verifier is a model and can be wrong (plan §10).
    - for a subject outside the fact list, the note "mentions" it only if every word of the subject's name appears in the note;
    - numbers written as ranges with "to" are rule text, like "6-10";
    - a cited passage that no claim uses is charged (7) only to a claim that rests on a rule, never to a patient or imaging fact.
+13. **Approved 12 November 2026, from the EXP-12 flags:** a restatement of the output's own decision is not a claim (§2). In EXP-12, "The rulebook does not support thrombectomy for this patient" was scored as a wrong rule, though it only restates `recommend` = false.
+14. **Approved 12 November 2026:** rule candidates also include the passages a claim names lexically (a trial, Table 3 or 8, an ASPECTS range), because embeddings miss rule rows that differ only in numbers (EXP-7), and for an uncertainty, the passages its output's decisions cite, like blocking factors (point 8). In EXP-12, "The ASPECTS 3 to 5 pathway excludes patients aged 80 or over" had no candidate at all.
+15. **Approved 12 November 2026, as DEC-23, which amends DEC-20:** judge prompt `judge_v3`, which says how to judge a requirement that is not needed, criteria that are not met, a conditional or counterfactual claim, and a reason for a decision. It keeps v2's verdicts and adds that an unknown input is not a failed criterion. Its examples come from the EXP-12 flags, so its effect on EXP-12 is measured in-sample; EXP-11's seeded errors and the Phase 3 human labels are the fair checks. EXP-23: the EXP-11 bar is unchanged (min recall 0.80, false flags 0.010), and EXP-12 goes from 23 to 19 flags of 350 against `judge_v2` with the same code fixes, with every reasoner error of the earlier reading still flagged.

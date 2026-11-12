@@ -87,6 +87,21 @@ def tarball_path():
     raise PodError(f"{TARBALL} is neither in data/ nor in Drive for desktop. Install Drive for desktop or download it to data/.")
 
 
+def input_files(exp):
+    """[(local path, pod path)] for the files `exp` needs sent up, read from Drive for Desktop. Raises before any
+    pod exists if one is missing."""
+    wanted = jobs.inputs(exp)
+    if not wanted:
+        return []
+    root = drive_root()
+    if root is None:
+        raise PodError(f"{exp} needs {len(wanted)} input file(s) from Drive, and Drive for desktop was not found.")
+    missing = [src for src in wanted if not (root / src).is_file()]
+    if missing:
+        raise PodError(f"{exp} needs input files that are not on Drive: {', '.join(missing)}.")
+    return [(root / src, dst) for src, dst in wanted.items()]
+
+
 def sha256(path, chunk=16 * 2**20):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -132,9 +147,14 @@ def remote_sh(state, script, capture=True, timeout=600):
     return out.stdout
 
 
-def rsync_up(state, local, remote_path):
+UPLOAD_LIMIT_S = 1800
+
+
+def rsync_up(state, local, remote_path, timeout=None):
     e = " ".join(shlex.quote(x) for x in ssh_base(state["host"], state["port"], state["user"])[:-1])
-    run(["rsync", "-a", "--partial", "-e", e, str(local), f"{state['user']}@{state['host']}:{remote_path}"])
+    # --timeout ends a transfer that moves no data for 5 min; on 12 Nov 2026 an upload to one host sat at 0 kB/s for
+    # 18 min while the pod billed. A failed copy makes `up` destroy the pod.
+    run(["rsync", "-a", "--partial", "--timeout=300", "-e", e, str(local), f"{state['user']}@{state['host']}:{remote_path}"], timeout=timeout)
 
 
 def rsync_down(state, remote_path, local, includes):
@@ -176,6 +196,16 @@ def search(p, rounds=6):
     return sorted(seen.values(), key=lambda o: o.get("dph_total", 1e9))
 
 
+def find_offer(p, offer_id, rounds=25):
+    """The offer if it still passes the filters. Searches until it appears, because a search shows a varying sample:
+    on 12 Nov 2026 a rentable offer appeared in only 2 of 10 searches."""
+    for _ in range(rounds):
+        for o in p.offers(limit=64):
+            if str(o["id"]) == str(offer_id):
+                return o
+    return None
+
+
 def offers(exp, provider_name="vast", log=print, show=6):
     """The cheapest offers that pass the filters, US and EU hosts first."""
     spec = jobs.get(exp)
@@ -201,7 +231,7 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
     p = provider(provider_name)
     if any(i.get("label") == label(exp) for i in p.instances()):
         raise PodError(f"An instance labelled {label(exp)} already exists. Run down first.")
-    offer = next((o for o in search(p, rounds=10) if str(o["id"]) == str(offer_id)), None)
+    offer = find_offer(p, offer_id)
     if offer is None:
         raise PodError(f"Offer {offer_id} no longer passes the filters or is gone. Run offers again.")
     if provider_name == "vast" and vast.contract_hours(offer) < spec["hours"] + 1:
@@ -219,11 +249,13 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
     tar = tarball_path()
     if sha256(tar) != TARBALL_SHA256:
         raise PodError("The local tarball's sha256 does not match the recorded one.")
+    sources = input_files(exp)
     commit = commit or head_commit()
     instance_id = p.create(offer["id"], IMAGE, DISK_GB, label(exp))
     state = {"exp": exp, "provider": provider_name, "instance_id": instance_id, "offer": offer["id"],
-             "dph": offer["dph_total"], "created_utc": dt.datetime.now(dt.timezone.utc).isoformat(), "commit": commit,
-             "hours_limit": spec["hours"], "destroyed": False}
+             "dph": offer["dph_total"], "machine_id": offer.get("machine_id"), "created_utc": dt.datetime.now(dt.timezone.utc).isoformat(), "commit": commit,
+             "hours_limit": spec["hours"], "runs": jobs.chain(exp),
+             "inputs_sha256": {dst: sha256(src) for src, dst in sources}, "destroyed": False}
     save_state(exp, state)
     log(f"Created instance {instance_id} ({p.describe(offer)}). Waiting for it to run.")
     try:
@@ -234,11 +266,16 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
         log(remote_sh(state, remote.BOOTSTRAP).strip())
         log(remote_sh(state, remote.start_watchdog(spec["hours"] * 3600)).strip())
         started = time.time()
-        rsync_up(state, tar, f"{remote.ROOT}/data/{TARBALL}")
+        # A host whose inbound link crawls costs pod time while nothing runs: on 12 Nov 2026 one took 38 min for 1.9 of
+        # 3.1 GB (EXP-14 took 15 min for all of it). Past UPLOAD_LIMIT_S the copy fails and the pod is destroyed.
+        rsync_up(state, tar, f"{remote.ROOT}/data/{TARBALL}", timeout=UPLOAD_LIMIT_S)
         archive = repo_archive(commit, RUNS / exp / "repo.tar")
         rsync_up(state, archive, f"{remote.ROOT}/repo.tar")
         archive.unlink(missing_ok=True)
-        log(f"Copied the tarball and the repo at {commit[:7]} in {time.time() - started:.0f} s.")
+        for src, dst in sources:
+            remote_sh(state, f"mkdir -p {Path(dst).parent}")
+            rsync_up(state, src, dst)
+        log(f"Copied the tarball, {len(sources)} input file(s) and the repo at {commit[:7]} in {time.time() - started:.0f} s.")
         remote_sh(state, "cd /root/sc && tar -xf repo.tar -C repo && rm repo.tar")
         log(remote_sh(state, remote.SETUP.replace("{nnunet}", jobs.NNUNET_VERSION), timeout=1800).strip())
         log(remote_sh(state, remote.start_job(exp, jobs.command(exp, commit))).strip())
@@ -272,14 +309,18 @@ def collect(exp, force=False, log=print):
     if "EXIT=" not in out and not force:
         raise PodError(f"{exp} is still running. Use --force to collect anyway (the job is then lost).")
     local = RUNS / exp
-    rsync_down(state, f"{remote.ROOT}/runs/{exp}/", local, jobs.COLLECT)
-    rsync_down(state, f"{remote.ROOT}/", local / "pod_logs", ["watchdog.log", "pip.log"])
     root = drive_root()
-    if root:
-        dest = root / "runs" / jobs.get(exp)["run_dir"]
-        run(["rsync", "-a", "--exclude", "pod.json", "--exclude", "repo.tar", str(local) + "/", str(dest) + "/"])
-        log(f"Copied to Drive: {dest}")
-    else:
+    for e in state.get("runs", [exp]):
+        rsync_down(state, f"{remote.ROOT}/runs/{e}/", RUNS / e, jobs.COLLECT)
+        if e != exp:
+            log(f"{e}: " + (remote_sh(state, remote.status(e), timeout=60).strip().splitlines() or ["no status"])[0])
+    rsync_down(state, f"{remote.ROOT}/", local / "pod_logs", ["watchdog.log", "pip.log"])
+    for e in state.get("runs", [exp]):
+        if root:
+            dest = root / "runs" / jobs.get(e)["run_dir"]
+            run(["rsync", "-a", "--exclude", "pod.json", "--exclude", "repo.tar", str(RUNS / e) + "/", str(dest) + "/"])
+            log(f"Copied to Drive: {dest}")
+    if not root:
         log("Drive for desktop not found: outputs are in runs/ on this Mac only.")
     down(exp, log=log)
     return local
