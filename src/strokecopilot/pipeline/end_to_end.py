@@ -84,20 +84,20 @@ def _score(case, rec, claims, traces):
 
 
 def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU, log=print, extra_config=None, source=None,
-              judge_prompt=tr.JUDGE_PROMPT):
+              judge_prompt=tr.JUDGE_PROMPT, version=rp.REASONER_PROMPT):
     """Writes config.json, metrics.json, flagged.json, and outputs/, traces/ and calls/ per case; returns the metrics.
     reasoner, extractor and judge are llm(system, user, schema) callables (providers.ClaudeJSON)."""
     out = Path(out_dir)
     for sub in ("outputs", "traces", "calls"):
         (out / sub).mkdir(parents=True, exist_ok=True)
-    system = rp.system_prompt()
+    system = rp.system_prompt(version)
     corpus = ingest.load()
     cached_extractor = vr.CachedExtractor(extractor, vr.JsonCache(out / "extraction_cache.json"))
     cached_judge = vr.CachedJudge(tr.Judge(judge, judge_prompt), vr.JsonCache(out / "judge_cache.json"), version=judge_prompt)
     cached_retriever = vr.CachedRetriever(retriever, vr.JsonCache(out / "retrieval_cache.json"))
     describe = lambda llm: getattr(llm, "describe", lambda: {"model": getattr(llm, "model", "unknown")})()
     config = {"source": source, "cases": [c["id"] for c in cases], "reasoner": describe(reasoner),
-              "prompt_version": rp.REASONER_PROMPT, "extractor": describe(extractor), "judge": describe(judge),
+              "prompt_version": version, "extractor": describe(extractor), "judge": describe(judge),
               "judge_prompt": judge_prompt, "tau": tau, "top_k": tr.TOP_K, "corpus_sha256": ingest.version(),
               "corpus_draft": ingest.unchecked(ingest.read()), **(extra_config or {})}
     if source == "scenarios":
@@ -106,7 +106,7 @@ def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU,
 
     records, rows = [], []
     for case in cases:
-        rec, call = rr.recommend(case["vision"], case["note"], reasoner, system=system)
+        rec, call = rr.recommend(case["vision"], case["note"], reasoner, version=version, system=system)
         (out / "calls" / f"{case['id']}.json").write_text(json.dumps(call, indent=1, ensure_ascii=False))
         row = {"case": case["id"], "error": call["error"]}
         if rec is None:
@@ -135,8 +135,10 @@ def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU,
             + ", ".join(f"{d} {'yes' if got else 'no'}" for d, (got, _, _) in check.items())
             + (f"; omissions: {'; '.join(found)}" if found else ""))
 
-    costs = {name: cost_usd(getattr(llm, "model", ""), _usage(llm)) for name, llm in
-             (("reasoner", reasoner), ("extractor", extractor), ("judge", judge))}
+    # A batched llm (pipeline/batched.py) carries price_factor 0.5: the Message Batches API is half price.
+    costs = {name: (lambda c, f: None if c is None else c * f)(cost_usd(getattr(llm, "model", ""), _usage(llm)),
+                                                                getattr(llm, "price_factor", 1.0))
+             for name, llm in (("reasoner", reasoner), ("extractor", extractor), ("judge", judge))}
     metrics = {"summary": vm.summarise(records) if records else None, "per_case": rows,
                "usage": {"reasoner": _usage(reasoner), "extractor": _usage(extractor), "judge": _usage(judge)},
                "cost_usd_estimate": costs, "judge_calls": cached_judge.calls, "extractor_calls": cached_extractor.calls}

@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes, model list)
+## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes, model list, PR review)
 - **Phase 3, Parsa's tasks A1–A3.** Nothing below used a held-out case; `folds.json` was checked by sha256 only.
 - **A1, nnU-Net folds 1–4 (commit `7c67c5b`):**
   - `compute/jobs.py`: EXP-18 to EXP-21 are folds 1–4, 300 epochs each. EXP-22 regenerates fold 0's validation masks from EXP-14's `checkpoint_final.pth`, on EXP-18's pod before fold 1 trains. A run can carry others (`with`), each with its own folder, log and exit code; `collect` brings all of them back.
@@ -52,12 +52,38 @@
   - **Budget finding.** Verifying an output costs about $0.08 with the Sonnet extractor (EXP-12: extractor $0.064, judge about $0.015), more than the reasoner call ($0.046). Four models at about 410 outputs each would need about $150 of API against about $96 left.
   - **The fix depends on EXP-24.** With a Haiku 5.5 extractor (about $0.003 per output), the main runs cost about $52. The project would then total about $65–77 of API and $12.5–15 of GPU (estimates). Haiku becomes the extractor only if EXP-24 keeps the seeded-error bar.
   - Notion: the DEC-24 row; Hana's shortlist task Done, with her questions answered and a link to DEC-24; her adapters task Next up, with the models.
+- **EXP-24, Haiku as claim extractor** (Parsa ran notebook 52 on Colab, about $0.27): **bar NOT met.**
+  - Strict recall for uncited rules was 0.30; every other sub-type 1.0; false flags 0.010.
+  - Haiku's claims still flag 9 of 10 planted uncited rules (lenient recall 0.9), mostly as mis-attributed source.
+  - On EXP-12 it flags 17 of 321 claims, but misses 3 of the 9 reasoner errors (both fx05 DEFUSE-3 citation errors and the last-known-well rule) and adds about 4 verifier errors of its own.
+  - **DEC-24 amended (Parsa):**
+    - the extractor stays Sonnet 5.5; the extractor and the Sonnet reasoner go through the Message Batches API (half price);
+    - the matrix shrinks: per model, the 5 fixtures with and without the rulebook, 150 scenarios with it and 75 without, and 20 real cases three ways; the triple repeat is for Sonnet only;
+    - estimated about $65 for the main runs and about $85 for the project's API.
+- **Batch support** (tested with fakes only; the first paid use is a 2-request dummy batch):
+  - `providers.ClaudeBatch` sends ClaudeJSON's exact requests through the Message Batches API.
+  - `pipeline/batched.run_batched` works in two passes:
+    - it gathers every reasoner answer, by batch for Sonnet or by direct calls for open models;
+    - it batches the extractions into the run's extraction cache under the key `run_cases` already uses;
+    - then it runs `run_cases` unchanged, with only the judge called live.
+  - `run_cases` takes the reasoner prompt version and applies a batched llm's price factor to the cost estimate.
+  - Tests are in `tests/test_batched.py`.
 - **`providers.py`:** Sonnet 5.5 cache reads are now priced at $0.10/M, not $0.20/M (Hana's finding), so earlier logged Sonnet costs were slightly high.
   - `CachedExtractor` now keys the cache by model for any extractor but Sonnet, so another extractor never reuses Sonnet's claims. Sonnet keeps its old key.
 - **EXP-24 prepared:**
   - `end_to_end.reverify` re-extracts a run's saved outputs with another extractor.
   - `recheck.extractor_check` runs EXP-11 and EXP-12 that way in `runs/EXP-24_haiku_extractor/`, seeded with copies of the original caches. It resumes without losing paid verdicts.
   - `notebooks/52_haiku_extractor_check.ipynb`: about $0.50–1.00, estimated.
+- **D10, review of PRs #2–#5** (Parsa approved the fixes and the merges). Each PR's review entry is below.
+  - **Rule checks:** no held-out IDs, no `folds.json` reads, no RSNA IDs, no secrets and no paid calls in any of them. Two independent reviewers covered #2/#3 and #5, and their key numbers were re-checked by hand.
+  - **Fixes** went onto each branch as new commits, with a comment on each PR.
+  - **Merged by squash:**
+    - #3, Mohamed's ISLES'24 check, as `60bd2ca`;
+    - #2, Mohamed's operating point, as `0c6436f`;
+    - #4, Hana's prompt v2, as `a3af4e6`.
+  - Each branch first merged main and resolved the CHANGELOG by date. Notebooks 21 and 22 now point at `main`.
+  - **#5 (Benny) stays open.** Its bugs are fixed (kappa, stale metrics file, old run layout, blinding), but the sampling redesign and the table shape are back with him.
+  - **The Vision B threshold is Parsa's to decide**, after Mohamed's ISLES'24 follow-ups. On ISLES'24, the proposed 0.175 would flag 68 of 129 presumed bleed-free scans.
 - **A1, the folds launched (watcher cap raised by Parsa within the 8–15 USD budget):**
   - The watcher now launches US/EU offers up to $0.47/h. A credit guard launches a run only if the credit covers every running pod's worst case plus the new one, with $0.50 to spare.
   - It skips machines that failed setup. The tarball upload now has a 30-min limit (`pod.UPLOAD_LIMIT_S`), and pod state records the machine ID.
@@ -67,8 +93,19 @@
   - The home uplink measures about 50 Mbps. There is no VPN; the old SSH block was the university Wi-Fi (Parsa).
   - **EXP-18** runs on New Jersey (instance 60383981, $0.376/h) from 17:42 UTC: 38.6 s per epoch, due about 20:55 UTC, watchdog at 23:15.
   - **EXP-22, done on EXP-18's pod:** fold 0 Dice 0.218 ± 0.249 over 26 cases, the same as EXP-14. The masks come back with EXP-18's collect.
-  - EXP-19 was being set up on New Jersey ($0.376/h) at 17:57 UTC.
-- pytest: 465 passed.
+  - **EXP-19 on the same machine as EXP-18.** Its first attempt (New Jersey, $0.376/h) landed on EXP-18's machine (155712, two GPUs in one box).
+    - Both runs' data workers starved each other: GPU at 0%, load average 34, and epochs went from 39 s to about 290 s, so both would have hit their watchdogs half done.
+    - EXP-19 was destroyed at 18:59 after 1.08 h (about $0.41, 7 epochs), and EXP-18 recovered to 39 s.
+    - The watcher now never puts two folds on one machine, and set fold 2 up again on an Estonia host ($0.405/h).
+  - EXP-20 runs on Michigan ($0.416/h) from 18:51 UTC, at about 50 s per epoch.
+  - **EXP-21 (fold 4):**
+    - It waited on the credit guard until Parsa topped up $5 (credit $12.87).
+    - Its first pod (Michigan, $0.402/h) never left "loading" in 15 min. `up` destroyed it (0.26 h, about $0.10), and the watcher retries.
+    - `runs/podguard.py` (not committed) destroys a pod still without a job 45 min after creation, once no `up` is working on it, so an offline moment during setup cannot leave a pod idle until its watchdog.
+  - **`runs/monitor_all.py`** (not committed): one page for all fold pods at `localhost:8717`, served on 127.0.0.1 only.
+    - It shows progress, the median and last epoch time, with an epoch over twice the median flagged; the ETA, watchdog, cost, Vast credit and the watcher's last lines.
+    - The per-pod pages show only the median of the last 20 epochs, which hid the slowdown.
+- pytest: 509 passed.
 - **Spend so far:**
   - GPU: $3.01 measured before EXP-18 ($2.56 before, plus $0.45 of failed attempts today); EXP-18 and EXP-19 are running.
   - API: about $0.15 (EXP-23).
@@ -82,6 +119,7 @@
   - done: Decisions → DEC-23 (judge_v3); DEC-20 notes the amendment; metric page → points 8–15;
   - done: Tasks → "Verifier fixes" Done (commits `502a769`, `6bf370b`);
   - done: Decisions → DEC-24; Tasks → shortlist Done, adapters Next up;
+  - done: Tasks → Hana's prompt v2 Done; Mohamed's two tasks and Benny's taxonomy In review; Benny's notebook and labelling kit In progress;
 
 ## 2026-11-12 — Parsa's review of PR #3 (EXP-16 recorded; notebook and test fixes)
 - **EXP-16 result**, from Drive `runs/EXP-16_visionB_isles_check/metrics.json` (Mohamed, Colab, 8 Nov 2026, commit `23e2f92`):
