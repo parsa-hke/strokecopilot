@@ -74,6 +74,25 @@ LARGEST_MISS_KEYS = ("ref_ml", "nnunet_pred_ml", "threshold_dice", "threshold_pr
 FIGURE_PANELS = (("ncct", 0, 80), ("cbf", None, None), ("tmax", 0, 12))
 BEST_CASES = 3
 
+# Follow-ups step 2. "Small" infarcts are under the first treatment cut-off, as in the write-up.
+SMALL_ML = 21.0
+# A case counts as having a no-data problem when at least this share of its infarct has Tmax -30 (Parsa's review).
+NO_DATA_SHARE = 0.05
+# Parsa's EXP-25 numbers (CHANGELOG, 13 Nov 2026) for the check in exp25_check(): means and stds over the five folds
+# (mean Dice and mean absolute volume error per fold), cases on the wrong side of 21/31/51/70 mL out of 129, and
+# each nnU-Net fold's own numbers (fold 0 is EXP-14, folds 1 to 4 are EXP-18 to EXP-21).
+EXP25_REFERENCE = {
+    "nnunet": {"dice_mean": 0.215, "dice_std": 0.046, "abs_error_mean": 23.5, "abs_error_std": 3.9, "crossings": (30, 28, 20, 17)},
+    "threshold": {"dice_mean": 0.111, "dice_std": 0.031, "abs_error_mean": 25.2, "abs_error_std": 5.0, "crossings": (35, 29, 23, 17)},
+    "nnunet_per_fold": {
+        "0": {"cases": 26, "dice_mean": 0.218, "abs_error_mean": 19.6, "crossings": (5, 5, 3, 3)},
+        "1": {"cases": 26, "dice_mean": 0.211, "abs_error_mean": 22.0, "crossings": (3, 4, 4, 3)},
+        "2": {"cases": 26, "dice_mean": 0.173, "abs_error_mean": 27.0, "crossings": (9, 6, 3, 3)},
+        "3": {"cases": 26, "dice_mean": 0.290, "abs_error_mean": 20.9, "crossings": (5, 5, 2, 3)},
+        "4": {"cases": 25, "dice_mean": 0.184, "abs_error_mean": 28.3, "crossings": (8, 8, 8, 5)},
+    },
+}
+
 
 def write_config(run_dir, git_commit, folds=(0,), notes=""):
     """Write config.json for EXP-15 before the run, and return it. Refuses to overwrite one.
@@ -344,6 +363,85 @@ def visibility_comparison(table):
         out[name] = {"cases": int(len(rows)), "with_reliable_data": int(share.notna().sum()),
                      "median": _num(share.median()), "p25": _num(share.quantile(0.25)), "p75": _num(share.quantile(0.75))}
     return out
+
+
+def is_overcall(table):
+    """Over-call (agreed with Lorna, follow-ups): nnU-Net's predicted volume is larger than the true volume and
+    crosses at least one decision cut-off, at any Dice. A boolean per row."""
+    over = table["nnunet_pred_ml"] > table["ref_ml"]
+    crosses_any = sum(table[f"nnunet_{c}"].astype(bool) for c in CROSSINGS) > 0
+    return over & crosses_any
+
+
+def _fold_block(rows):
+    """The follow-up counts for one set of rows of the five-fold table: counts and medians only, no case IDs."""
+    miss = rows["nnunet_dice"] == 0
+    small = rows["ref_ml"] < SMALL_ML
+    overcall = is_overcall(rows)
+    visible, missing = rows["infarct_tmax6_share"], rows["infarct_tmax_missing_share"]
+
+    def side(mask):
+        share = visible[mask]
+        return {
+            "cases": int(mask.sum()),
+            "visible_with_reliable_data": int(share.notna().sum()),
+            "visible_median": _num(share.median()),
+            "visible_under_25pct": int((share < 0.25).sum()),
+            "no_data_at_least_5pct": int((missing[mask] >= NO_DATA_SHARE).sum()),
+        }
+
+    return {
+        "cases": int(len(rows)),
+        "dice0": int(miss.sum()),
+        "miss_rate_by_size": {
+            f"under_{SMALL_ML:g}_ml": {"cases": int(small.sum()), "dice0": int((miss & small).sum())},
+            f"{SMALL_ML:g}_ml_and_over": {"cases": int((~small).sum()), "dice0": int((miss & ~small).sum())},
+        },
+        "overcalls": int(overcall.sum()),
+        "overcalls_dice0": int((overcall & miss).sum()),
+        "dice0_misses": side(miss),
+        "rest": side(~miss),
+    }
+
+
+def five_fold_counts(table):
+    """Follow-ups step 2. On the five-fold table with case_features() added: Dice-0 misses, the miss rate under and
+    over 21 mL, over-calls and how many of them are Dice 0, and the visible (Tmax > 6 s) and no-data comparisons
+    for misses against the rest. Overall and per fold; counts and medians only, no case IDs."""
+    return {
+        "overall": _fold_block(table),
+        "per_fold": {str(int(f)): _fold_block(table[table["fold"] == f]) for f in sorted(table["fold"].unique())},
+    }
+
+
+def exp25_check(table, reference=None):
+    """Compare the five-fold table with Parsa's EXP-25 numbers (CHANGELOG, 13 Nov 2026), rounded as EXP-25 reports
+    them. Returns one row per number: what, ours, exp25, match. Counts and means only, no case IDs."""
+    reference = EXP25_REFERENCE if reference is None else reference
+    rows = []
+
+    def add(what, ours, ref, digits):
+        ours = None if ours is None else round(float(ours), digits)
+        rows.append({"what": what, "ours": ours, "exp25": ref, "match": ours is not None and abs(ours - ref) < 1e-9})
+
+    folds = sorted(table["fold"].unique())
+    for model in ("nnunet", "threshold"):
+        means = {m: [table.loc[table["fold"] == f, f"{model}_{m}"].mean() for f in folds] for m in ("dice", "abs_error_ml")}
+        ref = reference[model]
+        add(f"{model} Dice, mean over folds", np.mean(means["dice"]), ref["dice_mean"], 3)
+        add(f"{model} Dice, std over folds", np.std(means["dice"], ddof=1), ref["dice_std"], 3)
+        add(f"{model} abs volume error mL, mean over folds", np.mean(means["abs_error_ml"]), ref["abs_error_mean"], 1)
+        add(f"{model} abs volume error mL, std over folds", np.std(means["abs_error_ml"], ddof=1), ref["abs_error_std"], 1)
+        for cutoff, count in zip(DECISION_CUTOFFS_ML, ref["crossings"]):
+            add(f"{model} wrong side of {cutoff:g} mL", table[f"{model}_crosses_{cutoff:g}"].astype(bool).sum(), count, 0)
+    for fold, ref in reference["nnunet_per_fold"].items():
+        rows_f = table[table["fold"] == int(fold)]
+        add(f"fold {fold} cases", len(rows_f), ref["cases"], 0)
+        add(f"fold {fold} nnunet Dice mean", rows_f["nnunet_dice"].mean(), ref["dice_mean"], 3)
+        add(f"fold {fold} nnunet abs volume error mL", rows_f["nnunet_abs_error_ml"].mean(), ref["abs_error_mean"], 1)
+        for cutoff, count in zip(DECISION_CUTOFFS_ML, ref["crossings"]):
+            add(f"fold {fold} nnunet wrong side of {cutoff:g} mL", rows_f[f"nnunet_crosses_{cutoff:g}"].astype(bool).sum(), count, 0)
+    return rows
 
 
 def _num(value, digits=3):

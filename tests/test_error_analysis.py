@@ -182,6 +182,79 @@ def test_five_fold_table_refuses_bad_inputs():
         error_analysis.five_fold_table(nnunet, threshold[threshold["case"] != "f1a"])
 
 
+def _five_fold_features():
+    """A hand-made five-fold table with features: 8 cases over folds 0 and 1, known answers."""
+    table = pd.DataFrame({
+        "case": [f"c{i}" for i in range(8)],
+        "fold": [0, 0, 0, 0, 1, 1, 1, 1],
+        "ref_ml": [2.2, 10.0, 101.0, 40.0, 1.1, 15.0, 80.0, 5.0],
+        "nnunet_pred_ml": [0.0, 0.8, 0.0, 30.0, 32.6, 25.0, 60.0, 4.1],
+        "nnunet_dice": [0.0, 0.0, 0.0, 0.52, 0.0, 0.3, 0.6, np.nan],
+        "nnunet_abs_error_ml": [2.2, 9.2, 101.0, 10.0, 31.5, 10.0, 20.0, 0.9],
+        "threshold_pred_ml": [0.0, 5.0, 5.0, 20.0, 0.0, 10.0, 50.0, 3.5],
+        "threshold_dice": [0.0, 0.1, 0.0, 0.3, 0.0, 0.2, 0.4, np.nan],
+        "threshold_abs_error_ml": [2.2, 5.0, 96.0, 20.0, 1.1, 5.0, 30.0, 1.5],
+        "infarct_tmax6_share": [0.1, 0.9, 0.22, 0.7, 0.75, 0.6, np.nan, 0.5],
+        "infarct_tmax_missing_share": [0.0, 0.0, 0.02, 0.0, 0.0, 0.5, 0.9, 0.06],
+    })
+    for model in ("nnunet", "threshold"):
+        for cutoff in evaluate.DECISION_CUTOFFS_ML:
+            table[f"{model}_crosses_{cutoff:g}"] = [evaluate.crosses(p, r, cutoff) for p, r in zip(table[f"{model}_pred_ml"], table["ref_ml"])]
+    return table
+
+
+def test_is_overcall():
+    # c4: 32.6 mL for 1.1 mL, crosses 21 and 31 (the Miss 8 type, Dice 0). c5: 25.0 for 15.0, crosses 21, Dice 0.3.
+    # c3: 30.0 for 40.0 crosses 31 but under-calls, so it is not an over-call.
+    flags = error_analysis.is_overcall(_five_fold_features())
+    assert flags.tolist() == [False, False, False, False, True, True, False, False]
+
+
+def test_five_fold_counts_overall_and_per_fold():
+    counts = error_analysis.five_fold_counts(_five_fold_features())
+    o = counts["overall"]
+    assert o["cases"] == 8 and o["dice0"] == 4
+    assert o["miss_rate_by_size"] == {"under_21_ml": {"cases": 5, "dice0": 3}, "21_ml_and_over": {"cases": 3, "dice0": 1}}
+    assert o["overcalls"] == 2 and o["overcalls_dice0"] == 1
+    assert o["dice0_misses"] == {"cases": 4, "visible_with_reliable_data": 4, "visible_median": 0.485,
+                                 "visible_under_25pct": 2, "no_data_at_least_5pct": 0}
+    assert o["rest"] == {"cases": 4, "visible_with_reliable_data": 3, "visible_median": 0.6,
+                         "visible_under_25pct": 0, "no_data_at_least_5pct": 3}
+    assert set(counts["per_fold"]) == {"0", "1"}
+    assert counts["per_fold"]["0"]["dice0"] == 3 and counts["per_fold"]["1"]["overcalls"] == 2
+    assert sum(f["cases"] for f in counts["per_fold"].values()) == 8
+    assert not error_analysis._ids_in(counts, set(_five_fold_features()["case"]))
+
+
+def test_exp25_check_matches_and_reports_differences():
+    table = _five_fold_features()
+    # Worked out by hand from the table, rounded as EXP-25 reports, so it should match everywhere.
+    # nnU-Net Dice per fold: 0.13 and 0.3 (c7 has no Dice); mean 0.215, std 0.17/sqrt(2) = 0.120.
+    # nnU-Net abs error per fold: 122.4/4 = 30.6 and 62.4/4 = 15.6; mean 23.1, std 15/sqrt(2) = 10.6.
+    # Threshold Dice per fold: 0.1 and 0.2; mean 0.15, std 0.071. Abs error: 30.8 and 9.4; mean 20.1, std 15.1.
+    # nnU-Net crossings: c2 all four, c3 31, c4 21+31, c5 21, c6 70. Threshold: c2 all four, c3 21+31, c6 51+70.
+    ref = {
+        "nnunet": {"dice_mean": 0.215, "dice_std": 0.12, "abs_error_mean": 23.1, "abs_error_std": 10.6, "crossings": (3, 3, 1, 2)},
+        "threshold": {"dice_mean": 0.15, "dice_std": 0.071, "abs_error_mean": 20.1, "abs_error_std": 15.1, "crossings": (2, 2, 2, 2)},
+        "nnunet_per_fold": {"0": {"cases": 4, "dice_mean": 0.13, "abs_error_mean": 30.6, "crossings": (1, 2, 1, 1)},
+                            "1": {"cases": 4, "dice_mean": 0.3, "abs_error_mean": 15.6, "crossings": (2, 1, 0, 1)}},
+    }
+    rows = error_analysis.exp25_check(table, ref)
+    assert len(rows) == 2 * 8 + 2 * 7
+    assert [r["what"] for r in rows if not r["match"]] == []
+    ref["nnunet_per_fold"]["1"]["crossings"] = (2, 1, 0, 0)  # one wrong number
+    bad = [r for r in error_analysis.exp25_check(table, ref) if not r["match"]]
+    assert bad == [{"what": "fold 1 nnunet wrong side of 70 mL", "ours": 1, "exp25": 0, "match": False}]
+
+
+def test_exp25_reference_is_consistent():
+    """The recorded EXP-25 per-fold crossings and case counts add up to its totals."""
+    ref = error_analysis.EXP25_REFERENCE
+    folds = ref["nnunet_per_fold"].values()
+    assert sum(f["cases"] for f in folds) == 129
+    assert tuple(sum(f["crossings"][i] for f in folds) for i in range(4)) == ref["nnunet"]["crossings"]
+
+
 def test_join_tables_keeps_one_threshold_variant():
     """EXP-1 has a row per case for each core variant; only within_tmax6 is joined."""
     nnunet, within = _tables()

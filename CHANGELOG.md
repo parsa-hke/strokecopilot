@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 2026-11-14 — Claude Code session (Lorna, error-analysis follow-ups, step 2 of 6)
+- **`error_analysis.is_overcall()`** flags cases where nnU-Net's predicted volume is larger than the true volume and crosses at least one of the 21, 31, 51 and 70 mL cut-offs, at any Dice. This is the definition agreed with Lorna.
+- **`error_analysis.five_fold_counts()`** works on the five-fold table with `case_features()` added. It gives, overall and per fold:
+  - Dice-0 misses;
+  - the miss rate under 21 mL and at 21 mL or more;
+  - over-calls, and how many of them are Dice 0 (the Miss 8 type);
+  - for misses against the rest:
+    - the median visible share (Tmax > 6 s, reliable data only);
+    - how many are under 25% visible;
+    - how many have at least 5% of the infarct with no perfusion data (Parsa's review threshold).
+
+  It gives counts and medians only, with no case IDs.
+- **`error_analysis.exp25_check()`** compares the five-fold table with Parsa's EXP-25 numbers, as recorded in his 13 Nov CHANGELOG entry (`EXP25_REFERENCE`), each rounded as EXP-25 reports it. It covers:
+  - Dice and absolute volume error, as mean and std over folds, for nnU-Net and the threshold baseline;
+  - cases on the wrong side of each cut-off, out of 129;
+  - each nnU-Net fold's case count, Dice, volume error and crossings.
+
+  It returns one row per number, with ours, EXP-25's, and whether they match. EXP-25's own output files on Drive were not read; the reference is the CHANGELOG table.
+- **Tests:** 4 new tests (53 in `test_error_analysis.py`).
+  - A hand-made 8-case table checks the counts and the over-call flag.
+  - A reference worked out by hand from that table checks `exp25_check`, including one deliberately wrong number.
+  - A last test checks that the recorded EXP-25 per-fold numbers add up to its totals: 129 cases, and 30/28/20/17 crossings.
+- Not run on real data.
+- pytest on Windows: 495 passed, 5 skipped, 9 failed. These are the same 9 as in step 1 (8 Windows, 1 missing `cv2`).
+- **Notion sync:** none yet.
+
 ## 2026-11-14 — Claude Code session (Lorna, error-analysis follow-ups, step 1 of 6)
 - **Branch `lorna/error-analysis-followups`, from `main` at `dfc832f`.** It works on the 4 follow-ups from Parsa's PR #1 review as one piece of work, with one Colab run at the end:
   1. the five-fold table;
