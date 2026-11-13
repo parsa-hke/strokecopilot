@@ -196,6 +196,10 @@ def _five_fold_features():
         "threshold_abs_error_ml": [2.2, 5.0, 96.0, 20.0, 1.1, 5.0, 30.0, 1.5],
         "infarct_tmax6_share": [0.1, 0.9, 0.22, 0.7, 0.75, 0.6, np.nan, 0.5],
         "infarct_tmax_missing_share": [0.0, 0.0, 0.02, 0.0, 0.0, 0.5, 0.9, 0.06],
+        "occlusion_reason": ["ok", "ok", "ok", "ok", "empty_mask", "ok", "ok", "no_labels"],
+        "occlusion_nearest_label": [7, 5, 4, 1, np.nan, 2, 8, np.nan],
+        "occlusion_distance_mm": [1.0, 12.0, 0.0, 20.0, np.nan, 3.0, 2.0, np.nan],
+        "onset_to_imaging_min": [120.0, np.nan, 300.0, np.nan, 90.0, np.nan, 60.0, 200.0],
     })
     for model in ("nnunet", "threshold"):
         for cutoff in evaluate.DECISION_CUTOFFS_ML:
@@ -210,12 +214,57 @@ def test_is_overcall():
     assert flags.tolist() == [False, False, False, False, True, True, False, False]
 
 
+def test_is_undercall():
+    # c2: 0 for 101 mL, crosses all four (Dice 0). c3: 30 for 40, crosses 31. c6: 60 for 80, crosses 70.
+    # c4 crosses by over-calling, so it is not an under-call; c0, c1 and c7 under-call but cross nothing.
+    flags = error_analysis.is_undercall(_five_fold_features())
+    assert flags.tolist() == [False, False, True, True, False, False, True, False]
+    assert not (flags & error_analysis.is_overcall(_five_fold_features())).any()
+
+
+@pytest.mark.parametrize("reason, label, distance, group", [
+    ("ok", 7, 1.0, "MCA"), ("ok", 4, 5.0, "ICA"),          # 5 mm is still within the limit
+    ("ok", 1, 5.01, "too far"), ("ok", 2, 3.0, "PCA"),
+    ("ok", 8, 2.0, "Pcom"), ("ok", 13, 1.0, "unknown"),    # 13 is not a listed label
+    ("empty_mask", None, None, "no occlusion found"), ("no_labels", None, None, "unknown"),
+    ("ok", float("nan"), float("nan"), "unknown"),
+])
+def test_artery_group(reason, label, distance, group):
+    assert error_analysis.artery_group(reason, label, distance) == group
+
+
+def test_artery_group_limit_is_adjustable():
+    assert error_analysis.artery_group("ok", 1, 20.0) == "too far"
+    assert error_analysis.artery_group("ok", 1, 20.0, limit_mm=25.0) == "basilar"
+
+
+def test_add_artery_groups_and_group_summary():
+    table = error_analysis.add_artery_groups(_five_fold_features())
+    assert table["artery_group"].tolist() == ["MCA", "too far", "ICA", "too far", "no occlusion found", "PCA", "Pcom", "unknown"]
+    assert table["territory_within_limit"].tolist() == [
+        "anterior", "too far", "anterior", "too far", "no occlusion found", "posterior", "unknown", "unknown"]
+    table["miss"] = np.where(table["nnunet_dice"] == 0, "both", "neither")
+    rows = {r["group"]: r for r in error_analysis.group_summary(table, "artery_group")}
+    assert rows["too far"]["cases"] == 2 and rows["too far"]["dice0"] == 1
+    assert sum(r["cases"] for r in rows.values()) == 8
+
+
+def test_onset_summary():
+    s = error_analysis.onset_summary(_five_fold_features())
+    assert s["cases"] == 8 and s["onset_known"] == 5
+    # Misses with onset: c0 120, c2 300, c4 90. Others: c6 60, c7 200 (c7 has no Dice, so it is not a miss).
+    assert s["dice0_misses"] == {"onset_known": 3, "median_min": 120.0, "min_min": 90.0, "max_min": 300.0}
+    assert s["rest"] == {"onset_known": 2, "median_min": 130.0, "min_min": 60.0, "max_min": 200.0}
+    assert not error_analysis._ids_in(s, set(_five_fold_features()["case"]))
+
+
 def test_five_fold_counts_overall_and_per_fold():
     counts = error_analysis.five_fold_counts(_five_fold_features())
     o = counts["overall"]
     assert o["cases"] == 8 and o["dice0"] == 4
     assert o["miss_rate_by_size"] == {"under_21_ml": {"cases": 5, "dice0": 3}, "21_ml_and_over": {"cases": 3, "dice0": 1}}
     assert o["overcalls"] == 2 and o["overcalls_dice0"] == 1
+    assert o["undercalls"] == 3 and o["undercalls_dice0"] == 1
     assert o["dice0_misses"] == {"cases": 4, "visible_with_reliable_data": 4, "visible_median": 0.485,
                                  "visible_under_25pct": 2, "no_data_at_least_5pct": 0}
     assert o["rest"] == {"cases": 4, "visible_with_reliable_data": 3, "visible_median": 0.6,

@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 2026-11-14 — Claude Code session (Lorna, error-analysis follow-ups, under-call and step 3 of 6)
+- **Under-call, Lorna's addition:**
+  - `error_analysis.is_undercall()` is the mirror of an over-call: nnU-Net's predicted volume is smaller than the true volume and crosses at least one of the 21, 31, 51 and 70 mL cut-offs, at any Dice.
+  - `five_fold_counts()` now also gives `undercalls` and `undercalls_dice0`.
+  - Both definitions go into the new run's `config.json`.
+- **`error_analysis.artery_group()` / `add_artery_groups()` (Parsa's follow-up 1):** each case gets the artery type its occlusion sits next to (basilar, PCA, ICA, MCA, Pcom, Acom or ACA, side ignored), but only within the contract's distance limit (`volumes.DISTANCE_LIMIT_MM`, 5 mm).
+  - Occlusions farther away are "too far", an empty occlusion mask is "no occlusion found", and anything else is "unknown".
+  - `territory_within_limit` gives anterior or posterior on the same rule.
+  - The groups feed `group_summary()`.
+  - The TopCoW label numbering is still unconfirmed for this dataset.
+- **`error_analysis.onset_summary()` (Parsa's follow-up 2):** onset-to-scan time for the cases that have it, misses against the rest. It gives how many cases have it, plus the median, shortest and longest time in minutes. No case IDs.
+- **Tests:** 13 new tests (66 in `test_error_analysis.py`), on the hand-made 8-case table with artery and onset columns added. The answers were worked out by hand.
+- Not run on real data.
+- pytest on Windows: 508 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
+- **Notion sync:** none yet.
+
 ## 2026-11-14 — Claude Code session (Lorna, error-analysis follow-ups, step 2 of 6)
 - **`error_analysis.is_overcall()`** flags cases where nnU-Net's predicted volume is larger than the true volume and crosses at least one of the 21, 31, 51 and 70 mL cut-offs, at any Dice. This is the definition agreed with Lorna.
 - **`error_analysis.five_fold_counts()`** works on the five-fold table with `case_features()` added. It gives, overall and per fold:

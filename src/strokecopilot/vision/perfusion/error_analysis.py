@@ -74,6 +74,12 @@ LARGEST_MISS_KEYS = ("ref_ml", "nnunet_pred_ml", "threshold_dice", "threshold_pr
 FIGURE_PANELS = (("ncct", 0, 80), ("cbf", None, None), ("tmax", 0, 12))
 BEST_CASES = 3
 
+# Follow-ups step 3. Artery type of each Circle of Willis label, side ignored (TopCoW numbering, as for
+# POSTERIOR_LABELS above; not confirmed for this dataset). Labels not listed become "unknown".
+ARTERY_OF_LABEL = {1: "basilar", 2: "PCA", 3: "PCA", 4: "ICA", 6: "ICA", 5: "MCA", 7: "MCA",
+                   8: "Pcom", 9: "Pcom", 10: "Acom", 11: "ACA", 12: "ACA", 15: "ACA"}
+NOT_AN_ARTERY = ("too far", "no occlusion found", "unknown")
+
 # Follow-ups step 2. "Small" infarcts are under the first treatment cut-off, as in the write-up.
 SMALL_ML = 21.0
 # A case counts as having a no-data problem when at least this share of its infarct has Tmax -30 (Parsa's review).
@@ -373,11 +379,20 @@ def is_overcall(table):
     return over & crosses_any
 
 
+def is_undercall(table):
+    """Under-call, the mirror of is_overcall(): nnU-Net's predicted volume is smaller than the true volume and
+    crosses at least one decision cut-off, at any Dice. A boolean per row."""
+    under = table["nnunet_pred_ml"] < table["ref_ml"]
+    crosses_any = sum(table[f"nnunet_{c}"].astype(bool) for c in CROSSINGS) > 0
+    return under & crosses_any
+
+
 def _fold_block(rows):
     """The follow-up counts for one set of rows of the five-fold table: counts and medians only, no case IDs."""
     miss = rows["nnunet_dice"] == 0
     small = rows["ref_ml"] < SMALL_ML
     overcall = is_overcall(rows)
+    undercall = is_undercall(rows)
     visible, missing = rows["infarct_tmax6_share"], rows["infarct_tmax_missing_share"]
 
     def side(mask):
@@ -399,6 +414,8 @@ def _fold_block(rows):
         },
         "overcalls": int(overcall.sum()),
         "overcalls_dice0": int((overcall & miss).sum()),
+        "undercalls": int(undercall.sum()),
+        "undercalls_dice0": int((undercall & miss).sum()),
         "dice0_misses": side(miss),
         "rest": side(~miss),
     }
@@ -406,12 +423,60 @@ def _fold_block(rows):
 
 def five_fold_counts(table):
     """Follow-ups step 2. On the five-fold table with case_features() added: Dice-0 misses, the miss rate under and
-    over 21 mL, over-calls and how many of them are Dice 0, and the visible (Tmax > 6 s) and no-data comparisons
+    over 21 mL, over-calls and under-calls and how many of each are Dice 0, and the visible (Tmax > 6 s) and no-data comparisons
     for misses against the rest. Overall and per fold; counts and medians only, no case IDs."""
     return {
         "overall": _fold_block(table),
         "per_fold": {str(int(f)): _fold_block(table[table["fold"] == f]) for f in sorted(table["fold"].unique())},
     }
+
+
+def artery_group(reason, nearest_label, distance_mm, limit_mm=None):
+    """Follow-ups step 3. The artery the occlusion sits next to, counted only within the distance limit.
+
+    Returns the artery type, side ignored (ARTERY_OF_LABEL), "too far" when the occlusion is more than `limit_mm`
+    from its nearest label, "no occlusion found" when the occlusion mask is empty, and "unknown" otherwise
+    (no labels, an unlisted label, or a missing value). The default limit is the contract's (volumes.DISTANCE_LIMIT_MM).
+    """
+    limit_mm = volumes.DISTANCE_LIMIT_MM if limit_mm is None else limit_mm
+    if reason == "empty_mask":
+        return "no occlusion found"
+    if reason != "ok" or nearest_label is None or distance_mm is None:
+        return "unknown"
+    if isinstance(nearest_label, float) and np.isnan(nearest_label):
+        return "unknown"
+    if isinstance(distance_mm, float) and np.isnan(distance_mm):
+        return "unknown"
+    if distance_mm > limit_mm:
+        return "too far"
+    return ARTERY_OF_LABEL.get(int(nearest_label), "unknown")
+
+
+def add_artery_groups(table, limit_mm=None):
+    """A copy of the table with `artery_group` and `territory_within_limit` (anterior, posterior, or the same
+    "too far" / "no occlusion found" / "unknown" as artery_group)."""
+    table = table.copy()
+    groups = [artery_group(r, l, d, limit_mm) for r, l, d in
+              zip(table["occlusion_reason"], table["occlusion_nearest_label"], table["occlusion_distance_mm"])]
+    table["artery_group"] = groups
+    territory = []
+    for group, label in zip(groups, table["occlusion_nearest_label"]):
+        territory.append(territory_of_label(int(label)) if group not in NOT_AN_ARTERY else group)
+    table["territory_within_limit"] = territory
+    return table
+
+
+def onset_summary(table):
+    """Follow-ups step 3. Onset to scan time (minutes) for the cases that have it, misses against the rest:
+    how many cases have it, the median and the range. Counts and values only, no case IDs."""
+    known = table[table["onset_to_imaging_min"].notna()]
+    miss = known["nnunet_dice"] == 0
+    out = {"cases": int(len(table)), "onset_known": int(len(known))}
+    for name, rows in (("dice0_misses", known[miss]), ("rest", known[~miss])):
+        minutes_ = rows["onset_to_imaging_min"]
+        out[name] = {"onset_known": int(len(rows)), "median_min": _num(minutes_.median(), 0),
+                     "min_min": _num(minutes_.min(), 0), "max_min": _num(minutes_.max(), 0)}
+    return out
 
 
 def exp25_check(table, reference=None):
