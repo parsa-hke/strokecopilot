@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-11-14 — Claude Code session (Lorna, error-analysis follow-ups, step 4 of 6)
+- **`error_analysis.case_figure(..., prediction=...)` (Parsa's follow-up 3):** with nnU-Net's mask, the AI's outline is drawn in cyan next to the red true infarct, on the same slice, with a small legend below the panels. The title says which colour is which.
+  - If the AI marked nothing on that slice, the legend says so, and gives the number of other slices it did mark, or "none anywhere".
+  - This matters for cases like Miss 8, whose 32.6 mL may sit away from the infarct's main slice.
+  - Without `prediction`, the figure is unchanged.
+- **`error_analysis.load_prediction()`** reads one case's mask from a folder of validation masks (EXP-22 for fold 0, named `<case>.nii.gz` as `nnunet_wrapper` writes them) and checks its shape. The colours are `TRUE_COLOUR` (red) and `AI_COLOUR` (cyan).
+- **Tests:** 3 new tests (69 in `test_error_analysis.py`).
+  - On a fake case named like a real one: both outline colours are drawn, the legend and title texts are right, and the case ID appears nowhere in the figure.
+  - The "none on this slice" and "none anywhere" legend texts.
+  - A shape mismatch is refused.
+  - A mask is loaded from a fake NIfTI file.
+- One fake figure was rendered and checked by eye: the legend sits below the panels and covers nothing. Not run on real data or real masks.
+- pytest on Windows: 511 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
+- **Notion sync:** none yet.
+
 ## 2026-11-14 — Claude Code session (Lorna, error-analysis follow-ups, under-call and step 3 of 6)
 - **Under-call, Lorna's addition:**
   - `error_analysis.is_undercall()` is the mirror of an over-call: nnU-Net's predicted volume is smaller than the true volume and crosses at least one of the 21, 31, 51 and 70 mL cut-offs, at any Dice.

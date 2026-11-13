@@ -29,6 +29,7 @@ from strokecopilot.data.isles24_survey import PENUMBRA_TMAX_S
 from strokecopilot.nlp.notes.generate import minutes
 from strokecopilot.vision.perfusion import volumes
 from strokecopilot.vision.perfusion.evaluate import DECISION_CUTOFFS_ML
+from strokecopilot.vision.perfusion.nnunet_wrapper import FILE_ENDING
 from strokecopilot.vision.perfusion.pod_job import FOLDS_SHA256, SLIM_SHA256
 from strokecopilot.vision.perfusion.thresholds import reliable
 
@@ -73,6 +74,9 @@ LARGEST_MISS_KEYS = ("ref_ml", "nnunet_pred_ml", "threshold_dice", "threshold_pr
 # Step 6a figures: the maps shown, with display windows (template.PANELS), and how many best cases.
 FIGURE_PANELS = (("ncct", 0, 80), ("cbf", None, None), ("tmax", 0, 12))
 BEST_CASES = 3
+# Follow-ups step 4. Outline colours: the true final infarct, and nnU-Net's prediction (EXP-22 for fold 0).
+TRUE_COLOUR = "red"
+AI_COLOUR = "cyan"
 
 # Follow-ups step 3. Artery type of each Circle of Willis label, side ignored (TopCoW numbering, as for
 # POSTERIOR_LABELS above; not confirmed for this dataset). Labels not listed become "unknown".
@@ -654,26 +658,60 @@ def figure_summary(table, picks):
     return out
 
 
-def case_figure(case, label, size_band=None, z=None):
+def load_prediction(pred_dir, case_id, shape):
+    """Follow-ups step 4. nnU-Net's predicted mask for one case from a folder of validation masks (EXP-22 for
+    fold 0: `<case>.nii.gz`, on the slim grid), as booleans. Raises if the shape differs from `shape`."""
+    import nibabel as nib
+
+    path = Path(pred_dir) / f"{case_id}{FILE_ENDING}"
+    pred = np.asanyarray(nib.load(str(path)).dataobj) > 0
+    if pred.shape != tuple(shape):
+        raise ValueError(f"A predicted mask has shape {pred.shape}, expected {tuple(shape)}.")
+    return pred
+
+
+def case_figure(case, label, size_band=None, z=None, prediction=None):
     """NCCT, CBF and Tmax at the slice with the most infarct, the final infarct outlined in red.
 
+    With `prediction` (nnU-Net's mask, same grid), its outline is drawn in cyan on the same slice, with a small
+    legend. The legend says when the AI marked nothing on this slice, and on how many other slices it did.
     Titled only with the anonymous label and size band, never the case ID. Returns the figure.
     """
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
 
     z = template.largest_infarct_slice(case) if z is None else z
     infarct = np.asarray(case.arrays["infarct"][:, :, z], dtype=bool)
-    fig, axes = plt.subplots(1, len(FIGURE_PANELS), figsize=(3.2 * len(FIGURE_PANELS), 3.6))
+    pred = None
+    if prediction is not None:
+        prediction = np.asarray(prediction, dtype=bool)
+        if prediction.shape != case.arrays["infarct"].shape:
+            raise ValueError(f"The predicted mask has shape {prediction.shape}, expected {case.arrays['infarct'].shape}.")
+        pred = prediction[:, :, z]
+    fig, axes = plt.subplots(1, len(FIGURE_PANELS), figsize=(3.2 * len(FIGURE_PANELS), 3.9))
     for ax, (name, low, high) in zip(axes, FIGURE_PANELS):
         low, high = template._window(case.arrays[name], low, high)
         ax.imshow(case.arrays[name][:, :, z].T, cmap="gray", vmin=low, vmax=high, origin="lower")
         if infarct.any():
-            ax.contour(infarct.T, levels=[0.5], colors="red", linewidths=0.8)
+            ax.contour(infarct.T, levels=[0.5], colors=TRUE_COLOUR, linewidths=0.8)
+        if pred is not None and pred.any():
+            ax.contour(pred.T, levels=[0.5], colors=AI_COLOUR, linewidths=0.8)
         ax.set_title(name.upper(), fontsize=9)
         ax.axis("off")
     band = f", {size_band} mL" if size_band else ""
-    fig.suptitle(f"{label}{band}: final infarct in red", fontsize=10)
-    fig.tight_layout()
+    if prediction is None:
+        fig.suptitle(f"{label}{band}: final infarct in red", fontsize=10)
+        fig.tight_layout()
+        return fig
+    fig.suptitle(f"{label}{band}: final infarct in red, AI outline in cyan", fontsize=10)
+    ai_label = "AI outline"
+    if not pred.any():
+        others = int(np.count_nonzero(prediction.any(axis=(0, 1))))
+        ai_label = "AI outline: none on this slice" + (f" (marks on {others} other slices)" if others else ", none anywhere")
+    handles = [Line2D([0], [0], color=TRUE_COLOUR, lw=1.5, label="Final infarct"),
+               Line2D([0], [0], color=AI_COLOUR, lw=1.5, label=ai_label)]
+    fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=8, frameon=False)
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
     return fig
 
 

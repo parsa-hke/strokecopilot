@@ -423,6 +423,75 @@ def test_case_figure_is_anonymous():
     plt.close(fig)
 
 
+def _figure_case():
+    """The synthetic case named like a real one, with an NCCT map, for the figure tests."""
+    case = synthetic_case()
+    case.id = case.clinical["case"] = "sub-stroke9999"
+    case.arrays["ncct"] = np.full(SHAPE, 30.0, dtype=np.float32)
+    return case
+
+
+def _outline_colours(fig):
+    """The edge colours of every outline (contour) drawn on the figure's panels, as RGBA tuples."""
+    colours = set()
+    for ax in fig.axes:
+        for collection in ax.collections:
+            for rgba in np.atleast_2d(collection.get_edgecolor()):
+                colours.add(tuple(np.round(rgba, 3)))
+    return colours
+
+
+def test_case_figure_draws_both_outlines():
+    mpl = pytest.importorskip("matplotlib")
+    mpl.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import to_rgba
+
+    case = _figure_case()
+    prediction = np.zeros(SHAPE, dtype=bool)
+    prediction[20:30, 10:18, 6:14] = True  # overlaps part of the infarct, on the same slices
+    fig = error_analysis.case_figure(case, "Miss 8", "under 5", prediction=prediction)
+    colours = _outline_colours(fig)
+    assert tuple(np.round(to_rgba("red"), 3)) in colours and tuple(np.round(to_rgba("cyan"), 3)) in colours
+    texts = error_analysis.figure_texts(fig)
+    assert "Miss 8, under 5 mL: final infarct in red, AI outline in cyan" in texts
+    assert {"Final infarct", "AI outline"} <= set(texts)
+    assert not any("sub-stroke9999" in t for t in texts)
+    plt.close(fig)
+
+
+def test_case_figure_says_when_the_ai_marked_elsewhere_or_nothing():
+    mpl = pytest.importorskip("matplotlib")
+    mpl.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import to_rgba
+
+    case = _figure_case()
+    z = 10  # the infarct's largest slice in the synthetic case is one of z 6 to 13
+    elsewhere = np.zeros(SHAPE, dtype=bool)
+    elsewhere[5:9, 5:9, 16:19] = True  # 3 slices, none with infarct
+    fig = error_analysis.case_figure(case, "Miss 8", prediction=elsewhere, z=z)
+    assert "AI outline: none on this slice (marks on 3 other slices)" in error_analysis.figure_texts(fig)
+    assert tuple(np.round(to_rgba("cyan"), 3)) not in _outline_colours(fig)
+    plt.close(fig)
+    fig = error_analysis.case_figure(case, "Miss 1", prediction=np.zeros(SHAPE, dtype=bool))
+    assert "AI outline: none on this slice, none anywhere" in error_analysis.figure_texts(fig)
+    plt.close(fig)
+    with pytest.raises(ValueError, match="shape"):
+        error_analysis.case_figure(case, "Miss 1", prediction=np.zeros((4, 4, 4), dtype=bool))
+
+
+def test_load_prediction(tmp_path):
+    nib = pytest.importorskip("nibabel")
+    mask = np.zeros(SHAPE, dtype=np.uint8)
+    mask[1:3, 1:3, 1:3] = 1
+    nib.save(nib.Nifti1Image(mask, np.eye(4)), str(tmp_path / "sub-stroke9999.nii.gz"))
+    pred = error_analysis.load_prediction(tmp_path, "sub-stroke9999", SHAPE)
+    assert pred.dtype == bool and int(pred.sum()) == 8
+    with pytest.raises(ValueError, match="shape"):
+        error_analysis.load_prediction(tmp_path, "sub-stroke9999", (4, 4, 4))
+
+
 def test_case_features_missing_inputs():
     case = synthetic_case(infarct_box=None)
     case.clinical["Onset to door"] = None  # unknown onset, as in wake-up strokes
