@@ -11,7 +11,7 @@
   7. saves `per_case.csv` (Drive only, held-out check first), then `metrics.json`, last.
 
   It prints counts only, never case IDs.
-- **`EXPERIMENT` is a setting at the top, still `EXP-NN`.** Lorna's message gave "EXP-[your number]", so the ID is not known yet. The notebook and `write_followup_config` refuse to run until it holds a real ID. The run folder is `runs/<EXPERIMENT>_visionA_error_followups`.
+- **`EXPERIMENT` is `EXP-27`**, Lorna's Notion row, set in a follow-up commit. The notebook and `write_followup_config` refuse a placeholder ID. The run folder is `runs/EXP-27_visionA_error_followups`.
 - **New helpers in `error_analysis`:**
   - `write_followup_config` writes the definitions: miss, over-call, under-call, small (21 mL), no data (5%), visible, the 5 mm artery limit, and the artery types.
   - `find_mask_dir` finds the EXP-22 mask folder.
@@ -26,7 +26,7 @@
 - **Tests:** 5 new tests (74 in `test_error_analysis.py`), including one that runs the notebook's steps 4 to 9 end to end on fake tables.
 - The notebook's code parses. It has not run in Colab.
 - pytest on Windows: 516 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
-- **Notion sync:** before the run, Lorna adds the Experiments row (Running) and puts its ID in `EXPERIMENT`.
+- **Notion sync:** Experiments → EXP-27 row added by Lorna (Running). Fill in the commit and results after the run.
 
 ## 2026-11-14 — Claude Code session (Lorna, error-analysis follow-ups, step 4 of 6)
 - **`error_analysis.case_figure(..., prediction=...)` (Parsa's follow-up 3):** with nnU-Net's mask, the AI's outline is drawn in cyan next to the red true infarct, on the same slice, with a small legend below the panels. The title says which colour is which.
