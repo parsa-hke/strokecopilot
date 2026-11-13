@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 2026-11-13 — Claude Code session (Phase 3: A1 done — nnU-Net folds 1–4 collected, 5-fold table)
+## 2026-11-13 — Claude Code session (Phase 3: A1 done — nnU-Net folds 1–4 collected, 5-fold table; B5 decided, DEC-25)
 - **Phase 3, Parsa's task A1.** Nothing below used a held-out case; the 129 cases are the development folds 0–4 only.
 - **Folds 1–3 (EXP-18/19/20) finished overnight 12 Nov** and were collected by their auto-collectors, copied to Drive, and their pods destroyed and confirmed gone:
 
@@ -27,15 +27,18 @@
   - **Paired against within-Tmax6:** Dice +0.104 (95% CI +0.078 to +0.133; p < 0.0001). Abs volume error −1.6 mL (CI −4.5 to +1.3; p 0.35): not a clear difference. No crossing difference is significant.
   - **Against unrestricted:** nnU-Net crosses 21 mL far less often (30 vs 48, p 0.003), all of it in lesions under 21 mL, where the unrestricted threshold over-calls.
   - **Lesions ≥ 21 mL (45 cases):** both methods are far off, mostly under-calling (nnU-Net 52.8 vs 55.7 mL abs error).
-- **B5 not decided:** Parsa's decision, from these numbers.
+- **B5 decided — DEC-25 (Parsa):** nnU-Net feeds `core_ml`, not the rCBF < 30% threshold. Each development case uses the validation prediction of the fold model that did not train on it; combining the five fold models for held-out cases is left to Phase 4.
+  - Recorded with its limit: no worse on any contract measure and clearly better on Dice, but the volume is not measurably better, and the report keeps the threshold as the comparison.
+  - The under-calling of lesions ≥ 21 mL is the open weakness for B4 and calibration. The penumbra stays Tmax > 6 s.
+  - Plan §2 row DEC-25 added; §7 "Decide which core feeds the contract" ticked.
 - **GPU spend for A1:** about $8.8 measured from the credit (12 Nov from 17:09: $6.62; the three failed attempts before it: about $0.45; fold 4: $1.76). With the $2.56 before Phase 3, the project's GPU total is about $11.4 of the 8–15 USD budget (DEC-21). Credit left: $6.59. **API spend this session: none.**
 - **Housekeeping:** the keep-awake and the pod guard were stopped after fold 4; the combined monitor is still serving `localhost:8717`.
 - `pytest`: 510 passed.
 - **Notion sync** (done this session):
   - Experiments EXP-18, EXP-19, EXP-20, EXP-21 set to Done with results, hosts and costs; EXP-22's notes point to the masks on Drive.
   - Experiments EXP-25 created (5-fold summary and paired comparison).
-  - Tasks: "nnU-Net folds 1–4 … then the 5-fold table" → Done; "Decide which core feeds the contract" notes updated with EXP-25 (status left as is).
-  - Still to sync: a Decisions row once Parsa decides B5.
+  - Tasks: "nnU-Net folds 1–4 … then the 5-fold table" → Done; "Decide which core feeds the contract" notes updated with EXP-25.
+  - Decisions: DEC-25 created and linked to both tasks; the task "Decide which core feeds the contract" → Done.
 
 ## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes, model list, PR review)
 - **Phase 3, Parsa's tasks A1–A3.** Nothing below used a held-out case; `folds.json` was checked by sha256 only.
