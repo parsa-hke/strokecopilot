@@ -296,6 +296,93 @@ def test_exp25_check_matches_and_reports_differences():
     assert bad == [{"what": "fold 1 nnunet wrong side of 70 mL", "ours": 1, "exp25": 0, "match": False}]
 
 
+def test_write_followup_config(tmp_path):
+    run_dir = tmp_path / "EXP-99_visionA_error_followups"
+    inputs = {"nnunet_fold0": "runs/EXP-14_nnunet_fold0/per_case.csv"}
+    config = error_analysis.write_followup_config(run_dir, "abc1234", "EXP-99", inputs)
+    assert config["experiment"] == "EXP-99" and config["name"] == "EXP-99_visionA_error_followups"
+    assert "smaller than the true volume" in config["definitions"]["undercall"]
+    assert "larger than the true volume" in config["definitions"]["overcall"]
+    assert config["definitions"]["artery_distance_limit_mm"] == 5.0
+    assert json.loads((run_dir / "config.json").read_text())["git_commit"] == "abc1234"
+    with pytest.raises(FileExistsError):
+        error_analysis.write_followup_config(run_dir, "def5678", "EXP-99", inputs)
+    for placeholder in ("EXP-NN", "EXP-[your number]", ""):
+        with pytest.raises(ValueError, match="Notion row"):
+            error_analysis.write_followup_config(tmp_path / "other", "abc1234", placeholder, inputs)
+
+
+def test_find_mask_dir(tmp_path):
+    nested = tmp_path / "fold_0" / "validation"
+    nested.mkdir(parents=True)
+    for case in ("sub-a", "sub-b"):
+        (nested / f"{case}.nii.gz").write_bytes(b"")
+    (tmp_path / "sub-a.nii.gz").write_bytes(b"")  # one stray copy higher up
+    folder, found = error_analysis.find_mask_dir(tmp_path, ["sub-a", "sub-b", "sub-c"])
+    assert folder == nested and found == 2
+    with pytest.raises(FileNotFoundError):
+        error_analysis.find_mask_dir(tmp_path, ["sub-x"])
+
+
+def test_compare_with_per_case():
+    table = _five_fold_features()
+    other = pd.DataFrame({"case": table["case"], "dice": table["nnunet_dice"],
+                          "pred_ml": table["nnunet_pred_ml"], "ref_ml": table["ref_ml"]})
+    out = error_analysis.compare_with_per_case(table, other)
+    assert out["in_both"] == 8 and out["only_ours"] == 0 and out["only_theirs"] == 0
+    assert out["columns"] == {"dice": {"compared": 8, "differ": 0}, "pred_ml": {"compared": 8, "differ": 0},
+                              "ref_ml": {"compared": 8, "differ": 0}}
+    other.loc[2, "pred_ml"] = 5.0
+    other = other.iloc[1:]  # one case missing from theirs
+    out = error_analysis.compare_with_per_case(table, other)
+    assert out["only_ours"] == 1 and out["columns"]["pred_ml"]["differ"] == 1
+    assert not error_analysis._ids_in(out, set(table["case"]))
+    with pytest.raises(ValueError, match="repeated"):
+        error_analysis.compare_with_per_case(table, pd.concat([other, other]))
+
+
+def test_followup_metrics_refuses_case_ids():
+    table = _five_fold_features()
+    counts = error_analysis.five_fold_counts(table)
+    groups = error_analysis.group_summary(
+        error_analysis.add_artery_groups(table).assign(miss="neither"), "artery_group")
+    onset = error_analysis.onset_summary(table)
+    metrics = error_analysis.followup_metrics(table, {"experiment": "EXP-99", "git_commit": "abc"}, "def",
+                                              {"artery_group": groups}, onset, counts, [])
+    assert metrics["git_commit"] == "def" and metrics["config_git_commit"] == "abc" and metrics["cases"] == 8
+    json.dumps(metrics)  # must be writable as JSON
+    onset["note"] = "c3"  # a case ID where none should be
+    with pytest.raises(ValueError, match="case IDs"):
+        error_analysis.followup_metrics(table, {}, "def", {}, onset, counts, [])
+
+
+def test_followup_notebook_flow(tmp_path):
+    """What notebook 13 does after loading data, on fake tables: join, add features, count, group, check, save."""
+    nnunet, threshold = _fold_tables()
+    table = error_analysis.five_fold_table(nnunet, threshold, expected_cases=6)
+    features = pd.DataFrame({
+        "case": table["case"], "size_band": "5-21", "infarct_tmax6_share": 0.5, "infarct_tmax_missing_share": 0.0,
+        "occlusion_reason": "ok", "occlusion_nearest_label": 7, "occlusion_distance_mm": 2.0,
+        "onset_to_imaging_min": [100.0, np.nan, 150.0, np.nan, 200.0, np.nan]})
+    table = table.merge(features, on="case", how="left", validate="one_to_one")
+    counts = error_analysis.five_fold_counts(table)
+    grouped = error_analysis.add_artery_groups(table)
+    groups = {g: error_analysis.group_summary(grouped, g) for g in ("artery_group", "territory_within_limit")}
+    onset = error_analysis.onset_summary(table)
+    exp25_rows = error_analysis.exp25_check(table)  # the real reference: fake data will not match, that is fine
+    assert len(exp25_rows) > 0 and not all(r["match"] for r in exp25_rows)
+    picks = error_analysis.figure_cases(table[table["fold"] == 0])
+    assert [p["label"] for p in picks] == ["Miss 1", "Best 1"]
+    summary = error_analysis.figure_summary(table[table["fold"] == 0], picks)
+    config = error_analysis.write_followup_config(tmp_path / "EXP-99_x", "abc1234", "EXP-99", {"a": "b"})
+    metrics = error_analysis.followup_metrics(table, config, "def5678", groups, onset, counts, exp25_rows,
+                                              {"x.csv": error_analysis.compare_with_per_case(table, table[["case"]])})
+    path = error_analysis.write_metrics(tmp_path / "EXP-99_x", metrics)
+    saved = json.loads(path.read_text())
+    assert saved["counts"]["overall"]["cases"] == 6 and saved["git_commit"] == "def5678"
+    assert not error_analysis._ids_in(saved, set(table["case"])) and not error_analysis._ids_in(summary, set(table["case"]))
+
+
 def test_exp25_reference_is_consistent():
     """The recorded EXP-25 per-fold crossings and case counts add up to its totals."""
     ref = error_analysis.EXP25_REFERENCE

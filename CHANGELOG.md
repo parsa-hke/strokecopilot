@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## 2026-11-14 — Claude Code session (Lorna, error-analysis follow-ups, step 5 of 6: notebook 13)
+- **`notebooks/13_visionA_error_analysis_followups.ipynb`** runs all 4 follow-ups in one Colab run (CPU). Its install and Drive-mount cells are copied from notebook 12, including Parsa's split install cell. It:
+  1. checks that every input is on Drive, then writes `config.json`;
+  2. joins the five folds (EXP-14, EXP-18 to 21) with EXP-1, and checks the cases and folds against the split;
+  3. runs `case_features` on all 129 development cases;
+  4. prints the five-fold counts (overall and per fold), the artery groups within 5 mm, and the onset summary;
+  5. runs the EXP-25 check, plus a case-by-case check against any csv in `runs/EXP-25_nnunet_5fold/`;
+  6. draws the fold-0 pictures with the EXP-22 outlines;
+  7. saves `per_case.csv` (Drive only, held-out check first), then `metrics.json`, last.
+
+  It prints counts only, never case IDs.
+- **`EXPERIMENT` is a setting at the top, still `EXP-NN`.** Lorna's message gave "EXP-[your number]", so the ID is not known yet. The notebook and `write_followup_config` refuse to run until it holds a real ID. The run folder is `runs/<EXPERIMENT>_visionA_error_followups`.
+- **New helpers in `error_analysis`:**
+  - `write_followup_config` writes the definitions: miss, over-call, under-call, small (21 mL), no data (5%), visible, the 5 mm artery limit, and the artery types.
+  - `find_mask_dir` finds the EXP-22 mask folder.
+  - `compare_with_per_case` gives case-by-case match counts against another per-case file.
+  - `followup_metrics` builds `metrics.json`, refuses case IDs, and records both commits.
+- **Drive folders, from Lorna:**
+  - `EXP-18_nnunet_fold1`, `EXP-19_nnunet_fold2`, `EXP-20_nnunet_fold3` and `EXP-21_nnunet_fold4`;
+  - `EXP-22_nnunet_fold0_masks` and `EXP-25_nnunet_5fold`;
+  - fold 0 is `EXP-14_nnunet_fold0`.
+
+  The `per_case.csv` name inside each fold folder is assumed from `pod_job`; section 3 stops with the missing names if any are wrong.
+- **Tests:** 5 new tests (74 in `test_error_analysis.py`), including one that runs the notebook's steps 4 to 9 end to end on fake tables.
+- The notebook's code parses. It has not run in Colab.
+- pytest on Windows: 516 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
+- **Notion sync:** before the run, Lorna adds the Experiments row (Running) and puts its ID in `EXPERIMENT`.
+
 ## 2026-11-14 — Claude Code session (Lorna, error-analysis follow-ups, step 4 of 6)
 - **`error_analysis.case_figure(..., prediction=...)` (Parsa's follow-up 3):** with nnU-Net's mask, the AI's outline is drawn in cyan next to the red true infarct, on the same slice, with a small legend below the panels. The title says which colour is which.
   - If the AI marked nothing on that slice, the legend says so, and gives the number of other slices it did mark, or "none anywhere".

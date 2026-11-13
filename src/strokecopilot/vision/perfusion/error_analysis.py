@@ -483,6 +483,129 @@ def onset_summary(table):
     return out
 
 
+def write_followup_config(run_dir, git_commit, experiment, inputs, notes=""):
+    """Follow-ups step 5. config.json for the follow-up run, written before it and never overwritten.
+
+    experiment: the Notion Experiments ID, such as "EXP-27"; a placeholder is refused. inputs: the Drive paths
+    the run reads. Records the definitions agreed with Lorna (over-call, under-call, small, no data, the artery
+    distance limit) and the counts-only output rule. No case IDs.
+    """
+    import re
+
+    if not re.fullmatch(r"EXP-\d+", str(experiment)):
+        raise ValueError(f"Set the experiment ID from the Notion row (like EXP-27), not {experiment!r}.")
+    if not git_commit:
+        raise ValueError("git_commit is required: the commit the notebook installed.")
+    run_dir = Path(run_dir)
+    path = run_dir / "config.json"
+    if path.exists():
+        raise FileExistsError(f"{path} already exists. config.json is written once, before the run.")
+    config = {
+        "experiment": experiment,
+        "name": run_dir.name,
+        "runner": "strokecopilot.vision.perfusion.error_analysis (notebooks/13_visionA_error_analysis_followups.ipynb)",
+        "git_commit": git_commit,
+        "data_version": ISLES24_SLIM,
+        "data_sha256": SLIM_SHA256,
+        "folds_sha256": FOLDS_SHA256,
+        "cases": "development only (folds 0-4); held-out cases are refused by the loaders",
+        "inputs": dict(inputs),
+        "threshold_variant": THRESHOLD_VARIANT,
+        "definitions": {
+            "miss": "nnU-Net Dice exactly 0",
+            "overcall": "nnU-Net predicted volume larger than the true volume and on the wrong side of at least one "
+                        "decision cut-off, at any Dice; also counted: how many of these are Dice 0",
+            "undercall": "nnU-Net predicted volume smaller than the true volume and on the wrong side of at least one "
+                         "decision cut-off, at any Dice; also counted: how many of these are Dice 0",
+            "small_ml": SMALL_ML,
+            "no_data_share": NO_DATA_SHARE,
+            "visible": "share of the infarct with Tmax > 6 s, among infarct voxels with reliable data",
+            "artery_distance_limit_mm": volumes.DISTANCE_LIMIT_MM,
+            "artery_types": {str(k): v for k, v in ARTERY_OF_LABEL.items()},
+        },
+        "decision_cutoffs_ml": list(DECISION_CUTOFFS_ML),
+        "exp25_reference": "Parsa's CHANGELOG entry of 13 Nov 2026 (EXP25_REFERENCE)",
+        "figures": "fold 0 only: every Dice-0 miss and the 3 best cases, with the EXP-22 outlines",
+        "outputs_policy": "counts and summaries only, never case IDs",
+        "notes": notes,
+    }
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, indent=1))
+    return config
+
+
+def find_mask_dir(root, case_ids):
+    """The folder under `root` (itself or any subfolder) that holds `<case>.nii.gz` masks for the most of
+    `case_ids`. Raises if none holds any. Returns the path and how many of the cases it holds."""
+    root = Path(root)
+    best, found = None, 0
+    for folder in [root, *[p for p in root.rglob("*") if p.is_dir()]]:
+        n = sum((folder / f"{case}{FILE_ENDING}").exists() for case in case_ids)
+        if n > found:
+            best, found = folder, n
+    if best is None:
+        raise FileNotFoundError(f"No predicted masks for these {len(case_ids)} cases under {root}.")
+    return best, found
+
+
+def compare_with_per_case(table, other, tolerance=1e-6):
+    """Case-by-case check of the five-fold table against another per-case file of nnU-Net results (such as
+    EXP-25's). `other` needs a `case` column and one row per case; its `dice`, `pred_ml`, `abs_error_ml` and
+    `ref_ml` columns, where present, are compared with ours. Returns counts only, no case IDs."""
+    if "case" not in other.columns:
+        raise ValueError("The other table has no case column.")
+    if other["case"].duplicated().any():
+        raise ValueError(f"The other table has {int(other['case'].duplicated().sum())} repeated cases; "
+                         "pick the nnU-Net rows before comparing.")
+    ours = table.set_index("case")
+    theirs = other.set_index("case")
+    common = ours.index.intersection(theirs.index)
+    out = {"ours": int(len(ours)), "theirs": int(len(theirs)), "in_both": int(len(common)),
+           "only_ours": int(len(ours.index.difference(theirs.index))),
+           "only_theirs": int(len(theirs.index.difference(ours.index))), "columns": {}}
+    for column, mine in (("dice", "nnunet_dice"), ("pred_ml", "nnunet_pred_ml"),
+                         ("abs_error_ml", "nnunet_abs_error_ml"), ("ref_ml", "ref_ml")):
+        if column not in theirs.columns:
+            continue
+        a = pd_numeric(ours.loc[common, mine])
+        b = pd_numeric(theirs.loc[common, column])
+        both_missing = a.isna() & b.isna()
+        differ = ~both_missing & ((a - b).abs().gt(tolerance) | a.isna() | b.isna())
+        out["columns"][column] = {"compared": int(len(common)), "differ": int(differ.sum())}
+    return out
+
+
+def pd_numeric(series):
+    """A column as floats, with blanks and text such as 'None' as missing."""
+    import pandas as pd
+
+    return pd.to_numeric(series, errors="coerce")
+
+
+def followup_metrics(table, config, git_commit, groups, onset, counts, exp25_rows, per_case_check=None):
+    """metrics.json for the follow-up run: run details, the five-fold counts, the artery groups, the onset
+    summary and the EXP-25 check. Raises if any case ID appears anywhere in it."""
+    if not git_commit:
+        raise ValueError("git_commit is required: the commit this run installed.")
+    metrics = {
+        "experiment": config.get("experiment"),
+        "git_commit": git_commit,
+        "config_git_commit": config.get("git_commit"),
+        "data_version": config.get("data_version", ISLES24_SLIM),
+        "cases": int(len(table)),
+        "counts": counts,
+        "artery_groups": groups,
+        "onset": onset,
+        "exp25_check": {"numbers": len(exp25_rows), "differ": sum(not r["match"] for r in exp25_rows),
+                        "rows": exp25_rows},
+        "exp25_per_case_check": per_case_check,
+    }
+    leaked = _ids_in(metrics, set(table["case"].astype(str)))
+    if leaked:
+        raise ValueError(f"{len(leaked)} case IDs reached metrics.json. Nothing was written.")
+    return metrics
+
+
 def exp25_check(table, reference=None):
     """Compare the five-fold table with Parsa's EXP-25 numbers (CHANGELOG, 13 Nov 2026), rounded as EXP-25 reports
     them. Returns one row per number: what, ours, exp25, match. Counts and means only, no case IDs."""
@@ -506,6 +629,8 @@ def exp25_check(table, reference=None):
     for fold, ref in reference["nnunet_per_fold"].items():
         rows_f = table[table["fold"] == int(fold)]
         add(f"fold {fold} cases", len(rows_f), ref["cases"], 0)
+        if rows_f.empty:
+            continue
         add(f"fold {fold} nnunet Dice mean", rows_f["nnunet_dice"].mean(), ref["dice_mean"], 3)
         add(f"fold {fold} nnunet abs volume error mL", rows_f["nnunet_abs_error_ml"].mean(), ref["abs_error_mean"], 1)
         for cutoff, count in zip(DECISION_CUTOFFS_ML, ref["crossings"]):
