@@ -104,7 +104,7 @@ def test_run_fixtures_writes_the_run_folder(tmp_path):
     assert call["usage"]["requests"] == 1 and call["reply"]["thrombectomy"]["recommend"] is True
     config = json.loads((tmp_path / "config.json").read_text())
     assert config["corpus_sha256"] == ingest.version() and config["repeats"] == 2
-    assert (tmp_path / "system_prompt.md").read_text() == rp.system_prompt()
+    assert (tmp_path / "system_prompt.md").read_text(encoding="utf-8") == rp.system_prompt()
 
 
 def test_expected_decisions_cover_every_fixture():

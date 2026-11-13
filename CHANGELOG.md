@@ -1,235 +1,327 @@
 # CHANGELOG
 
-## 2026-11-07 — Claude Code session (Lorna, error-analysis write-up: Miss 2 reading)
-- **`docs/ERROR_ANALYSIS_VISION_A.md`:**
-  - The Miss 2 visual reading is replaced. The blood-flow scans don't seem to reach the outer edge on that slice, so much of the dead area appears to have no data there. Where data exists, across all slices, 62% showed trouble.
-  - "Over the whole brain" becomes "across all slices of the dead area" everywhere (2 places).
-- The Limits line now matches the new reading: "One slice can disagree with the number across all slices." On Miss 2's slice, much of the dead area appears to have no data, but where data exists across all slices, 62% showed trouble. Lorna approved this change.
-- No code changes.
-- **Notion sync:** none new.
+## 2026-11-13 — Parsa's review of PR #1 (Lorna's Vision A error analysis, EXP-15)
+- **Write-up corrected** (`docs/ERROR_ANALYSIS_VISION_A.md`), every number re-checked against EXP-15's `per_case.csv` on Drive (counts and anonymous labels only):
+  - **New failure group, no perfusion data.** 3 of the 4 cases with ≥ 5% of the infarct at Tmax −30 are misses. Miss 2 has 51% with no data, so its "62% visible" covers only the third with reliable data. The Limits line that said the slice disagreed with the whole-case number is replaced.
+  - **Miss 8 is an over-call:** 32.6 mL predicted for a 1.1 mL infarct, crossing 21 and 31 mL. It has its own group. A table gives the predicted volume for every miss: 4 empty, one 0.04 mL.
+  - **Base rates added:** 7 of 17 small cases are missed against 2 of 9 larger ones; 4 of 9 misses and 5 of 17 others are under 25% visible (Mann-Whitney p ≈ 0.28).
+  - **The "missed by both, so the scan is the problem" argument** now carries its caveat: the baseline looks only inside Tmax > 6 s.
+  - **Volume table:** each group's size and the overall error (AI 19.6, threshold 20.5 mL) are added.
+  - **Stale and causal lines updated:** the outlines are EXP-22 on Drive; Miss 1 "wasn't showing yet" is now "may not have been showing yet, or died after the scan"; noise was judged by eye.
+  - **Groupings not reported yet** are listed under Limits: occlusion site, front/back, onset.
+- **Notebook 12:** the install cell is split from the Drive mount and split check, and `REPO_REF` is `main` for reruns after merge.
+- **CHANGELOG:** Lorna's 14 working entries are folded into one (2026-11-07 below), with nothing lost that the code or write-up does not hold.
+- **Back to Lorna** (PR comment):
+  - group by the nearest artery label with a distance limit;
+  - report onset for the 9 cases that have it;
+  - draw the EXP-22 outlines on the figures;
+  - repeat the miss count over all five folds.
+- `pytest` (Mac, after merging main into the branch): 557 passed.
+- **Notion sync:** none from this review. EXP-15 and the task row are Lorna's to update after merge.
 
-## 2026-11-07 — Claude Code session (Lorna, error-analysis write-up wording fixes)
-- **`docs/ERROR_ANALYSIS_VISION_A.md`:**
-  - In the Summary and Results, "the AI still found nothing" becomes "the AI still missed it". Only 4 of the 9 misses are known to be empty predictions, and which ones is not known.
-  - The Miss 4 visual reading says "A small patch" instead of "A medium-sized patch", since Miss 4 is in the 5–21 mL group.
-- No code changes.
-- **Notion sync:** none new.
+## 2026-11-13 — Claude Code session (Phase 3: A1 done — nnU-Net folds 1–4 collected, 5-fold table; B5 decided, DEC-25; B4 decided, DEC-26)
+- **Phase 3, Parsa's task A1.** Nothing below used a held-out case; the 129 cases are the development folds 0–4 only.
+- **Folds 1–3 (EXP-18/19/20) finished overnight 12 Nov** and were collected by their auto-collectors, copied to Drive, and their pods destroyed and confirmed gone:
 
-## 2026-11-07 — Claude Code session (Lorna, error-analysis write-up rewritten in plain English)
-- **`docs/ERROR_ANALYSIS_VISION_A.md` rewritten for non-specialists.** It has:
-  - a 5-bullet summary;
-  - a "Terms used" list: infarct, mL, nnU-Net, threshold baseline, Dice, Tmax, fold 0, miss;
-  - short sentences, and no em dashes.
+  | Fold | Run | Dice | Abs volume error | Wrong side of 21/31/51/70 mL | Uptime cost |
+  |---|---|---|---|---|---|
+  | 1 | EXP-18 | 0.211 ± 0.246 | 22.0 ± 42.2 mL | 3/4/4/3 of 26 | 4.89 h, ≈ $1.84 |
+  | 2 | EXP-19 | 0.173 ± 0.165 | 27.0 ± 46.1 mL | 9/6/3/3 of 26 | 3.86 h, ≈ $1.57 |
+  | 3 | EXP-20 | 0.290 ± 0.281 | 20.9 ± 27.2 mL | 5/5/2/3 of 26 | 4.90 h, ≈ $2.04 |
 
-  Every number and limit is kept.
-- **Visual readings** are added with Lorna's exact text, labelled "drafted with AI help, checked by Lorna; one slice per case, not a clinical opinion".
-- **Correction:** the two misses with high visible delay are named, Miss 4 (88%) and Miss 8 (75%). The group is now "75% or more", since 0.75 is not over 75%.
-  - Miss 4 is the clearest likely model error.
-  - Miss 8 is borderline: a late-blood area marks tissue at risk, not tissue that will die.
-- **New limit:** one slice can disagree with the whole-brain number (Miss 2).
-- No code changes.
-- **Notion sync:** link the rewritten draft from the EXP-15 row and the error-analysis task.
+  - **EXP-22's fold-0 masks** came back with EXP-18 and are on Drive `runs/EXP-22_nnunet_fold0_masks/` for Lorna's error analysis.
+  - **Measured:** the Vast credit fell $6.62 from 17:09 UTC 12 Nov ($9.97 + the $5 top-up → $8.35), covering the three folds, EXP-19's first pod and EXP-21's failed setup. About $0.67 of it is not explained by uptime (storage and bandwidth, most likely; not checked).
+- **Fold 4 (EXP-21), 13 Nov:** Parsa approved offer 59572201 (New Jersey RTX 4090, $0.402/h, 5.5 h limit), the machine that ran EXP-18 cleanly.
+  - Upload 13 min; epochs 39.4 s; training 3.56 h; collected and destroyed at 16:11 UTC.
+  - Dice 0.184 ± 0.240 over 25 cases; abs volume error 28.3 ± 39.9 mL; wrong side of 21/31/51/70 mL in 8/8/8/5.
+  - **Measured cost $1.76** (credit $8.35 → $6.59; uptime 3.88 h ≈ $1.56).
+- **5-fold table (EXP-25, analysis on the Mac, no cost):** `vision/perfusion/evaluate.py` gains `load_per_case` and `paired_comparison` (bootstrap CI over cases, Wilcoxon signed-rank, exact McNemar on crossings), with a test. Same 129 cases and the same fold per case in both sources (checked).
 
-## 2026-11-07 — Claude Code session (Lorna, error-analysis write-up: volume error filled from the c442a54 run)
-- **`docs/ERROR_ANALYSIS_VISION_A.md`:** the volume-error section is filled from EXP-15 at `c442a54`, using numbers reported by Lorna from the Colab run.
-  - **Mean absolute error by size band, nnU-Net vs threshold (mL):**
+  | | nnU-Net | Threshold, within Tmax > 6 s | Threshold, unrestricted |
+  |---|---|---|---|
+  | Dice, mean ± std over folds | **0.215 ± 0.046** | 0.111 ± 0.031 | 0.117 ± 0.034 |
+  | Abs volume error, mean ± std over folds | **23.5 ± 3.9 mL** | 25.2 ± 5.0 mL | 25.9 ± 6.1 mL |
+  | Wrong side of 21/31/51/70 mL (of 129) | **30**/**28**/**20**/17 | 35/29/23/17 | 48/28/23/16 |
 
-    | Size band | nnU-Net | Threshold |
-    |---|---|---|
-    | <5 mL | 7.6 | 6.8 |
-    | 5–21 mL | 8.7 | 5.7 |
-    | 21–70 mL | 28.2 | 19.8 |
-    | ≥70 mL | 50.7 | 70.2 |
+  - **Paired against within-Tmax6:** Dice +0.104 (95% CI +0.078 to +0.133; p < 0.0001). Abs volume error −1.6 mL (CI −4.5 to +1.3; p 0.35): not a clear difference. No crossing difference is significant.
+  - **Against unrestricted:** nnU-Net crosses 21 mL far less often (30 vs 48, p 0.003), all of it in lesions under 21 mL, where the unrestricted threshold over-calls.
+  - **Lesions ≥ 21 mL (45 cases):** both methods are far off, mostly under-calling (nnU-Net 52.8 vs 55.7 mL abs error).
+- **B5 decided — DEC-25 (Parsa):** nnU-Net feeds `core_ml`, not the rCBF < 30% threshold. Each development case uses the validation prediction of the fold model that did not train on it; combining the five fold models for held-out cases is left to Phase 4.
+  - Recorded with its limit: no worse on any contract measure and clearly better on Dice, but the volume is not measurably better, and the report keeps the threshold as the comparison.
+  - The under-calling of lesions ≥ 21 mL is the open weakness for B4 and calibration. The penumbra stays Tmax > 6 s.
+  - Plan §2 row DEC-25 added; §7 "Decide which core feeds the contract" ticked.
+- **B4 decided — DEC-26 (Parsa), from EXP-26** (free; `runs/EXP-26_core_volume_checks/analysis.py`, results on Drive):
+  - Vision A is two-stage: the nnU-Net final-infarct prediction is the core proxy (DEC-25), and the Tmax > 6 s rule is the penumbra (DEC-7). There are no core or penumbra heads, because ISLES'24 labels only the final infarct, and no volume calibration.
+  - **Consistency:** the nnU-Net core never exceeds the Tmax > 6 s volume (0 of 129), so the mismatch fields need no clipping.
+  - **Large infarcts are under-called by both methods.** For infarcts ≥ 70 mL the medians are: reference 118 mL, nnU-Net 35, threshold 25, Tmax > 6 s 188. In 7 of 22 the final infarct exceeds the whole Tmax > 6 s region. Missing Tmax does not explain it (median 92% reliable).
+  - **Corrections, cross-fitted by fold:** linear ones made things worse (+2.4 to +2.6 mL; 54–61 cases on the wrong side of 21 mL against 30). The best robust one gained 0.6 mL, with a CI crossing zero. Averaging nnU-Net and threshold volumes did best at 31 mL, but it was picked after the fact from 16 variants and is not adopted.
+  - The gap is reported as a limit (final infarct ≠ acute core; reperfused cohort) and is input to `confidence.core`. A cross-fitted lower probability threshold stays an optional later test.
+  - Plan §2 row DEC-26 added; §7 core/penumbra item ticked.
+- **GPU spend for A1:** about $8.8 measured from the credit (12 Nov from 17:09: $6.62; the three failed attempts before it: about $0.45; fold 4: $1.76). With the $2.56 before Phase 3, the project's GPU total is about $11.4 of the 8–15 USD budget (DEC-21). Credit left: $6.59. **API spend this session: none.**
+- **Housekeeping:** the keep-awake and the pod guard were stopped after fold 4; the combined monitor is still serving `localhost:8717`.
+- `pytest`: 510 passed.
+- **Notion sync** (done this session):
+  - Experiments EXP-18, EXP-19, EXP-20, EXP-21 set to Done with results, hosts and costs; EXP-22's notes point to the masks on Drive.
+  - Experiments EXP-25 created (5-fold summary and paired comparison).
+  - Tasks: "nnU-Net folds 1–4 … then the 5-fold table" → Done; "Decide which core feeds the contract" notes updated with EXP-25.
+  - Decisions: DEC-25 created and linked to both tasks; the task "Decide which core feeds the contract" → Done.
+  - Decisions: DEC-26 created; Tasks: "Decide the core/penumbra approach (B4)" created as Done and linked; Experiments: EXP-26 created.
 
-    The threshold has the lower error in every band except ≥70 mL, despite nnU-Net's higher Dice.
-  - **Cases on the wrong side of each cut-off, of 26 (nnU-Net / threshold / both):**
+## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes, model list, PR review)
+- **Phase 3, Parsa's tasks A1–A3.** Nothing below used a held-out case; `folds.json` was checked by sha256 only.
+- **A1, nnU-Net folds 1–4 (commit `7c67c5b`):**
+  - `compute/jobs.py`: EXP-18 to EXP-21 are folds 1–4, 300 epochs each. EXP-22 regenerates fold 0's validation masks from EXP-14's `checkpoint_final.pth`, on EXP-18's pod before fold 1 trains. A run can carry others (`with`), each with its own folder, log and exit code; `collect` brings all of them back.
+  - `pod_job.py --mode predict`: nnU-Net's own validation (`--val`) on a finished checkpoint. It refuses a checkpoint whose plan or fold differs, deletes the copied checkpoint afterwards, and leak-checks the mask file names too.
+  - **Dummy, free (Mac, MPS, 3 fold-0 cases):** per-case Dice matched EXP-14 within 0.0001 and volume within 0.004 mL.
+  - **Launch, not done.** Parsa approved 4 offers at $0.363/h in parallel, and topped up the credit to $10.44.
+    - By launch time, all four offers had been rented, and two replacements were taken within minutes.
+    - One pod (Poland, $0.363/h) was created, but its tarball upload stalled at 0 kB/s for 18 min. I stopped it, and `up` destroyed the pod. **Measured cost $0.13** (credit $10.44 → $10.31; $10.29 an hour later).
+    - Parsa chose to wait for offers at $0.363/h or less rather than pay up to $0.50/h.
+    - `runs/offerwatch.py` (not committed) checks every 10 min and launches each fold on the cheapest US or EU offer that passes, skipping the stalled host. It then starts the run's monitor page and auto-collector, and stops after 14 h or 2 failed setups.
+  - **`pod.py` fixes (not committed):**
+    - an upload that moves no data for 5 min aborts (`rsync --timeout=300`), so `up` destroys the pod;
+    - `up` searches up to 25 rounds for the offer, because a rentable offer appeared in only 2 of 10 searches.
+- **A3, approved by Parsa on 12 Nov 2026:**
+  - `docs/HALLUCINATION_METRIC.md` §9 points 8–12;
+  - the RSNA split, now DEC-22 in plan §2 and in Notion Decisions.
+- **Free EXP-12 rescore** with the critical-rate denominator fix, at `7c67c5b`, before today's verifier changes. Run locally from the caches.
+  - Results: rate 0.080 (28/351), content 0.060, **critical 0.014 (5/350)**, cases with a critical claim 3/5, attribution 0.979, no omissions.
+  - The 0.185 recorded earlier divided by the wrong denominator. Saved to Drive as `metrics_rescore_7c67c5b.json` and `flagged_rescore_7c67c5b.json`.
+- **A2, the three verifier fixes from EXP-12** (tests in `tests/test_verifier_phase3_fixes.py`; metric doc §9 points 13–15, approved 12 Nov 2026):
+  - **Rules under uncertainties:** an uncertainty's rule claim also gets both decisions' cited passages as candidates, like blocking factors (point 8). Every rule claim also gets lexical candidates for a trial, Table 3/8 or an ASPECTS range it names (`trace.lexical_candidates`). τ stays 0.6 (DEC-20).
+  - **Judge errors on conditional and negative applications:** `prompts/judge_v3.md` adds rules for a requirement that is not needed, criteria that are not met, conditional and counterfactual claims, and a reason for a decision. It became the default with DEC-23 (below). Its examples come from the EXP-12 flags, so EXP-12 is an in-sample check.
+  - **Meta-statements:** a pure restatement of the output's own decision is not a claim (`claims.restatements`), because `recommend` is scored by correctness. A reason given with it stays a claim, and so does a statement that contradicts the output.
+  - **Rescores take a judge prompt** and can call the judge for missing verdicts only (`run.rescore`, `end_to_end.rescore`). `nlp/verifier/recheck.py` and `notebooks/51_verifier_recheck.ipynb` re-check EXP-11 and EXP-12 under v2 and v3 (EXP-23).
+  - **Measured so far, free:**
+    - Fix 3 alone removes 1 of the 28 EXP-12 flags.
+    - Fixes 1 and 2 need new verdicts: v2 7 + 31 calls, v3 60 + 82 calls (counted in a dry run). That is about $0.20, an estimate.
+    - There is no API key on this Mac, so EXP-23 runs on Colab once the code is pushed. **The EXP-11 bar is not yet re-checked.**
+- **EXP-23** (Parsa ran notebook 51 on Colab at `a9dcfe2`, about $0.15): the re-check of the three fixes.
 
-    | Cut-off | nnU-Net / threshold / both |
-    |---|---|
-    | 21 mL | 5 / 7 / 4 |
-    | 31 mL | 5 / 6 / 4 |
-    | 51 mL | 3 / 4 / 3 |
-    | 70 mL | 3 / 3 / 2 |
-    | any | 7 / 8 / 6 |
+  | | EXP-11 min recall | EXP-11 false flags | EXP-12 flags | Rate | Critical |
+  |---|---|---|---|---|---|
+  | Before (rescore at `7c67c5b`) | 0.80 | 0.010 | 28 / 351 | 0.080 | 0.014 |
+  | Fixes 1 + 3, judge_v2 | 0.80 | 0.010 | 23 / 350 | 0.066 | 0.009 |
+  | Fixes 1 + 3, judge_v3 | 0.80 | 0.010 | 19 / 350 | 0.054 | 0.009 |
 
-    nnU-Net's counts match EXP-14's 5/5/3/3.
-  - The run commit in the doc is now `c442a54`.
-- No code changes.
-- **Notion sync:** Experiments → EXP-15: commit `c442a54`, plus the volume-error and cut-off findings.
-
-## 2026-11-07 — Claude Code session (Lorna, notebook 12 install fix)
-- **Problem:** in Colab, notebook 12 kept an old installed copy of the package ("error_analysis has no attribute figure_summary"). The package version never changes (0.0.1), so pip saw it as already installed.
-- **Notebook 12's install cell now:**
-  1. installs the dependencies;
-  2. reinstalls the package from the exact commit with `--force-reinstall --no-deps --no-cache-dir`;
-  3. reads the commit the installed package came from (pip's `direct_url.json`, without printing the URL, which holds the token);
-  4. prints it next to the branch's commit, and stops with a clear error if they differ.
-
-  It also stops at the start if the package is already imported in the session, because a reinstall wouldn't take effect then. It asks for Runtime → Restart session.
-- **Checked locally:** a forced install from a commit records that commit (`vcs_info.commit_id`). This was not checked in Colab.
-- `00_template.ipynb` installs the same way as the old cell, so it could hit the same problem when `main` moves. It was not changed here.
-- No code or test changes. pytest is unchanged: 435 passed, 3 skipped, and the same 9 Windows failures.
-- **Notion sync:** none new.
-
-## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, write-up fixes and cut-off counts)
-- **`docs/ERROR_ANALYSIS_VISION_A.md`:**
-  - "Points to the input" is softened to "suggests", because the threshold baseline is weak (Dice 0.12). It now says the threshold scored under 0.05 on all 9 misses and exactly 0 on 6.
-  - The reperfusion note gives 97 of 99 cases with a TICI value as 2c or 3, 2 lower and the rest unrecorded, citing plan §5.1.
-  - New volume-error section: nnU-Net's mean absolute error for the ≥70 mL band is about 51 mL. The other bands are still to be copied from `metrics.json`.
-  - The cut-off table is waiting for a rerun.
-  - Removed "one missed slice costs all of the Dice" and the dash in the title.
-- **`error_analysis.crossing_counts`:** per cut-off (21, 31, 51, 70 mL and any), how many cases nnU-Net, the threshold, and both put on the wrong side. It is saved in `metrics.json` as `wrong_side_of_cutoff`, and notebook 12's section 9 displays it.
-- **Group summaries** also give the threshold's mean absolute volume error.
-- **Needs a Colab rerun** to fill in the cut-off table.
-- **Tests:** 1 new test, plus checks in the metrics test (47 in `test_error_analysis.py`).
-- pytest on Windows: 435 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
-- **Notion sync:** none new.
-
-## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, step 6c: label table and write-up draft)
-- **`error_analysis.figure_summary`** gives one row per figure: label, size band, Dice-0 flag and Tmax > 6 s share, with no case IDs. Notebook 12's section 8 displays it.
-- **`docs/ERROR_ANALYSIS_VISION_A.md`** (draft). It covers:
-  - the question, data and method (EXP-15, fold 0, 26 cases, results at `6a2758c`);
-  - code-measured results;
-  - four overlapping failure groups among the 9 Dice-0 misses:
-    - small infarcts under 21 mL (7);
-    - under 25% visible as Tmax > 6 s (4);
-    - the 101 mL miss with 22% visible and 88% reliable data (1);
-    - over 75% visible but still missed, likely true model errors (2);
-  - reperfusion context;
-  - example figures (Miss 1, Best 1; the PNGs are still on Drive);
-  - untested ideas for fixing each group;
-  - limits.
-
-  The numbers come from Lorna's Colab run. Other findings: no case was missed by nnU-Net only, and the misses had a median of 30% visible vs 64% for the rest.
-- The visual readings section is left for Lorna to fill in, kept apart from the measured numbers.
-- Plan §7's error-analysis item is not ticked yet: the write-up is a draft.
-- **Tests:** 1 new test (46 in `test_error_analysis.py`).
-- pytest on Windows: 434 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
+  - EXP-11 misses the same seeded items as before (fx04-3a, fx03-6b, fx04-6b), so the bar holds under both prompts.
+  - All 9 reasoner errors from the earlier reading are still flagged under both.
+  - **v3 against v2:** it removes 5 verifier false flags (no BP lowering needed; M2 dominance definition; "not recommended because eligible for thrombectomy"; "meets ASPECTS 3 to 5 except mass effect"; the within-6-h counterfactual). It adds 1 citation-only flag (fx04 "appears eligible for thrombectomy" as uncited). v3's examples come from EXP-12, so that run is in-sample.
+  - **The 3 remaining critical flags look like verifier errors** on Claude's reading (not human adjudication): a truism ("treatment cannot start before imaging"), an imaging fact the extractor labelled a rule, and a correct negative application the judge still misreads.
+- **DEC-23, approved by Parsa:** the judge prompt is `judge_v3`, amending DEC-20; model, effort and τ are unchanged.
+  - `trace.JUDGE_PROMPT` is now `judge_v3`.
+  - Metric §9 points 13–15 are approved.
+  - Plan §2 has the DEC-23 row, and DEC-20 notes the amendment, in the plan and in Notion.
+- **B6, the model list (DEC-24, approved by Parsa)**, from Hana's shortlist:
+  - The models: Claude Sonnet 5.5, Qwen3.5-27B, MedGemma 27B text, and Gemma 3 27B as MedGemma's base, for a paired comparison. Open models run on a rented 4090 with vLLM at 4-bit and constrained JSON.
+  - **No non-Claude frontier model for now.** Three of the four are non-Claude, and verifier-vs-human agreement is reported per model.
+  - **MedGemma waits for Parsa's reading of HAI-DEF terms §3.2.** Their "Clinical Use" includes research studies; the fallback is Baichuan-M2-32B with Qwen2.5-32B. It is a gated download, so the Hugging Face token question is decided at the paid-run step.
+  - **Budget finding.** Verifying an output costs about $0.08 with the Sonnet extractor (EXP-12: extractor $0.064, judge about $0.015), more than the reasoner call ($0.046). Four models at about 410 outputs each would need about $150 of API against about $96 left.
+  - **The fix depends on EXP-24.** With a Haiku 5.5 extractor (about $0.003 per output), the main runs cost about $52. The project would then total about $65–77 of API and $12.5–15 of GPU (estimates). Haiku becomes the extractor only if EXP-24 keeps the seeded-error bar.
+  - Notion: the DEC-24 row; Hana's shortlist task Done, with her questions answered and a link to DEC-24; her adapters task Next up, with the models.
+- **EXP-24, Haiku as claim extractor** (Parsa ran notebook 52 on Colab, about $0.27): **bar NOT met.**
+  - Strict recall for uncited rules was 0.30; every other sub-type 1.0; false flags 0.010.
+  - Haiku's claims still flag 9 of 10 planted uncited rules (lenient recall 0.9), mostly as mis-attributed source.
+  - On EXP-12 it flags 17 of 321 claims, but misses 3 of the 9 reasoner errors (both fx05 DEFUSE-3 citation errors and the last-known-well rule) and adds about 4 verifier errors of its own.
+  - **DEC-24 amended (Parsa):**
+    - the extractor stays Sonnet 5.5; the extractor and the Sonnet reasoner go through the Message Batches API (half price);
+    - the matrix shrinks: per model, the 5 fixtures with and without the rulebook, 150 scenarios with it and 75 without, and 20 real cases three ways; the triple repeat is for Sonnet only;
+    - estimated about $65 for the main runs and about $85 for the project's API.
+- **Batch support** (tested with fakes only; the first paid use is a 2-request dummy batch):
+  - `providers.ClaudeBatch` sends ClaudeJSON's exact requests through the Message Batches API.
+  - `pipeline/batched.run_batched` works in two passes:
+    - it gathers every reasoner answer, by batch for Sonnet or by direct calls for open models;
+    - it batches the extractions into the run's extraction cache under the key `run_cases` already uses;
+    - then it runs `run_cases` unchanged, with only the judge called live.
+  - `run_cases` takes the reasoner prompt version and applies a batched llm's price factor to the cost estimate.
+  - Tests are in `tests/test_batched.py`.
+- **`providers.py`:** Sonnet 5.5 cache reads are now priced at $0.10/M, not $0.20/M (Hana's finding), so earlier logged Sonnet costs were slightly high.
+  - `CachedExtractor` now keys the cache by model for any extractor but Sonnet, so another extractor never reuses Sonnet's claims. Sonnet keeps its old key.
+- **EXP-24 prepared:**
+  - `end_to_end.reverify` re-extracts a run's saved outputs with another extractor.
+  - `recheck.extractor_check` runs EXP-11 and EXP-12 that way in `runs/EXP-24_haiku_extractor/`, seeded with copies of the original caches. It resumes without losing paid verdicts.
+  - `notebooks/52_haiku_extractor_check.ipynb`: about $0.50–1.00, estimated.
+- **D10, review of PRs #2–#5** (Parsa approved the fixes and the merges). Each PR's review entry is below.
+  - **Rule checks:** no held-out IDs, no `folds.json` reads, no RSNA IDs, no secrets and no paid calls in any of them. Two independent reviewers covered #2/#3 and #5, and their key numbers were re-checked by hand.
+  - **Fixes** went onto each branch as new commits, with a comment on each PR.
+  - **Merged by squash:**
+    - #3, Mohamed's ISLES'24 check, as `60bd2ca`;
+    - #2, Mohamed's operating point, as `0c6436f`;
+    - #4, Hana's prompt v2, as `a3af4e6`.
+  - Each branch first merged main and resolved the CHANGELOG by date. Notebooks 21 and 22 now point at `main`.
+  - **#5 (Benny) stays open.** Its bugs are fixed (kappa, stale metrics file, old run layout, blinding), but the sampling redesign and the table shape are back with him.
+  - **The Vision B threshold is Parsa's to decide**, after Mohamed's ISLES'24 follow-ups. On ISLES'24, the proposed 0.175 would flag 68 of 129 presumed bleed-free scans.
+- **A1, the folds launched (watcher cap raised by Parsa within the 8–15 USD budget):**
+  - The watcher now launches US/EU offers up to $0.47/h. A credit guard launches a run only if the credit covers every running pod's worst case plus the new one, with $0.50 to spare.
+  - It skips machines that failed setup. The tarball upload now has a 30-min limit (`pod.UPLOAD_LIMIT_S`), and pod state records the machine ID.
+  - **Two more failed attempts, both destroyed:**
+    - Oregon (machine 26487, $0.456/h): the upload crawled at 0.1–4 MB/s; 1.9 of 3.1 GB in 38 min. **$0.30 measured.**
+    - Poland offer 54489655: the same host as the first stall, stopped before upload, about $0.02.
+  - The home uplink measures about 50 Mbps. There is no VPN; the old SSH block was the university Wi-Fi (Parsa).
+  - **EXP-18** runs on New Jersey (instance 60383981, $0.376/h) from 17:42 UTC: 38.6 s per epoch, due about 20:55 UTC, watchdog at 23:15.
+  - **EXP-22, done on EXP-18's pod:** fold 0 Dice 0.218 ± 0.249 over 26 cases, the same as EXP-14. The masks come back with EXP-18's collect.
+  - **EXP-19 on the same machine as EXP-18.** Its first attempt (New Jersey, $0.376/h) landed on EXP-18's machine (155712, two GPUs in one box).
+    - Both runs' data workers starved each other: GPU at 0%, load average 34, and epochs went from 39 s to about 290 s, so both would have hit their watchdogs half done.
+    - EXP-19 was destroyed at 18:59 after 1.08 h (about $0.41, 7 epochs), and EXP-18 recovered to 39 s.
+    - The watcher now never puts two folds on one machine, and set fold 2 up again on an Estonia host ($0.405/h).
+  - EXP-20 runs on Michigan ($0.416/h) from 18:51 UTC, at about 50 s per epoch.
+  - **EXP-21 (fold 4):**
+    - It waited on the credit guard until Parsa topped up $5 (credit $12.87).
+    - Its first pod (Michigan, $0.402/h) never left "loading" in 15 min. `up` destroyed it (0.26 h, about $0.10), and the watcher retries.
+    - `runs/podguard.py` (not committed) destroys a pod still without a job 45 min after creation, once no `up` is working on it, so an offline moment during setup cannot leave a pod idle until its watchdog.
+    - **Postponed to 13 Nov by Parsa.** The offer watcher was stopped at about 19:48 UTC with no fold-4 pod up.
+  - **Folds 1–3 left to finish overnight.** Each has one auto-collector (EXP-19's duplicate, left over from its first pod, was stopped). The guard and the combined monitor keep running, and `caffeinate -i` keeps the Mac from idle-sleeping for 5 h.
+  - **`runs/monitor_all.py`** (not committed): one page for all fold pods at `localhost:8717`, served on 127.0.0.1 only.
+    - It shows progress, the median and last epoch time, with an epoch over twice the median flagged; the ETA, watchdog, cost, Vast credit and the watcher's last lines.
+    - The per-pod pages show only the median of the last 20 epochs, which hid the slowdown.
+- pytest: 509 passed.
+- **Spend so far:**
+  - GPU: $3.01 measured before EXP-18 ($2.56 before, plus $0.45 of failed attempts today); EXP-18 and EXP-19 are running.
+  - API: about $0.15 (EXP-23).
 - **Notion sync:**
-  - Experiments → EXP-15: commit `6a2758c`, the findings above, and a link to the draft.
-  - Tasks → the error-analysis row stays In progress until the draft is final.
+  - done: Experiments → EXP-18 to EXP-22 rows, all Planned (EXP-18 notes the failed attempt and its $0.13);
+  - done: Decisions → DEC-22 (RSNA split);
+  - done: "Hallucination metric" page → points 8–12 approved, arms wording (rulebook, DEC-19);
+  - done: EXP-12 row → corrected critical rate 0.014;
+  - done: EXP-23 row;
+  - done: EXP-18 Running (offer, price, commit `a9dcfe2`), EXP-22 Done;
+  - done: Decisions → DEC-23 (judge_v3); DEC-20 notes the amendment; metric page → points 8–15;
+  - done: Tasks → "Verifier fixes" Done (commits `502a769`, `6bf370b`);
+  - done: Decisions → DEC-24; Tasks → shortlist Done, adapters Next up;
+  - done: Tasks → Hana's prompt v2 Done; Mohamed's two tasks and Benny's taxonomy In review; Benny's notebook and labelling kit In progress;
 
-## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, step 6a, code only)
-- **`case_features`** adds `infarct_tmax6_share`: of the infarct voxels with reliable data, the share with Tmax > 6 s on the admission scan. It is None when no infarct voxel has reliable data.
-- **`tmax6_band`** groups that share as <25%, 25–50%, 50–75%, ≥75% or no data. It is the sixth group feature, and it is also in the largest-miss values.
-- **`visibility_comparison`** compares Dice-0 misses with the rest. It gives counts, the number with reliable data, and the median, p25 and p75 of that share. It is also saved in `metrics.json` as `tmax6_share_misses_vs_rest`.
-- **`figure_cases`** picks the cases to draw, with anonymous labels: every Dice-0 miss ("Miss 1" is the largest), then the 3 highest-Dice cases ("Best 1–3").
-- **`case_figure`** draws NCCT, CBF and Tmax at the slice with the most infarct, with the final infarct outlined. It reuses `template.largest_infarct_slice` and the template's windows. The title is the label and size band only, never the case ID. `figure_texts` returns every text in a figure, so the notebook can check for IDs.
-- **Notebook 12, new section 8:**
-  - draws and shows those figures, after checking each for its case ID;
-  - saves the figures as `figures/miss_<n>.png` and `best_<n>.png` in the EXP-15 folder;
-  - saves `figures/labels.csv`, which maps labels to cases, on Drive only and never printed;
-  - prints the Tmax > 6 s share for misses vs the rest.
+## 2026-11-12 — Parsa's review of PR #3 (EXP-16 recorded; notebook and test fixes)
+- **EXP-16 result**, from Drive `runs/EXP-16_visionB_isles_check/metrics.json` (Mohamed, Colab, 8 Nov 2026, commit `23e2f92`):
+  - 129 of 129 development cases scored, 0 failed.
+  - At the provisional threshold 0.278, 45 of 129 were called positive on 5 mm slabs: a presumed false-positive rate of 34.9% (95% Wilson CI 27.2–43.4%).
+  - On native thin slices: 61 of 129.
+  - Slice thickness 0.8–4.0 mm (median 2.0); 86 scans LAS, 43 LPS.
+  - The previous entry's "not run, unmeasured" is superseded.
+- **Fixes in review:**
+  - Notebook 21 was committed with outputs (8 cells, including a 755 KB figure of ISLES scans); the outputs are cleared.
+  - The stray "flush and remount" cell before the install cell is removed.
+  - `EXPERIMENT` is `None` with a guard, so a rerun cannot reuse EXP-16's ID.
+  - `tests/test_isles_check.py` used 4 real development case IDs; they are now synthetic IDs that exist in no split, checked by count only.
+- **Still open:**
+  - the top-scan review (the `review` column is empty on Drive);
+  - one check of RSNA's real slice thickness (`z_mm` in the shards, on Kaggle), since 5 mm is the documented value, not a measured one;
+  - field of view is not matched to RSNA (`set_field_of_view` exists but is off). A rerun with it on is cheap, and worth doing before putting a 35% rate down to domain shift alone.
+- pytest: `tests/test_isles_check.py` 19 passed.
+- **Notion sync:** Experiments → EXP-16 row already Done; Tasks → "Vision B false-positive check": In review, with the result.
 
-  `metrics.json` moves to section 9, still last. Prediction overlays wait for the regenerated fold-0 masks.
-- **Tests:** 11 new synthetic tests (45 in `test_error_analysis.py`), including one that the figure has no case ID. Not run on real data.
-- pytest on Windows: 433 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
-- **Notion sync:** none new.
+## 2026-11-12 — Parsa's review of PR #2 (EXP-17 recorded; one wilson; proposal rule documented)
+- **EXP-17 result**, from Drive `runs/EXP-17_visionB_operating_point/metrics.json` (Mohamed, Kaggle, commit `ff522bd`).
+  - 2,166 validation scans, 1,894 patients, 879 bleed scans. Scan AUC 0.9772, and EXP-6's 0.278 reproduces 0.951/0.917 on the same split.
+  - **Cross-fitted at a 95% target:** sensitivity 0.945, specificity 0.914. It fell below 95% in 11 of 20 seeds.
+  - **Proposed 0.175** (96% target): sensitivity 0.961 (95% CI 0.946–0.972), specificity 0.878 (0.859–0.895).
+  - **Strict alternative 0.125:** sensitivity 0.968, specificity 0.858.
+  - The previous entry's "not run" is superseded.
+- **ISLES'24 cost of each threshold, measured in review** from EXP-16's `per_case.csv` (counts only). Of 129 presumed bleed-free development scans, Vision B would flag:
+  - 45 at 0.278 (34.9%);
+  - 68 at 0.175 (52.7%);
+  - 87 at 0.125 (67.4%).
 
-## 2026-11-07 — Claude Code session (Lorna, Vision A error analysis, step 5, code only)
-- **`group_summary(table, by)`** gives one row per group with:
-  - the number of cases;
-  - nnU-Net Dice mean and median, leaving out cases with no Dice;
-  - mean absolute volume error;
-  - Dice-0 count;
-  - cases missed (Dice < 0.05) by nnU-Net only and by both models.
+  This is added as a dated note in `reasoning_EXP-17.md` on Drive, since that doc only estimated it. It matters for Parsa's threshold decision more than the RSNA specificity does.
+- **Fixes in review:**
+  - `wilson()` was defined twice; it now lives in `vision/haemorrhage/stats.py` (same constant, so recorded intervals reproduce), with a test.
+  - `propose()` documents that the median rule in practice steps up one candidate, so read 0.96 as a chosen safety margin, slightly optimistic until the RSNA test split.
+  - `seeds_below_target` is commented as counting against each row's own target.
+  - Notebook 22 notes that `REPO_REF` becomes `main` after merging.
+- **Merge:** PR #3's branch, with its review fixes, is merged into this one. The plan and CHANGELOG conflicts are resolved, and the plan's two Vision B items carry the EXP-16 and EXP-17 results, both unticked until the threshold decision.
+- pytest: 469 passed.
+- **Notion sync:** Experiments → EXP-17 row already Done; Decisions → the threshold, once Parsa decides.
 
-  Missing values form their own group.
-- **`summarise_features`** runs `group_summary` for size band, territory, occlusion site, missing-Tmax band and onset known. The last two are derived by `add_groups`. The missing-Tmax bands are none, <5%, 5–25%, ≥25% and no infarct.
-- **`miss_profile`** describes nnU-Net's Dice-0 misses, as counts and values only:
-  - how many the threshold also scores 0;
-  - reference and predicted volume ranges;
-  - how many predictions are empty;
-  - counts per group;
-  - the largest miss by reference volume, as values with no ID.
-- **`build_metrics` / `write_metrics`** write `metrics.json`. Its contents:
-  - run details from `config.json`;
-  - overall scores;
-  - who misses;
-  - which model has the smaller volume error;
-  - the groups and the miss profile.
+## 2026-11-12 — Parsa's review of PR #4 (reasoner prompt v2)
+- **One change to `prompts/reasoner_v2.md`** (not yet run on any model, so it is edited in place).
+  - "What not to write" banned any claim that the patient "is eligible" or "qualifies". But eligibility for thrombectomy is itself the reason extended-window thrombolysis does not apply (fx02 and fx05 expect it), so the ban could push that reasoning step out of the rationale.
+  - The bullet now bans only restating the output's own decision ("is recommended", "the rulebook supports"). It allows a step another decision depends on, stated with the passage that sets the criteria and the inputs that meet them.
+  - The bad example's explanation and `test_v2_states_each_targeted_fix` are updated to match.
+- **On the evidence behind v2:**
+  - Its targets come from Benny's labels of the 28 EXP-12 flags (22 real reasoner errors, 6 verifier mistakes). These are not yet adjudicated, and Parsa's earlier reading was about 9 real and 19 verifier errors.
+  - Some targets (rules named in uncertainties, restated decisions) are now handled by the verifier itself: DEC-23 and metric points 13–14, 12 Nov 2026.
+  - So the paid v1-vs-v2 comparison is scored with the current verifier (`judge_v3`, the code fixes), so that v2 is not credited for verifier artefacts.
+- **Rulebook gap Hana found:** "time counts from last known well when onset is not witnessed" is in the prompt but in no passage. Adding a passage is Parsa's call as rulebook owner.
+- Plan §7 note spacing tidied.
+- pytest: `tests/test_reasoner_v2.py` and `tests/test_reasoner.py` 15 passed (Mac).
+- **Notion sync:** Tasks → "Reasoner prompt v2": In review, with this change.
 
-  It refuses to write if any case ID appears in a key or text value.
-- **Commits in `metrics.json`:**
-  - `git_commit` is the commit the run actually installed, which `build_metrics` now requires.
-  - `config_git_commit` is the one `config.json` was written at. That can be older, because `config.json` is written once and kept on reruns.
-- **Notebook 12** gains sections 7 (groups) and 8 (miss profile, `metrics.json`, `OK:`). Section 6 now only saves `per_case.csv`.
-- **Tests:** 11 new synthetic tests (34 in `test_error_analysis.py`). Not run on real data.
-- pytest on Windows: 422 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
-- **Notion sync:** after the Colab run, fill in EXP-15 (commit, results) and set it to Done.
+## 2026-11-12 — Hana (NLP A: reasoner prompt v2, conditions fix)
+- **`prompts/reasoner_v2.md`:** the "check a rule's conditions" bullet contradicted the `rule_ids` instruction. It said a rule whose condition is false must not be cited, while `rule_ids` must include the limits a patient fails (and the "9 h is beyond a 4.5 h window" example needs that passage). A model could drop the citation for a blocking factor, bringing back the "right fact, missing citation" error. The bullet now separates two cases: a **blocking rule** (the patient fails a limit for the treatment being decided) is cited in `rule_ids` and `blocking_factors`; a **rule that does not apply** (a different situation, as with the fx03 BP rule) is not cited. Not yet run on a model.
+- **`tests/test_reasoner_v2.py`:** one more phrase in `test_v2_states_each_targeted_fix` ("A blocking rule sets a limit").
+- pytest: on Windows (Python 3.14), `test_reasoner_v2.py` + `test_reasoner.py` 15 passed (1 unrelated deprecation warning from the anyio pytest plugin). Full suite not re-run.
+- **Notion sync:**
+  - pending: Tasks → "Reasoner prompt v2 from the EXP-12 findings": note the conditions fix before Parsa's paid v1/v2 run.
 
-## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 4 fix after the first Colab run)
-- **First Colab run of notebook 12 stopped in `join_tables`:** "The threshold table has 129 repeated cases." EXP-1's `per_case.csv` has two rows per case, one per `variant` (`within_tmax6`, the default compared with EXP-14, and `unrestricted`; notebook 11).
-- **`join_tables`** now keeps only the `within_tmax6` rows when there is a `variant` column (`THRESHOLD_VARIANT`, overridable). It raises if that variant has no rows.
-- **`config.json`** records `inputs.threshold_variant`. Notebook 12 prints the variant and calls the threshold count "rows".
-- The first run wrote EXP-15's `config.json` before it stopped, so that file has no `threshold_variant`. Lorna decides whether to delete it on Drive before rerunning.
-- **Tests:** 1 new test with both variants (23 in `test_error_analysis.py`).
-- pytest on Windows: 411 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
-- **Notion sync:** none new.
+## 2026-11-09 — Hana (NLP A: reasoner prompt v2 from the EXP-12 findings)
+- **`prompts/reasoner_v2.md`** (new; `reasoner_v1` unchanged and still the default). Built from Benny's labels of the 28 EXP-12 flags (22 real reasoner errors, 6 verifier mistakes):
+  - Right fact, wrong or missing citation (10): cite the passage that states the rule or threshold used; no same-topic padding.
+  - Blocking factors checked only against `rule_ids` (fx04, fx05): for a decision against a treatment, `rule_ids` include the passages setting the limits the patient fails.
+  - Uncertainties stating rules with no source (8): name what is unknown and the affected rule's ID in square brackets; no rule content there.
+  - Conclusions written as claims (6): new "What not to write" section ("is eligible", "the rulebook supports…").
+  - Inferences, predictions and added note details (5, two critical): no predictions, no general knowledge, no "only/never" summaries; nothing beyond the quoted note words.
+  - Rules applied when their conditions don't hold (fx03 BP, fx05 ASPECTS): check a rule's conditions before using it.
+  - The prompt's own instructions restated as rules (fx02 last-known-well): the instructions are not a source.
+  - Numbers copied exactly (0 cases in EXP-12; kept as prevention).
+  - One worked good/bad example with invented IDs and numbers (`PASSAGE-A/B`, 42.0 mL vs 60 mL) that appear in no passage, fixture or note.
+  - About 490 words longer than v1; the system prompt stays cached.
+- **`tests/test_reasoner_v2.py`** (7 tests, fake model, no network): v2 holds all 47 passage IDs; v1 kept and v2 contains its input section; one phrase per fix; the example shares no ID or number with any fixture; a fake reply assembles and validates as `reasoner_v2`; a bracketed-ID uncertainty is valid; a fixture run records `prompt_version` `reasoner_v2`.
+- **For Parsa:**
+  - Paid v1 against v2 run on the fixtures is yours (no paid calls made).
+  - Rulebook gap: "time counts from last known well when onset is not witnessed" is in the prompt but in no passage. v2 stops the model restating it; adding a passage is your call.
+  - Uncertainties have no sources field, so the verifier gives them no declared sources; whether it should read the bracketed IDs is for the verifier side.
+- **Windows fix in two tests:** `test_reasoner.py` (line 107) and the new v2 test read `system_prompt.md` back with `encoding="utf-8"`. It is written as UTF-8, and Windows' default encoding garbled characters such as `–`, so both failed on Windows only. No change on Mac, Linux or Colab.
+- pytest: on Windows (Python 3.14), `test_reasoner_v2.py` + `test_reasoner.py` 15 passed. Full suite on Linux: 409 passed, 4 skipped; 3 failed in `test_haemorrhage.py` only because PyTorch was not installed (unrelated).
+- **Notion sync:**
+  - done: Tasks → "Reasoner prompt v2 from the EXP-12 findings": note for Parsa on the last-known-well gap.
+  - pending: same task → In review once the pull request is open; Experiments row for the paid v1/v2 run (Parsa).
 
-## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 4 prepared, not run)
-- **`notebooks/12_visionA_error_analysis.ipynb`** (thin, CPU runtime). It:
-  - installs from `lorna/error-analysis` with `GITHUB_TOKEN`, as in `00_template`;
-  - mounts Drive and checks the split and tarball checksums;
-  - writes EXP-15's `config.json` once, keeping the existing one on a rerun;
-  - joins the EXP-14 and EXP-1 per-case tables, after checking that EXP-14's cases are the fold-0 cases;
-  - runs `case_features` on each fold-0 case from the unpacked slim tar;
-  - saves the combined table as `runs/EXP-15_visionA_error_analysis/per_case.csv` on Drive, after checking that no held-out case is in it.
-  - It prints counts and summaries only, never case IDs.
-- **Not run yet.** The branch must be pushed before Colab can install it. `metrics.json` comes in step 5.
-- **Tests:** 1 new test of the notebook's join-then-merge on synthetic tables (22 in `test_error_analysis.py`).
-- pytest on Windows: 410 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
-- **Notion sync:** none new. Fill in EXP-15's commit after the Colab run.
+## 2026-11-08 — Claude Code session (Vision B Task 1: cross-fitted operating point, code and notebook)
+- **Scope:** Phase 3, Vision B, Task 1 from `docs/team/mohamed_vision_b.md`. Code and notebook only; the Kaggle run is Mohamed's, and the threshold decision is Parsa's.
+- **`vision/haemorrhage/operating_point.py`** (tested): EXP-6 set 0.278 for 95% sensitivity and measured it on the same validation scans. This module cross-fits instead:
+  - validation patients split into two halves with a fixed seed (20261108), whole patients per half, stratified by whether a patient has a bleeding scan;
+  - threshold chosen for ≥ 95% sensitivity on one half (`aggregate.threshold_for_sensitivity`), measured on the other, then swapped; the two held-out results are pooled;
+  - thresholds are set on the raw top-2 score. Platt calibration is monotonic (checked: temperature > 0), so the calls are identical and the calibrator, itself fit on the full validation split, does not leak into the held-out halves. The proposal is converted to the calibrated scale;
+  - 95% Wilson intervals and a patient-level bootstrap (scans of one patient are not independent); 20 seeds for the spread; a sweep of targets 0.90–0.99 for the specificity cost of each extra point of sensitivity;
+  - proposal rule, fixed before the run: the lowest full-split target (0.95–0.99) whose held-out sensitivity, median over seeds, reaches 0.95. A stricter alternative (lower Wilson bound ≥ 0.95) is reported beside it;
+  - `reasoning_text` drafts the written reasoning from the run's numbers, including EXP-16's ISLES'24 false-positive rate if it is entered.
+- **`notebooks/22_visionB_operating_point.ipynb`** (Kaggle): rebuilds the RSNA split and refuses to go on unless its fingerprint matches EXP-6's; keeps validation rows only; refuses to run if `ALLOW_RSNA_TEST` is set. It recomputes the validation slice predictions with EXP-6's `best.pt` from a private weights dataset, and stops if the scan AUC is more than 0.005 from 0.977. Writes `config.json` first; then `metrics.json`, `reasoning_draft.md` and `tradeoff.png`, after an ID check. `REPO_REF` is `mohamed/operating-point`.
+  - Sections 3–8 were dry-run locally on four small fake shards with a fake model. Not run on Kaggle or real data: every result and the timing are unmeasured.
+- **Plan:** layout lists `operating_point.py` and notebook 22; the §7 Vision B tuning item notes the code is ready and the run and decision pending (not ticked). README lists notebook 22.
+- pytest: 468 passed (13 new).
+- **Notion sync** (not done; for Mohamed or Parsa):
+  - Tasks → Vision B "Operating point": In progress; code and notebook on `mohamed/operating-point`.
+  - Experiments → a new row (Status *Running*) before the Kaggle run; afterwards the held-out sensitivity and specificity with intervals, the proposed threshold and the commit.
+  - Decisions → Parsa records the threshold once he has chosen between the proposed and strict values.
 
-## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 3, code only)
-- **`error_analysis.case_features()`** gives the possible causes of failure for one loaded case:
-  - reference infarct volume and a size group: none, <5, 5–21, 21–70 or ≥70 mL;
-  - occlusion site and reason, from `volumes.occlusion_evidence` / `occlusion_site`, plus the nearest label and its distance;
-  - territory: anterior, posterior or unknown, from the occlusion's nearest Circle of Willis label;
-  - onset to imaging in minutes, computed as onset to door plus door to imaging, as the notes compute it (`notes.generate.minutes`). It is None when either is missing, which includes wake-up strokes;
-  - the share of the infarct with Tmax at −30, and the share with no reliable data (Tmax below 0 or CBF not finite, plan §8.1).
-- **Open points to check in Colab (step 4):**
-  - Territory uses the TopCoW numbering (1–3 posterior; 4–7, 10–12 and 15 anterior; 8–9 unknown), which `docs/DATA.md` notes is unconfirmed for this dataset.
-  - Territory applies no distance limit, and DATA.md says basilar-nearest occlusions sit 17–51 mm away. So read territory alongside `occlusion_distance_mm`.
-- **Tests:** 14 new synthetic tests (21 in `test_error_analysis.py`). The synthetic case's clinical times are now `hh:mm:ss` text, as in `clinical.csv`. Not run on real data.
-- pytest on Windows: 409 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures.
-- **Notion sync:** none new. The EXP-15 row stays Running.
+## 2026-11-07 — Lorna (Vision A error analysis, EXP-15, fold 0; 14 working sessions on 6–7 Nov, folded into one entry at review)
+- Task 1 of `docs/team/lorna_vision_a.md`. No held-out case was used; the notebook prints counts only, and case IDs stay in the Drive tables.
+- **`vision/perfusion/error_analysis.py`:**
+  - `write_config` writes once and records checksums, no case IDs.
+  - `join_tables` joins EXP-14 to EXP-1's `within_tmax6` rows. It refuses missing columns, repeated cases, and reference volumes that disagree.
+  - `case_features`: size band, occlusion site with its nearest label and distance, territory, onset to imaging, the infarct's Tmax −30 and unreliable shares, and its Tmax > 6 s share.
+  - `group_summary` / `summarise_features`, `miss_profile`, `visibility_comparison`, `crossing_counts`.
+  - `figure_cases` / `case_figure` / `figure_summary`, with anonymous labels.
+  - `build_metrics` / `write_metrics` refuse case IDs and record the installed commit next to `config.json`'s.
+- **`tests/test_error_analysis.py`:** 47 synthetic tests.
+- **`notebooks/12_visionA_error_analysis.ipynb`** (CPU Colab):
+  - installs the exact commit and checks it, with a forced reinstall, because the package version never changes;
+  - checks the split and tarball checksums;
+  - writes `per_case.csv`, `metrics.json` and `figures/` to Drive `runs/EXP-15_visionA_error_analysis/`.
 
-## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 2, code only)
-- **EXP-15** (`runs/EXP-15_visionA_error_analysis/`). Lorna added the Notion Experiments row, with Status Running.
-- **`error_analysis.write_config()`** writes `config.json` before the run (`docs/team/README.md` §4) and refuses to overwrite one. It records:
-  - the experiment and the installed commit;
-  - the slim tarball and split checksums (shared with `pod_job`), with no case IDs;
-  - the folds analysed and the input tables;
-  - the decision cut-offs, the miss threshold and the counts-only output rule.
-- **`error_analysis.join_tables()`** puts the EXP-14 nnU-Net and EXP-1 threshold per-case tables side by side.
-  - It keeps only nnU-Net's cases.
-  - It refuses missing columns, repeated cases, nnU-Net cases absent from the threshold table, and reference volumes that differ between the two tables.
-  - It adds:
-    - the Dice and absolute-volume-error gaps;
-    - which model has the smaller volume error;
-    - which model misses (Dice < 0.05);
-    - how many decision cut-offs one model crosses and the other doesn't.
-  - Assumption to check in Colab: EXP-1's `per_case.csv` has the `evaluate.case_metrics` columns. It wasn't opened here.
-- **Tests:** 4 new synthetic tests (7 in `test_error_analysis.py`). Not run on real data.
-- pytest on Windows: 395 passed, 3 skipped, 9 failed. These are the same 9 pre-existing Windows failures as in step 1.
-- **Notion sync:** Experiments → EXP-15 row exists (Running). Fill in its commit once the notebook installs one.
-
-## 2026-11-06 — Claude Code session (Lorna, Vision A error analysis, step 1)
-- **Plan for Task 1** (brief `docs/team/lorna_vision_a.md`), six steps:
-  1. module skeleton and synthetic tests;
-  2. join the EXP-14 and EXP-1 per-case tables, after the Notion Experiments row and `config.json` (`docs/team/README.md` §4);
-  3. per-case feature functions;
-  4. feature table in Colab;
-  5. failure groups;
-  6. images and write-up.
-  - Notebook outputs print counts and summaries, never case IDs.
-- **`vision/perfusion/error_analysis.py`:** skeleton only. `join_tables`, `case_features` and `group_summary` raise NotImplementedError until steps 2, 3 and 5.
-- **`tests/test_error_analysis.py`:** a synthetic case builder in the shape `load_case()` returns (maps, infarct, occlusion, Circle of Willis labels, a no-data Tmax region, clinical times), with 3 tests.
-- Local setup on Lorna's Windows laptop: `.venv` with Python 3.12.4, `pip install -e ".[dev,isles]"`.
-- pytest on Windows: 391 passed, 3 skipped, 9 failed. The same 9 fail without this change: `test_archive_listing` (5), `test_compute::test_scripts_parse_in_bash`, `test_corpus_ingest` (UnicodeDecodeError), `test_nnunet_wrapper::test_splits_final_matches_our_folds` and `test_reasoner::test_run_fixtures_writes_the_run_folder`. They look like Windows-only problems (bash, file encoding), not yet investigated. The last entry reported 436 passed on the Mac.
-- Plan §7: nothing ticked; the error-analysis task stays open.
-- **Notion sync:** Tasks → Lorna's error-analysis row to In progress. No Experiments row yet (comes before step 2).
+  `00_template.ipynb` still installs the old way.
+- **EXP-15 run at `c442a54`:**
+  - 9 of 26 fold-0 cases are Dice-0 misses;
+  - volume error and cut-off crossings by size band;
+  - figures of every miss and the 3 best cases.
+- **`docs/ERROR_ANALYSIS_VISION_A.md`:** a plain-English draft with Lorna's visual readings (drafted with AI help, checked by Lorna).
+- **Open points recorded:**
+  - territory uses the unconfirmed TopCoW numbering and no distance limit;
+  - EXP-15's `config.json` predates the results commit;
+  - the first Colab run stopped on EXP-1's two rows per case, now handled.
+- `pytest` on Lorna's Windows laptop: 435 passed, 3 skipped, and the same 9 Windows-only failures as before the work (archive listing, bash parse, corpus encoding, nnU-Net splits).
+- **Notion sync:**
+  - Experiments: EXP-15 (commit, findings, link to the draft).
+  - Tasks: the error-analysis row through In progress to In review.
 
 ## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
 - **Roles agreed by Parsa:**
@@ -252,6 +344,24 @@
   - The two existing Phase 3 rows are assigned to Parsa.
   - The onboarding row is In progress, and the template row is In review.
   - The charter's Person column is filled in.
+
+## 2026-11-06 — Claude Code session (Vision B Task 2: ISLES'24 domain-shift check, code and notebook)
+- **Scope:** Phase 3, Vision B, Task 2 from `docs/team/mohamed_vision_b.md`. Code and notebook only; the real run is Mohamed's, on Colab.
+- **`vision/haemorrhage/isles_check.py`** (tested): scores each development case's `ncct_native` the way the RSNA shards were built:
+  - turned to RAS, then laid out as DICOM stores axial slices (front of the head at the top, patient's right on the left). ISLES'24 sources are LAS or LPS, so this matters;
+  - averaged into 5 mm slabs in HU, each native slice weighted by its overlap. 5 mm is RSNA's documented thickness (plan §5.2), not measured: the shards' `z_mm` could confirm it on Kaggle;
+  - padded to a square with air, then `rsna.window_hu` (brain, subdural, bone) at 320 px, then JPEG at quality 95 and back, as the shards were stored;
+  - scored with EXP-6's top-2 mean and Platt calibration through `infer`, against the calibrated threshold in `calibration.json`.
+  - The native thin slices are scored too, as a second reading, to show what the reformatting changes.
+  - Reports hold counts, rates with 95% Wilson intervals, percentiles and a histogram. The per-case table holds case IDs and is saved only to Drive. Figures are labelled by rank and score. A held-out request stops the run; any other failure is kept in the table and counted.
+- **`notebooks/21_visionB_isles_check.ipynb`:** thin Colab notebook: install, checksums, `config.json` before the run, scoring, results, the top-scored scans with a list of common false-alarm causes, then `metrics.json`, `per_case.csv` (with an empty `review` column), two figures and a read-back. `REPO_REF` is `mohamed/isles-check` until the pull request is merged.
+  - Sections 4–8 were dry-run locally on synthetic volumes with a random-weight model and a stubbed Drive. It has not run on Colab or on real data, so its timing and every result are unmeasured.
+- **Known limits, to state with the result:** no bleed labels, so positives are *presumed* false positives; the threshold (0.278) is provisional until Task 1; in-plane field of view is not matched to RSNA's (ISLES'24 spacing is 0.305–0.562 mm, `docs/DATA.md`), and is recorded per case so it can be checked. `set_field_of_view` exists for that check but is off.
+- **Plan:** layout lists `isles_check.py` and notebook 21; the §7 domain-shift item notes the code is ready and the run pending (not ticked). README lists notebook 21.
+- pytest: 455 passed (19 new).
+- **Notion sync** (not done; for Mohamed or Parsa):
+  - Tasks → Vision B "Domain shift check": In progress; code and notebook ready on `mohamed/isles-check`.
+  - Experiments → a new row (Status *Running*) before the Colab run; its ID goes in `EXPERIMENT`. Afterwards: the presumed false-positive rate at 0.278 with its interval, the top-scan review by count, and the commit.
 
 ## 2026-11-05 — Claude Code session (DEC-21 rented GPU, EXP-13 and EXP-14, notes, trial passages checked; Phase 2 closed)
 - **DEC-21 pod tooling** (commit `5767cd4`): `src/strokecopilot/compute/` and `scripts/pod` (`offers`, `up`, `status`, `collect`, `down`, `monitor`).
