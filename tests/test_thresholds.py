@@ -114,3 +114,24 @@ def test_diagnose_case():
     assert row["infarct_rcbf_p50"] == pytest.approx(0.2)
     assert row["dice_rcbf0.3"] == 1.0 and row["dice_rcbf0.2"] == 0.0  # strict <: nothing below 20%
     assert row["tmax6_dice"] == pytest.approx(2 * 64 / (960 + 64))
+
+
+def test_paired_comparison_and_loader(tmp_path):
+    model = [{"case": f"c{i}", "fold": 0, "dice": 0.5, "abs_error_ml": 5.0, "crosses_21": i == 0, "crosses_31": False,
+              "crosses_51": False, "crosses_70": False} for i in range(6)]
+    base = [{**row, "dice": 0.2, "abs_error_ml": 10.0, "crosses_21": i in (1, 2)} for i, row in enumerate(model)]
+    base[5]["dice"] = None
+    out = evaluate.paired_comparison(model, base + [{**base[0], "case": "other"}], n_boot=200)
+    assert out["cases"] == 6
+    d = out["metrics"]["dice"]
+    assert d["n"] == 5 and d["model_better"] == 5 and d["mean_difference"] == pytest.approx(0.3)
+    assert d["ci95"][0] == pytest.approx(0.3) and d["ci95"][1] == pytest.approx(0.3)
+    a = out["metrics"]["abs_error_ml"]
+    assert a["n"] == 6 and a["model_better"] == 6 and a["mean_difference"] == pytest.approx(-5.0)
+    c = out["crossings"]["21"]
+    assert (c["model"], c["baseline"], c["only_model"], c["only_baseline"], c["both"]) == (1, 2, 1, 2, 0)
+    assert c["mcnemar_p"] == pytest.approx(1.0) and out["crossings"]["31"]["mcnemar_p"] is None
+    path = tmp_path / "per_case.csv"
+    path.write_text("variant,case,fold,dice,abs_error_ml,crosses_21\nx,c0,1,0.5,2.0,True\ny,c0,1,,3.0,False\n")
+    rows = evaluate.load_per_case(path, variant="y")
+    assert rows == [{"variant": "y", "case": "c0", "fold": 1, "dice": None, "abs_error_ml": 3.0, "crosses_21": False}]

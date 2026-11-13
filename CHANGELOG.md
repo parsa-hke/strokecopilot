@@ -1,5 +1,42 @@
 # CHANGELOG
 
+## 2026-11-13 — Claude Code session (Phase 3: A1 done — nnU-Net folds 1–4 collected, 5-fold table)
+- **Phase 3, Parsa's task A1.** Nothing below used a held-out case; the 129 cases are the development folds 0–4 only.
+- **Folds 1–3 (EXP-18/19/20) finished overnight 12 Nov** and were collected by their auto-collectors, copied to Drive, and their pods destroyed and confirmed gone:
+
+  | Fold | Run | Dice | Abs volume error | Wrong side of 21/31/51/70 mL | Uptime cost |
+  |---|---|---|---|---|---|
+  | 1 | EXP-18 | 0.211 ± 0.246 | 22.0 ± 42.2 mL | 3/4/4/3 of 26 | 4.89 h, ≈ $1.84 |
+  | 2 | EXP-19 | 0.173 ± 0.165 | 27.0 ± 46.1 mL | 9/6/3/3 of 26 | 3.86 h, ≈ $1.57 |
+  | 3 | EXP-20 | 0.290 ± 0.281 | 20.9 ± 27.2 mL | 5/5/2/3 of 26 | 4.90 h, ≈ $2.04 |
+
+  - **EXP-22's fold-0 masks** came back with EXP-18 and are on Drive `runs/EXP-22_nnunet_fold0_masks/` for Lorna's error analysis.
+  - **Measured:** the Vast credit fell $6.62 from 17:09 UTC 12 Nov ($9.97 + the $5 top-up → $8.35), covering the three folds, EXP-19's first pod and EXP-21's failed setup. About $0.67 of it is not explained by uptime (storage and bandwidth, most likely; not checked).
+- **Fold 4 (EXP-21), 13 Nov:** Parsa approved offer 59572201 (New Jersey RTX 4090, $0.402/h, 5.5 h limit), the machine that ran EXP-18 cleanly.
+  - Upload 13 min; epochs 39.4 s; training 3.56 h; collected and destroyed at 16:11 UTC.
+  - Dice 0.184 ± 0.240 over 25 cases; abs volume error 28.3 ± 39.9 mL; wrong side of 21/31/51/70 mL in 8/8/8/5.
+  - **Measured cost $1.76** (credit $8.35 → $6.59; uptime 3.88 h ≈ $1.56).
+- **5-fold table (EXP-25, analysis on the Mac, no cost):** `vision/perfusion/evaluate.py` gains `load_per_case` and `paired_comparison` (bootstrap CI over cases, Wilcoxon signed-rank, exact McNemar on crossings), with a test. Same 129 cases and the same fold per case in both sources (checked).
+
+  | | nnU-Net | Threshold, within Tmax > 6 s | Threshold, unrestricted |
+  |---|---|---|---|
+  | Dice, mean ± std over folds | **0.215 ± 0.046** | 0.111 ± 0.031 | 0.117 ± 0.034 |
+  | Abs volume error, mean ± std over folds | **23.5 ± 3.9 mL** | 25.2 ± 5.0 mL | 25.9 ± 6.1 mL |
+  | Wrong side of 21/31/51/70 mL (of 129) | **30**/**28**/**20**/17 | 35/29/23/17 | 48/28/23/16 |
+
+  - **Paired against within-Tmax6:** Dice +0.104 (95% CI +0.078 to +0.133; p < 0.0001). Abs volume error −1.6 mL (CI −4.5 to +1.3; p 0.35): not a clear difference. No crossing difference is significant.
+  - **Against unrestricted:** nnU-Net crosses 21 mL far less often (30 vs 48, p 0.003), all of it in lesions under 21 mL, where the unrestricted threshold over-calls.
+  - **Lesions ≥ 21 mL (45 cases):** both methods are far off, mostly under-calling (nnU-Net 52.8 vs 55.7 mL abs error).
+- **B5 not decided:** Parsa's decision, from these numbers.
+- **GPU spend for A1:** about $8.8 measured from the credit (12 Nov from 17:09: $6.62; the three failed attempts before it: about $0.45; fold 4: $1.76). With the $2.56 before Phase 3, the project's GPU total is about $11.4 of the 8–15 USD budget (DEC-21). Credit left: $6.59. **API spend this session: none.**
+- **Housekeeping:** the keep-awake and the pod guard were stopped after fold 4; the combined monitor is still serving `localhost:8717`.
+- `pytest`: 510 passed.
+- **Notion sync** (done this session):
+  - Experiments EXP-18, EXP-19, EXP-20, EXP-21 set to Done with results, hosts and costs; EXP-22's notes point to the masks on Drive.
+  - Experiments EXP-25 created (5-fold summary and paired comparison).
+  - Tasks: "nnU-Net folds 1–4 … then the 5-fold table" → Done; "Decide which core feeds the contract" notes updated with EXP-25 (status left as is).
+  - Still to sync: a Decisions row once Parsa decides B5.
+
 ## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes, model list, PR review)
 - **Phase 3, Parsa's tasks A1–A3.** Nothing below used a held-out case; `folds.json` was checked by sha256 only.
 - **A1, nnU-Net folds 1–4 (commit `7c67c5b`):**
@@ -102,6 +139,8 @@
     - It waited on the credit guard until Parsa topped up $5 (credit $12.87).
     - Its first pod (Michigan, $0.402/h) never left "loading" in 15 min. `up` destroyed it (0.26 h, about $0.10), and the watcher retries.
     - `runs/podguard.py` (not committed) destroys a pod still without a job 45 min after creation, once no `up` is working on it, so an offline moment during setup cannot leave a pod idle until its watchdog.
+    - **Postponed to 13 Nov by Parsa.** The offer watcher was stopped at about 19:48 UTC with no fold-4 pod up.
+  - **Folds 1–3 left to finish overnight.** Each has one auto-collector (EXP-19's duplicate, left over from its first pod, was stopped). The guard and the combined monitor keep running, and `caffeinate -i` keeps the Mac from idle-sleeping for 5 h.
   - **`runs/monitor_all.py`** (not committed): one page for all fold pods at `localhost:8717`, served on 127.0.0.1 only.
     - It shows progress, the median and last epoch time, with an epoch over twice the median flagged; the ETA, watchdog, cost, Vast credit and the watcher's last lines.
     - The per-pod pages show only the median of the last 20 epochs, which hid the slowdown.
