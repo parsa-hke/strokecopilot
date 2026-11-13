@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 2026-11-13 — Claude Code session (Phase 3: A1 done — nnU-Net folds 1–4 collected, 5-fold table; B5 decided, DEC-25)
+## 2026-11-13 — Claude Code session (Phase 3: A1 done — nnU-Net folds 1–4 collected, 5-fold table; B5 decided, DEC-25; B4 decided, DEC-26)
 - **Phase 3, Parsa's task A1.** Nothing below used a held-out case; the 129 cases are the development folds 0–4 only.
 - **Folds 1–3 (EXP-18/19/20) finished overnight 12 Nov** and were collected by their auto-collectors, copied to Drive, and their pods destroyed and confirmed gone:
 
@@ -31,6 +31,13 @@
   - Recorded with its limit: no worse on any contract measure and clearly better on Dice, but the volume is not measurably better, and the report keeps the threshold as the comparison.
   - The under-calling of lesions ≥ 21 mL is the open weakness for B4 and calibration. The penumbra stays Tmax > 6 s.
   - Plan §2 row DEC-25 added; §7 "Decide which core feeds the contract" ticked.
+- **B4 decided — DEC-26 (Parsa), from EXP-26** (free; `runs/EXP-26_core_volume_checks/analysis.py`, results on Drive):
+  - Vision A is two-stage: the nnU-Net final-infarct prediction is the core proxy (DEC-25), and the Tmax > 6 s rule is the penumbra (DEC-7). There are no core or penumbra heads, because ISLES'24 labels only the final infarct, and no volume calibration.
+  - **Consistency:** the nnU-Net core never exceeds the Tmax > 6 s volume (0 of 129), so the mismatch fields need no clipping.
+  - **Large infarcts are under-called by both methods.** For infarcts ≥ 70 mL the medians are: reference 118 mL, nnU-Net 35, threshold 25, Tmax > 6 s 188. In 7 of 22 the final infarct exceeds the whole Tmax > 6 s region. Missing Tmax does not explain it (median 92% reliable).
+  - **Corrections, cross-fitted by fold:** linear ones made things worse (+2.4 to +2.6 mL; 54–61 cases on the wrong side of 21 mL against 30). The best robust one gained 0.6 mL, with a CI crossing zero. Averaging nnU-Net and threshold volumes did best at 31 mL, but it was picked after the fact from 16 variants and is not adopted.
+  - The gap is reported as a limit (final infarct ≠ acute core; reperfused cohort) and is input to `confidence.core`. A cross-fitted lower probability threshold stays an optional later test.
+  - Plan §2 row DEC-26 added; §7 core/penumbra item ticked.
 - **GPU spend for A1:** about $8.8 measured from the credit (12 Nov from 17:09: $6.62; the three failed attempts before it: about $0.45; fold 4: $1.76). With the $2.56 before Phase 3, the project's GPU total is about $11.4 of the 8–15 USD budget (DEC-21). Credit left: $6.59. **API spend this session: none.**
 - **Housekeeping:** the keep-awake and the pod guard were stopped after fold 4; the combined monitor is still serving `localhost:8717`.
 - `pytest`: 510 passed.
@@ -39,6 +46,7 @@
   - Experiments EXP-25 created (5-fold summary and paired comparison).
   - Tasks: "nnU-Net folds 1–4 … then the 5-fold table" → Done; "Decide which core feeds the contract" notes updated with EXP-25.
   - Decisions: DEC-25 created and linked to both tasks; the task "Decide which core feeds the contract" → Done.
+  - Decisions: DEC-26 created; Tasks: "Decide the core/penumbra approach (B4)" created as Done and linked; Experiments: EXP-26 created.
 
 ## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes, model list, PR review)
 - **Phase 3, Parsa's tasks A1–A3.** Nothing below used a held-out case; `folds.json` was checked by sha256 only.
