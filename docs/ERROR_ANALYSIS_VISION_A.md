@@ -141,13 +141,13 @@ The pictures are on Drive in `runs/EXP-15_visionA_error_analysis/figures/`. They
 
 ## Visual readings
 
-*Drafted with AI help, checked by Lorna; one slice per case, not a clinical opinion. "Noisy" is judged by eye, not measured.*
+*Drafted with AI help, checked by Lorna, except where a reading is marked as edited at review; one slice per case, not a clinical opinion. "Noisy" is judged by eye, not measured.*
 
 How to read the pictures: the red outline is the brain tissue that died, seen on a scan days later. On the TMAX picture, bright means blood was arriving late, a sign of trouble at the time of the first scan. The % is how much of the dead area showed that sign, measured by the code across all slices of the dead area, not just this one slice, and counting only spots with reliable data.
 
-Miss 1 (70+ mL, 22%): A large area died, but on the first scan most of it looked normal. Only a small corner showed trouble. The scan quality was fine. The damage may not have been showing yet, or this tissue died after the scan; the data cannot tell which.
+Miss 1 (70+ mL, 22%): A large area died, but on the first scan most of it looked normal. Only a small corner showed trouble. The scan quality was fine. The damage may not have been showing yet, or this tissue died after the scan; the data cannot tell which. *(Edited at Parsa's review, 13 Nov 2026, to match the numbers; pending Lorna's check.)*
 
-Miss 2 (21–70 mL, 62% of the part with data): The dead area is along the outer edge of the brain. On this slice, the blood-flow scans don't reach that edge, and across all slices half of the dead area has no perfusion data. Only about a third of the dead area has reliable data, and 62% of that third showed trouble: about a fifth of the whole dead area. Neither method had an input for the rest.
+Miss 2 (21–70 mL, 62% of the part with data): The dead area is along the outer edge of the brain. On this slice, the blood-flow scans don't reach that edge, and across all slices half of the dead area has no perfusion data. Only about a third of the dead area has reliable data, and 62% of that third showed trouble: about a fifth of the whole dead area. Neither method had an input for the rest. *(Edited at Parsa's review, 13 Nov 2026, to match the numbers; pending Lorna's check.)*
 
 Miss 3 (5–21 mL, 65%): A thin, curvy strip near the front, plus two tiny spots. The trouble area on the scan is bigger than what died: it covers the strip and extends past it. So the sign was there, but it didn't show exactly which part would die, and the thin shape may have made it even harder for the AI.
 
@@ -159,7 +159,7 @@ Miss 6 (5–21 mL, 30%): Three small separate spots, one right at the edge of th
 
 Miss 7 (under 5 mL, 9%): A few tiny spots. There's a large trouble area nearby, but the tissue that died was mostly outside it.
 
-Miss 8 (under 5 mL, 75%): One small spot inside a much larger trouble area. The trouble sign was there, but it covered far more brain than actually died, so it didn't point to this spot. Most of that area likely recovered after treatment. The AI marked 32.6 mL, none of it on the dead spot, so this is an over-call rather than a case of seeing nothing. Where it marked it, the pictures do not show yet.
+Miss 8 (under 5 mL, 75%): One small spot inside a much larger trouble area. The trouble sign was there, but it covered far more brain than actually died, so it didn't point to this spot. Most of that area likely recovered after treatment. The AI marked 32.6 mL, none of it on the dead spot, so this is an over-call rather than a case of seeing nothing. Where it marked it, the pictures do not show yet. *(Edited at Parsa's review, 13 Nov 2026, to match the numbers; pending Lorna's check.)*
 
 Miss 9 (under 5 mL, 13%): One tiny spot near the back. It doesn't show trouble on the scan; the trouble areas are somewhere else.
 

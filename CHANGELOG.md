@@ -9,6 +9,7 @@
   - **Volume table:** each group's size and the overall error (AI 19.6, threshold 20.5 mL) are added.
   - **Stale and causal lines updated:** the outlines are EXP-22 on Drive; Miss 1 "wasn't showing yet" is now "may not have been showing yet, or died after the scan"; noise was judged by eye.
   - **Groupings not reported yet** are listed under Limits: occlusion site, front/back, onset.
+  - The Miss 1, 2 and 8 visual readings, reworded to match the numbers, are marked "pending Lorna's check".
 - **Notebook 12:** the install cell is split from the Drive mount and split check, and `REPO_REF` is `main` for reruns after merge.
 - **CHANGELOG:** Lorna's 14 working entries are folded into one (2026-11-07 below), with nothing lost that the code or write-up does not hold.
 - **Back to Lorna** (PR comment):
