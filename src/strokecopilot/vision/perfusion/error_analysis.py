@@ -168,6 +168,43 @@ def join_tables(nnunet, threshold, variant=THRESHOLD_VARIANT):
     return joined
 
 
+def five_fold_table(nnunet_folds, threshold, variant=THRESHOLD_VARIANT, expected_cases=None):
+    """Follow-ups step 1. join_tables() over every fold: one row per development case, nnU-Net scored by the
+    fold model that did not train on it.
+
+    nnunet_folds: the per_case.csv tables of the five nnU-Net fold runs (EXP-14 for fold 0, EXP-18 to EXP-21 for
+    folds 1 to 4), as pandas DataFrames, each holding one fold. threshold: EXP-1's per_case.csv, which covers all
+    folds. Raises, with counts only, if a table holds more than one fold, a fold appears in two tables, a case
+    appears twice, the threshold table puts a case in a different fold, or the total is not `expected_cases`.
+    """
+    import pandas as pd
+
+    seen = []
+    for table in nnunet_folds:
+        folds = sorted(table["fold"].dropna().astype(int).unique())
+        if len(folds) != 1:
+            raise ValueError(f"An nnU-Net table holds {len(folds)} folds; each should hold exactly one.")
+        if folds[0] in seen:
+            raise ValueError(f"Fold {folds[0]} appears in two nnU-Net tables.")
+        seen.append(folds[0])
+    nnunet = pd.concat(nnunet_folds, ignore_index=True)
+    nnunet["fold"] = nnunet["fold"].astype(int)
+    if nnunet["case"].duplicated().any():
+        raise ValueError(f"{int(nnunet['case'].duplicated().sum())} cases appear in more than one fold table.")
+    if expected_cases is not None and len(nnunet) != expected_cases:
+        raise ValueError(f"The fold tables hold {len(nnunet)} cases, not {expected_cases}.")
+
+    joined = join_tables(nnunet, threshold, variant=variant)
+
+    if "fold" in threshold.columns:
+        base = threshold[threshold["variant"] == variant] if "variant" in threshold.columns else threshold
+        fold_of = base.drop_duplicates("case").set_index("case")["fold"].astype(int)
+        differ = int((joined["case"].map(fold_of) != joined["fold"]).sum())
+        if differ:
+            raise ValueError(f"{differ} cases are in a different fold in the threshold table.")
+    return joined
+
+
 def size_band(infarct_ml):
     """Size group of a reference infarct volume: none, <5, 5-21, 21-70 or >=70 mL."""
     if infarct_ml is None:

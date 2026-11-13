@@ -130,6 +130,58 @@ def test_join_tables_refuses_bad_tables():
         error_analysis.join_tables(nnunet.drop(columns=["abs_error_ml"]), threshold)
 
 
+def _fold_tables():
+    """Three fake fold tables (folds 0, 1 and 2, two cases each), as the five nnU-Net runs would give, and a
+    threshold table over all six cases with both variants, as EXP-1 gives."""
+    small, big, empty = _box(24, 34), _box(0, 40), np.zeros(SHAPE, dtype=bool)
+    ref_small, ref_big = mask_ml(small, SPACING), mask_ml(big, SPACING)
+    cases = {  # case: (fold, nnU-Net prediction, truth, reference mL)
+        "f0a": (0, small, small, ref_small), "f0b": (0, empty, small, ref_small),
+        "f1a": (1, big, big, ref_big), "f1b": (1, small, big, ref_big),
+        "f2a": (2, big, small, ref_small), "f2b": (2, small, small, ref_small),
+    }
+    nnunet = [pd.DataFrame([_row(c, p, t, r, fold=f) for c, (f, p, t, r) in cases.items() if f == fold]) for fold in (0, 1, 2)]
+    within = [_row(c, empty, t, r, fold=f) for c, (f, p, t, r) in cases.items()]
+    threshold = pd.concat([pd.DataFrame(within).assign(variant="within_tmax6"),
+                           pd.DataFrame(within).assign(variant="unrestricted", dice=0.5)], ignore_index=True)
+    # Through CSV and back, as the tables arrive from Drive.
+    return ([pd.read_csv(io.StringIO(t.to_csv(index=False))) for t in nnunet],
+            pd.read_csv(io.StringIO(threshold.to_csv(index=False))))
+
+
+def test_five_fold_table_joins_every_fold():
+    nnunet, threshold = _fold_tables()
+    table = error_analysis.five_fold_table(nnunet, threshold, expected_cases=6).set_index("case")
+    assert len(table) == 6
+    assert table["fold"].value_counts().sort_index().to_dict() == {0: 2, 1: 2, 2: 2}
+    assert table.loc["f0a", "nnunet_dice"] == 1.0 and table.loc["f0b", "nnunet_dice"] == 0.0
+    assert (table["threshold_dice"] == 0.0).all()  # the within_tmax6 rows, not the unrestricted 0.5
+    # f2a: nnU-Net predicts 30.72 mL for a 7.68 mL infarct, crossing 21 mL (an over-call, counted in step 2).
+    assert bool(table.loc["f2a", "nnunet_crosses_21"]) and not bool(table.loc["f2a", "nnunet_crosses_31"])
+    assert table.loc["f0b", "miss"] == "both"
+
+
+def test_five_fold_table_refuses_bad_inputs():
+    nnunet, threshold = _fold_tables()
+    two_folds = pd.concat([nnunet[0], nnunet[1]], ignore_index=True)
+    with pytest.raises(ValueError, match="holds 2 folds"):
+        error_analysis.five_fold_table([two_folds, nnunet[2]], threshold)
+    with pytest.raises(ValueError, match="Fold 0 appears in two"):
+        error_analysis.five_fold_table([nnunet[0], nnunet[0].assign(case=["x", "y"])], threshold)
+    repeated = nnunet[1].copy()
+    repeated.loc[0, "case"] = "f0a"
+    with pytest.raises(ValueError, match="more than one fold table"):
+        error_analysis.five_fold_table([nnunet[0], repeated, nnunet[2]], threshold)
+    with pytest.raises(ValueError, match="not 129"):
+        error_analysis.five_fold_table(nnunet, threshold, expected_cases=129)
+    moved = threshold.copy()
+    moved.loc[moved["case"] == "f2b", "fold"] = 1
+    with pytest.raises(ValueError, match="1 cases are in a different fold"):
+        error_analysis.five_fold_table(nnunet, moved)
+    with pytest.raises(ValueError, match="missing from the threshold"):
+        error_analysis.five_fold_table(nnunet, threshold[threshold["case"] != "f1a"])
+
+
 def test_join_tables_keeps_one_threshold_variant():
     """EXP-1 has a row per case for each core variant; only within_tmax6 is joined."""
     nnunet, within = _tables()

@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## 2026-11-14 — Claude Code session (Lorna, error-analysis follow-ups, step 1 of 6)
+- **Branch `lorna/error-analysis-followups`, from `main` at `dfc832f`.** It works on the 4 follow-ups from Parsa's PR #1 review as one piece of work, with one Colab run at the end:
+  1. the five-fold table;
+  2. five-fold miss counts;
+  3. artery groups with a distance limit, and onset times;
+  4. AI outlines on the fold-0 pictures;
+  5. one notebook;
+  6. Lorna's run and the write-up.
+- **Decisions agreed with Lorna, to go into the new run's `config.json`:**
+  - The run gets a new EXP number and folder. Lorna adds the Notion row first.
+  - "Over-call" means nnU-Net's predicted volume is larger than the true volume and crosses at least one of the 21, 31, 51 and 70 mL cut-offs, at any Dice. Of those, the run also counts how many are Dice 0, the Miss 8 type.
+  - AI outlines go on the fold-0 pictures only.
+  - The five-fold numbers will be checked against Parsa's EXP-25 table, with any difference reported.
+- **`error_analysis.five_fold_table()`** stacks the five nnU-Net per-fold tables (EXP-14, EXP-18 to 21) and joins them with EXP-1 (`within_tmax6`) through `join_tables()`, one row per development case. It stops, with counts only, if:
+  - a table holds more than one fold;
+  - a fold appears twice;
+  - a case appears in two folds;
+  - the threshold table puts a case in a different fold;
+  - the total is not the expected count.
+- **Tests:** 2 new tests on fake fold tables (49 in `test_error_analysis.py`). Not run on real data.
+- **pytest on Windows:** 491 passed, 5 skipped, 9 failed. 8 of the failures are the earlier Windows ones. The ninth, `test_operating_point::test_one_wilson_for_both_vision_b_checks`, fails because `cv2` (opencv) is not installed in Lorna's local venv. It fails without this change too. `test_reasoner::test_run_fixtures_writes_the_run_folder` now passes on `main`.
+- **Notion sync:** none yet. Lorna adds the new EXP row before the Colab run.
+
 ## 2026-11-13 — Parsa's review of PR #1 (Lorna's Vision A error analysis, EXP-15)
 - **Write-up corrected** (`docs/ERROR_ANALYSIS_VISION_A.md`), every number re-checked against EXP-15's `per_case.csv` on Drive (counts and anonymous labels only):
   - **New failure group, no perfusion data.** 3 of the 4 cases with ≥ 5% of the infarct at Tmax −30 are misses. Miss 2 has 51% with no data, so its "62% visible" covers only the third with reliable data. The Limits line that said the slice disagreed with the whole-case number is replaced.
