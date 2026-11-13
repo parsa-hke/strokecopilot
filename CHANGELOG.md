@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-11-13 — Parsa's review of PR #1 (Lorna's Vision A error analysis, EXP-15)
+- **Write-up corrected** (`docs/ERROR_ANALYSIS_VISION_A.md`), every number re-checked against EXP-15's `per_case.csv` on Drive (counts and anonymous labels only):
+  - **New failure group, no perfusion data.** 3 of the 4 cases with ≥ 5% of the infarct at Tmax −30 are misses. Miss 2 has 51% with no data, so its "62% visible" covers only the third with reliable data. The Limits line that said the slice disagreed with the whole-case number is replaced.
+  - **Miss 8 is an over-call:** 32.6 mL predicted for a 1.1 mL infarct, crossing 21 and 31 mL. It has its own group. A table gives the predicted volume for every miss: 4 empty, one 0.04 mL.
+  - **Base rates added:** 7 of 17 small cases are missed against 2 of 9 larger ones; 4 of 9 misses and 5 of 17 others are under 25% visible (Mann-Whitney p ≈ 0.28).
+  - **The "missed by both, so the scan is the problem" argument** now carries its caveat: the baseline looks only inside Tmax > 6 s.
+  - **Volume table:** each group's size and the overall error (AI 19.6, threshold 20.5 mL) are added.
+  - **Stale and causal lines updated:** the outlines are EXP-22 on Drive; Miss 1 "wasn't showing yet" is now "may not have been showing yet, or died after the scan"; noise was judged by eye.
+  - **Groupings not reported yet** are listed under Limits: occlusion site, front/back, onset.
+  - The Miss 1, 2 and 8 visual readings, reworded to match the numbers, are marked "pending Lorna's check".
+- **Notebook 12:** the install cell is split from the Drive mount and split check, and `REPO_REF` is `main` for reruns after merge.
+- **CHANGELOG:** Lorna's 14 working entries are folded into one (2026-11-07 below), with nothing lost that the code or write-up does not hold.
+- **Back to Lorna** (PR comment):
+  - group by the nearest artery label with a distance limit;
+  - report onset for the 9 cases that have it;
+  - draw the EXP-22 outlines on the figures;
+  - repeat the miss count over all five folds.
+- `pytest` (Mac, after merging main into the branch): 557 passed.
+- **Notion sync:** none from this review. EXP-15 and the task row are Lorna's to update after merge.
+
 ## 2026-11-13 — Claude Code session (Phase 3: A1 done — nnU-Net folds 1–4 collected, 5-fold table; B5 decided, DEC-25; B4 decided, DEC-26)
 - **Phase 3, Parsa's task A1.** Nothing below used a held-out case; the 129 cases are the development folds 0–4 only.
 - **Folds 1–3 (EXP-18/19/20) finished overnight 12 Nov** and were collected by their auto-collectors, copied to Drive, and their pods destroyed and confirmed gone:
@@ -273,6 +293,36 @@
   - Tasks → Vision B "Operating point": In progress; code and notebook on `mohamed/operating-point`.
   - Experiments → a new row (Status *Running*) before the Kaggle run; afterwards the held-out sensitivity and specificity with intervals, the proposed threshold and the commit.
   - Decisions → Parsa records the threshold once he has chosen between the proposed and strict values.
+
+## 2026-11-07 — Lorna (Vision A error analysis, EXP-15, fold 0; 14 working sessions on 6–7 Nov, folded into one entry at review)
+- Task 1 of `docs/team/lorna_vision_a.md`. No held-out case was used; the notebook prints counts only, and case IDs stay in the Drive tables.
+- **`vision/perfusion/error_analysis.py`:**
+  - `write_config` writes once and records checksums, no case IDs.
+  - `join_tables` joins EXP-14 to EXP-1's `within_tmax6` rows. It refuses missing columns, repeated cases, and reference volumes that disagree.
+  - `case_features`: size band, occlusion site with its nearest label and distance, territory, onset to imaging, the infarct's Tmax −30 and unreliable shares, and its Tmax > 6 s share.
+  - `group_summary` / `summarise_features`, `miss_profile`, `visibility_comparison`, `crossing_counts`.
+  - `figure_cases` / `case_figure` / `figure_summary`, with anonymous labels.
+  - `build_metrics` / `write_metrics` refuse case IDs and record the installed commit next to `config.json`'s.
+- **`tests/test_error_analysis.py`:** 47 synthetic tests.
+- **`notebooks/12_visionA_error_analysis.ipynb`** (CPU Colab):
+  - installs the exact commit and checks it, with a forced reinstall, because the package version never changes;
+  - checks the split and tarball checksums;
+  - writes `per_case.csv`, `metrics.json` and `figures/` to Drive `runs/EXP-15_visionA_error_analysis/`.
+
+  `00_template.ipynb` still installs the old way.
+- **EXP-15 run at `c442a54`:**
+  - 9 of 26 fold-0 cases are Dice-0 misses;
+  - volume error and cut-off crossings by size band;
+  - figures of every miss and the 3 best cases.
+- **`docs/ERROR_ANALYSIS_VISION_A.md`:** a plain-English draft with Lorna's visual readings (drafted with AI help, checked by Lorna).
+- **Open points recorded:**
+  - territory uses the unconfirmed TopCoW numbering and no distance limit;
+  - EXP-15's `config.json` predates the results commit;
+  - the first Colab run stopped on EXP-1's two rows per case, now handled.
+- `pytest` on Lorna's Windows laptop: 435 passed, 3 skipped, and the same 9 Windows-only failures as before the work (archive listing, bash parse, corpus encoding, nnU-Net splits).
+- **Notion sync:**
+  - Experiments: EXP-15 (commit, findings, link to the draft).
+  - Tasks: the error-analysis row through In progress to In review.
 
 ## 2026-11-06 — Claude Code session (Phase 3 team briefs and the template notebook)
 - **Roles agreed by Parsa:**
