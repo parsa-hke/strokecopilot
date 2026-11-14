@@ -79,3 +79,55 @@ def build_table(run_folders, metrics_name=None):
                 row[f"{col_key}_{metric}_ci"] = m.get("ci95")
         table.append(row)
     return table
+
+#--
+
+def plot_table(table, out_path):
+    """Bar chart with CI error bars for the three main metrics."""
+    import matplotlib.pyplot as plt
+
+    if not table:
+        raise ValueError("Empty table.")
+        
+    labels = [f"{r['model']}\n({r.get('source', 'unknown')}, {r.get('arm', 'unknown')})" for r in table]
+    x = np.arange(len(table))
+    width = 0.25
+    fig, ax = plt.subplots(figsize=(max(6, 3 * len(table)), 5))
+    
+    for i, metric in enumerate(METRICS):
+        values = [r.get(metric) if r.get(metric) is not None else np.nan for r in table]
+        errors = _errors_from_ci(table, metric)
+        
+        bars = ax.bar(x + (i - 1) * width, values, width, label=metric.replace("_", " "),
+                      yerr=errors, capsize=3)
+                      
+        for bar, value in zip(bars, values):
+            label = "n/a" if np.isnan(value) else f"{value:.3f}"
+            ax.text(bar.get_x() + bar.get_width() / 2, 0 if np.isnan(value) else bar.get_height(),
+                    label, ha="center", va="bottom", fontsize=8)
+                    
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_ylabel("Rate")
+    ax.set_title("Hallucination, critical hallucination, omission")
+    ax.legend(loc="upper right", fontsize=8)
+    ax.set_ylim(0, 1)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=120)
+    plt.close()
+
+
+def _errors_from_ci(table, metric):
+    """Lower/upper error bars from CIs. Zero where the CI is missing or the value is null."""
+    lower = []
+    upper = []
+    for r in table:
+        ci = r.get(f"{metric}_ci")
+        value = r.get(metric)
+        if ci is None or value is None:
+            lower.append(0)
+            upper.append(0)
+        else:
+            lower.append(max(0, value - ci[0]))
+            upper.append(max(0, ci[1] - value))
+    return [lower, upper]
