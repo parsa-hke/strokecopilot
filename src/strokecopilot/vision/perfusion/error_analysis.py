@@ -438,14 +438,18 @@ def five_fold_counts(table):
 def artery_group(reason, nearest_label, distance_mm, limit_mm=None):
     """Follow-ups step 3. The artery the occlusion sits next to, counted only within the distance limit.
 
-    Returns the artery type, side ignored (ARTERY_OF_LABEL), "too far" when the occlusion is more than `limit_mm`
-    from its nearest label, "no occlusion found" when the occlusion mask is empty, and "unknown" otherwise
-    (no labels, an unlisted label, or a missing value). The default limit is the contract's (volumes.DISTANCE_LIMIT_MM).
+    `reason` is the contract's reason from volumes.occlusion_site(), as case_features() stores it. That says "ok"
+    only for an ICA or basilar occlusion within the limit; "nearest_<site>", "ambiguous" and "too_far" also come
+    from good evidence, so all of these are used. Returns the artery type, side ignored (ARTERY_OF_LABEL), "too far"
+    when the occlusion is more than `limit_mm` from its nearest label, "no occlusion found" for an empty occlusion
+    mask, and "unknown" for "no_labels", "shape_mismatch", any other reason, an unlisted label or a missing value.
+    The default limit is the contract's (volumes.DISTANCE_LIMIT_MM).
     """
     limit_mm = volumes.DISTANCE_LIMIT_MM if limit_mm is None else limit_mm
     if reason == "empty_mask":
         return "no occlusion found"
-    if reason != "ok" or nearest_label is None or distance_mm is None:
+    usable = reason in ("ok", "too_far", "ambiguous") or (isinstance(reason, str) and reason.startswith("nearest_"))
+    if not usable or nearest_label is None or distance_mm is None:
         return "unknown"
     if isinstance(nearest_label, float) and np.isnan(nearest_label):
         return "unknown"

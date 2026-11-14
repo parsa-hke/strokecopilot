@@ -196,7 +196,9 @@ def _five_fold_features():
         "threshold_abs_error_ml": [2.2, 5.0, 96.0, 20.0, 1.1, 5.0, 30.0, 1.5],
         "infarct_tmax6_share": [0.1, 0.9, 0.22, 0.7, 0.75, 0.6, np.nan, 0.5],
         "infarct_tmax_missing_share": [0.0, 0.0, 0.02, 0.0, 0.0, 0.5, 0.9, 0.06],
-        "occlusion_reason": ["ok", "ok", "ok", "ok", "empty_mask", "ok", "ok", "no_labels"],
+        # The contract reasons case_features() stores (volumes.occlusion_site), matching each label and distance.
+        "occlusion_reason": ["nearest_MCA", "nearest_MCA", "ok", "too_far", "empty_mask", "nearest_other",
+                             "nearest_other", "no_labels"],
         "occlusion_nearest_label": [7, 5, 4, 1, np.nan, 2, 8, np.nan],
         "occlusion_distance_mm": [1.0, 12.0, 0.0, 20.0, np.nan, 3.0, 2.0, np.nan],
         "onset_to_imaging_min": [120.0, np.nan, 300.0, np.nan, 90.0, np.nan, 60.0, 200.0],
@@ -223,19 +225,40 @@ def test_is_undercall():
 
 
 @pytest.mark.parametrize("reason, label, distance, group", [
-    ("ok", 7, 1.0, "MCA"), ("ok", 4, 5.0, "ICA"),          # 5 mm is still within the limit
-    ("ok", 1, 5.01, "too far"), ("ok", 2, 3.0, "PCA"),
-    ("ok", 8, 2.0, "Pcom"), ("ok", 13, 1.0, "unknown"),    # 13 is not a listed label
-    ("empty_mask", None, None, "no occlusion found"), ("no_labels", None, None, "unknown"),
-    ("ok", float("nan"), float("nan"), "unknown"),
+    # The reasons volumes.occlusion_site() really gives, as case_features() stores them.
+    ("nearest_MCA", 7, 1.0, "MCA"), ("nearest_MCA", 5, 12.0, "too far"),
+    ("ok", 4, 5.0, "ICA"),                                  # 5 mm is still within the limit
+    ("too_far", 1, 5.01, "too far"), ("ambiguous", 6, 2.0, "ICA"),
+    ("nearest_other", 2, 3.0, "PCA"), ("nearest_other", 8, 2.0, "Pcom"),
+    ("nearest_other", 13, 1.0, "unknown"),                  # 13 is not a listed label
+    ("empty_mask", None, None, "no occlusion found"),
+    ("no_labels", None, None, "unknown"), ("shape_mismatch", None, None, "unknown"),
+    ("something_new", 7, 1.0, "unknown"),                   # an unrecognised reason is not trusted
+    ("nearest_MCA", float("nan"), float("nan"), "unknown"),
 ])
 def test_artery_group(reason, label, distance, group):
     assert error_analysis.artery_group(reason, label, distance) == group
 
 
+def test_artery_group_from_case_features():
+    """Through the real pipeline: the reason comes from volumes.occlusion_site(), not from the test."""
+    mca = error_analysis.case_features(synthetic_case(occlusion_label=5))
+    assert mca["occlusion_reason"] == "nearest_MCA"
+    assert error_analysis.artery_group(mca["occlusion_reason"], mca["occlusion_nearest_label"], mca["occlusion_distance_mm"]) == "MCA"
+    far = synthetic_case(occlusion_label=1)
+    far.arrays["occlusion"][:] = False
+    far.arrays["occlusion"][2:4, 2:4, 2:3] = True  # far from the basilar label
+    f = error_analysis.case_features(far)
+    assert f["occlusion_reason"] == "too_far" and f["occlusion_distance_mm"] > 5.0
+    assert error_analysis.artery_group(f["occlusion_reason"], f["occlusion_nearest_label"], f["occlusion_distance_mm"]) == "too far"
+    ica = error_analysis.case_features(synthetic_case(occlusion_label=6))
+    assert ica["occlusion_reason"] == "ok"
+    assert error_analysis.artery_group(ica["occlusion_reason"], ica["occlusion_nearest_label"], ica["occlusion_distance_mm"]) == "ICA"
+
+
 def test_artery_group_limit_is_adjustable():
-    assert error_analysis.artery_group("ok", 1, 20.0) == "too far"
-    assert error_analysis.artery_group("ok", 1, 20.0, limit_mm=25.0) == "basilar"
+    assert error_analysis.artery_group("too_far", 1, 20.0) == "too far"
+    assert error_analysis.artery_group("too_far", 1, 20.0, limit_mm=25.0) == "basilar"
 
 
 def test_add_artery_groups_and_group_summary():
@@ -362,7 +385,7 @@ def test_followup_notebook_flow(tmp_path):
     table = error_analysis.five_fold_table(nnunet, threshold, expected_cases=6)
     features = pd.DataFrame({
         "case": table["case"], "size_band": "5-21", "infarct_tmax6_share": 0.5, "infarct_tmax_missing_share": 0.0,
-        "occlusion_reason": "ok", "occlusion_nearest_label": 7, "occlusion_distance_mm": 2.0,
+        "occlusion_reason": "nearest_MCA", "occlusion_nearest_label": 7, "occlusion_distance_mm": 2.0,
         "onset_to_imaging_min": [100.0, np.nan, 150.0, np.nan, 200.0, np.nan]})
     table = table.merge(features, on="case", how="left", validate="one_to_one")
     counts = error_analysis.five_fold_counts(table)

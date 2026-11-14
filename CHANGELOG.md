@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-11-14, Claude Code session (Lorna, artery_group fix)
+- **Bug, found by Lorna.** `error_analysis.artery_group` treated only the reason "ok" as usable. But the reason `case_features()` stores comes from `volumes.occlusion_site()`, and that says "ok" only for an ICA or basilar occlusion within the limit. "nearest_MCA", "nearest_other", "ambiguous" and "too_far" also come from good evidence, yet all of them fell into "unknown". That is why EXP-27 gave ICA 13, basilar 1, no occlusion found 2 and unknown 113, with no MCA or "too far".
+- **Fix:**
+  - "empty_mask" gives "no occlusion found".
+  - "ok", "too_far", "ambiguous" and any "nearest_*" reason count as usable evidence, then the distance limit and the nearest label decide the group, as before.
+  - "unknown" is left for "no_labels", "shape_mismatch", any other reason, an unlisted label or a missing value.
+- **Tests:**
+  - The artery tests now use the contract's real reasons.
+  - A new test goes through `case_features()` on fake scans, so the reason comes from `occlusion_site()` itself: nearest_MCA gives MCA, too_far gives "too far", and ok gives ICA.
+  - The hand-made tables use the real reasons.
+  - Against the old code, 9 of the artery tests fail; with the fix, all 79 tests in `test_error_analysis.py` pass.
+- **EXP-27's artery numbers are wrong and need a rerun** of notebook 13's section 6 at the fixed commit. Its other numbers do not use `artery_group` and stand. The write-up already holds the artery counts back.
+- pytest on Windows: 521 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
+- **Notion sync:** Experiments → EXP-27: note that the artery groups need a rerun after this fix.
+
 ## 2026-11-14, Claude Code session (Lorna, error-analysis write-up: EXP-27 five-fold follow-ups)
 - **`docs/ERROR_ANALYSIS_VISION_A.md`** gains "Five-fold follow-ups (EXP-27)". It uses EXP-27's results at commit `f493883`, on 129 development cases over 5 folds, as reported by Lorna from the Colab run. It covers:
   - **Misses:** 39 of 129 are Dice 0. Under 21 mL, 34 of 84; at 21 mL and over, 5 of 45.
