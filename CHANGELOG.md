@@ -1,17 +1,22 @@
 # CHANGELOG
 
 ## 2026-11-14 — Claude Code session (Vision B: RSNA slice spacing and field of view, PR #3 review items 2 and 3)
-- **Scope:** Parsa's PR #3 review, open items 2 (RSNA's real slice thickness) and the measurement item 3 needs (RSNA's field of view). Code and notebook only; the Kaggle run is Mohamed's. Branch `mohamed/isles-followup`, from `mohamed/isles-check`.
+- **Scope:** Parsa's PR #3 review, open items 2 (RSNA's real slice thickness) and 3 (the ISLES'24 rerun with the field of view matched). The runs are Mohamed's. Branch `mohamed/isles-followup`, from `mohamed/isles-check`.
 - **`data/rsna_geometry.py`** (tested): from the shard index only, no images, per RSNA training scan:
   - the gap between neighbouring slice centres (`z_mm`, ImagePositionPatient z): the slice interval, not the slice thickness, which RSNA's files do not carry (plan §5.2). Uneven spacing, repeated positions and missing z are counted;
   - field of view = 512 × `pixel_spacing_mm`. The image size is not in the index, so RSNA's documented 512 is assumed;
   - the distribution across scans, the share within 0.25 mm of the documented 5 mm, and the most common values.
 - **`notebooks/23_visionB_rsna_geometry.ipynb`** (Kaggle, CPU): reads the four index files, rebuilds the split (checked against EXP-6's fingerprint when its `metrics.json` is attached), keeps training rows only, refuses to run if `ALLOW_RSNA_TEST` is set, and saves `config.json` and `metrics.json` after an ID check. Dry-run locally on fake indexes; not run on the real data, so every number is unmeasured.
-- **Found while checking the branch:** notebook 21's section 8 ("Save and check") has lost its code cell, so a rerun would save nothing. To be restored with item 3's change.
-- pytest: 487 passed (4 new; `test_real_repo_is_clean` needs a git checkout and was run separately).
+- **EXP-28 (Mohamed, Kaggle CPU, `0172bce`):** 17,398 RSNA training scans; split matches EXP-6.
+  - Slice spacing (gap between slice centres): median 5.037 mm; 66.0% of scans within 0.25 mm of the documented 5 mm. The rest of the distribution is in `metrics.json` on Drive, not yet recorded here.
+  - Field of view (512 × pixel spacing): median 250.0 mm, p5–p95 216.0–253.3 mm. ISLES'24's in-plane spacing (median 0.41 mm on images at least 512 wide, `docs/DATA.md`) puts a typical scan near 210 mm, so heads fill more of the image than in RSNA; EXP-16's `metrics.json` has the measured figure.
+- **Item 3, code:** `isles_check.py` variants can now carry a field of view (`variant_spec`; a number is a slab thickness, a dict may add `fov_mm`). `FOV_VARIANTS` scores 5 mm slabs as in EXP-16 and 5 mm slabs cropped or padded with air to `RSNA_FOV_MM` = 250 mm (EXP-28's median), so the change in positive calls is paired scan by scan. `VARIANTS` and EXP-16's behaviour are unchanged (tested).
+- **Notebook 21:** section 8's save cell restored (it had lost its code, so a rerun saved nothing). `VARIANT_SET` picks `'fov'` (the follow-up) or `'standard'` (EXP-16); the run folder is `<EXP>_visionB_isles_fov` for the follow-up. Section 5 prints whether the unchanged reading reproduces EXP-16's 45 calls. `REPO_REF` is `mohamed/isles-followup` until the merge. Dry-run locally on synthetic scans; not run on Colab.
+- pytest: 491 passed (8 new: 4 geometry, 4 field of view; `test_real_repo_is_clean` needs a git checkout and was run separately).
 - **Notion sync** (not done; for Mohamed):
-  - Experiments → a new row (Status *Running*) for the notebook 23 run; afterwards the median slice spacing, the share near 5 mm, the median field of view and the commit.
-  - Tasks → Vision B "Domain shift check": items 2 and 3 in progress.
+  - Experiments → EXP-28: median slice spacing 5.037 mm (66.0% within 0.25 mm of 5 mm), median field of view 250.0 mm (p5–p95 216.0–253.3), commit `0172bce`, Done.
+  - Experiments → a new row (Status *Running*) for the field-of-view rerun of notebook 21; afterwards both readings' calls at 0.278, the paired flips, and whether EXP-16 was reproduced.
+  - Tasks → Vision B "Domain shift check": item 2 measured; item 3 code ready, run pending; item 1 (top-scan review) open.
 
 ## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes, model list)
 - **Phase 3, Parsa's tasks A1–A3.** Nothing below used a held-out case; `folds.json` was checked by sha256 only.
