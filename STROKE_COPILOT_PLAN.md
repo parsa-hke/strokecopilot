@@ -515,7 +515,7 @@ Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the lo
 - [x] Core/penumbra heads or a two-stage approach (predict final infarct = core proxy; penumbra from Tmax) — decide and record — DEC-26, 13 Nov 2026: two-stage (nnU-Net core proxy, Tmax > 6 s penumbra), no heads and no volume calibration; EXP-26
 - [x] Decide which core feeds the contract: rCBF < 30% threshold or learned model, compared on volume error and decision-threshold crossings (§8.1) — DEC-25, 13 Nov 2026: nnU-Net (each development case from the fold model that did not train on it). On EXP-25 it is no worse on volume error or crossings and clearly better on Dice; its volume is not measurably better, which the report states
 - [ ] Confidence estimates (`confidence.core/penumbra`) from fold ensemble disagreement or MC dropout
-- [ ] Error analysis: where does the model fail (small lesions, posterior circulation, artefacts)?
+- [x] Error analysis: where does the model fail (small lesions, posterior circulation, artefacts)? Done by Lorna: EXP-15 (fold 0) and EXP-27 (all five folds); write-up in `docs/ERROR_ANALYSIS_VISION_A.md`.
 - [ ] `contract/build.py` produces valid `vision_output.json` for every non-held-out case; validate all
 
 **Vision B**

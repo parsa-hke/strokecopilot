@@ -134,7 +134,7 @@ The groups overlap: a small infarct can also have little of it visible. Counts a
 
 ## Five-fold follow-ups (EXP-27)
 
-Parsa's review asked for four follow-ups. EXP-27 ran them in one pass (notebook 13, commit `f493883`) on all 129 development cases: fold 0 (EXP-14) and folds 1 to 4 (EXP-18 to 21), each case scored by the fold model that did not train on it. The threshold baseline is EXP-1 (`within_tmax6`). Outputs are on Drive in `runs/EXP-27_visionA_error_followups/`. All numbers are counts and medians; no case IDs.
+Parsa's review asked for four follow-ups. EXP-27 ran them in one pass (notebook 13, first at commit `f493883`, rerun at `0cd342c` after an artery-group fix) on all 129 development cases: fold 0 (EXP-14) and folds 1 to 4 (EXP-18 to 21), each case scored by the fold model that did not train on it. The threshold baseline is EXP-1 (`within_tmax6`). Outputs are on Drive in `runs/EXP-27_visionA_error_followups/`. All numbers are counts and medians; no case IDs.
 
 Two new terms:
 - **Over-call:** the AI's volume is larger than the true volume and lands on the wrong side of at least one cut-off (21, 31, 51 or 70 mL), at any Dice.
@@ -185,7 +185,32 @@ Onset to scan time is known for 59 of the 129 cases. The median is 122 minutes f
 
 ### Artery groups
 
-The grouping by nearest artery within 5 mm ran, but the counts reported from the run (ICA 13, basilar 1, no occlusion found 2, unknown 113) do not fit the grouping rule. The rule should also give MCA and "too far" groups, since about 57% of occlusions sit nearest an MCA label (`docs/DATA.md`), and 12 fold-0 occlusions alone are more than 5 mm from their nearest label. ICA 13 and basilar 1 match the contract's occlusion-site rule instead. **These counts are held back until they are rechecked** against the `artery_group` table in the run's output.
+Each case is grouped by the artery its blockage sits next to, left and right counted together, but only when the blockage is within 5 mm of that artery's label. Blockages farther away are "too far". These counts come from the rerun at `0cd342c`, after a bug fix: the first run put every artery except ICA and basilar under "unknown".
+
+"Missed by both" means both methods scored under 0.05, as before; "missed by the AI only" means only the AI did.
+
+| Artery group | Cases | Dice 0 | Missed by the AI only | Missed by both |
+|---|---|---|---|---|
+| MCA | 45 | 12 | 2 | 17 |
+| ICA | 13 | 3 | 0 | 5 |
+| ACA | 4 | 3 | 0 | 3 |
+| PCA | 3 | 1 | 0 | 1 |
+| Basilar | 1 | 1 | 0 | 1 |
+| No occlusion found | 2 | 2 | 0 | 2 |
+| Too far (over 5 mm) | 61 | 17 | 1 | 23 |
+| **All** | **129** | **39** | **3** | **52** |
+
+| Front or back of the brain | Cases | Dice 0 |
+|---|---|---|
+| Front (anterior: ACA, ICA, MCA) | 62 | 18 |
+| Back (posterior: PCA, basilar) | 4 | 2 |
+| No occlusion found | 2 | 2 |
+| Too far (over 5 mm) | 61 | 17 |
+
+- **In the large groups, the miss rate is about the same as overall.** The AI scores Dice 0 on 12 of 45 MCA cases, 3 of 13 ICA cases and 17 of 61 "too far" cases: about 1 in 4 to 3 in 10, against 39 of 129 overall. The artery the blockage sits next to does not seem to change how often the AI misses.
+- **The small groups are too small to conclude.** ACA (4 cases), the back of the brain (4 cases) and "no occlusion found" (2 cases) are mostly misses, but a handful of cases cannot show a pattern. So this data cannot say whether the AI does worse in the back of the brain.
+- Almost half the blockages (61 of 129) sit more than 5 mm from any artery label, so their artery is uncertain.
+- Over all five folds, 3 cases are missed by the AI alone (under 0.05 while the threshold baseline scored 0.05 or more). In fold 0 there were none.
 
 ### Check against Parsa's EXP-25
 
@@ -270,8 +295,12 @@ These are untested ideas.
 - **AI outlines only on fold 0, and only on one slice.** The EXP-27 pictures draw the AI's fold-0 outlines (EXP-22) next to the true infarct, but only for fold 0's misses and best cases, and only on the slice with the most infarct. The legend says when the AI marked other slices instead (Miss 4).
 - **Only 26 cases in the fold-0 sections,** from one fold. Groups of 1 to 7 cases show patterns, not proven causes. The EXP-27 section uses all 129 development cases, but its groups are still small, and no significance tests were run on it.
 - **Visual readings are not a clinical opinion.** Noise and artefacts were judged by eye, not measured.
-- **Groupings still open:**
-  - The occlusion site is "unknown" in 22 of 26 fold-0 cases by the contract's own rule, so grouping by it says little.
-  - The grouping by nearest artery within 5 mm ran in EXP-27, but its reported counts are held back until they are rechecked (see the EXP-27 section).
+- **Artery and onset groupings are limited:**
+  - The occlusion site is "unknown" in 22 of 26 fold-0 cases by the contract's own rule, so grouping by it says little. The EXP-27 artery grouping uses the nearest label within 5 mm instead.
+  - 61 of 129 blockages are more than 5 mm from any label, and the back-of-the-brain group has only 4 cases.
   - The artery labels use a numbering (TopCoW) that is not confirmed for this dataset (`docs/DATA.md`).
   - Onset to scan time is known for 59 of 129 cases. It shows no clear difference between misses and the rest.
+- **EXP-27 ran twice in the same folder.**
+  - The first run was at `f493883`. It was rerun at `0cd342c` after the artery-group fix.
+  - The run folder kept the `config.json` written at `f493883`, because it is written once, before the first run. `per_case.csv` and `metrics.json` are from `0cd342c`, and `metrics.json` records both commits.
+  - All numbers other than the artery groups were the same in both runs.
