@@ -38,6 +38,11 @@ AIR_HU = -1000.0
 # slices, to show how much of any false-positive rate the reformatting itself accounts for.
 VARIANTS = {"slab_5mm": TARGET_SLICE_MM, "native": None}
 PRIMARY = "slab_5mm"
+# RSNA training scans' median field of view, 512 x pixel spacing (EXP-28, notebook 23: p5-p95 216.0-253.3 mm).
+RSNA_FOV_MM = 250.0
+# The follow-up to EXP-16 (PR #3 review, item 3): the same 5 mm slabs with the field of view left as it is
+# (reproduces EXP-16) and matched to RSNA's, so the change in positive calls is paired scan by scan.
+FOV_VARIANTS = {"slab_5mm": TARGET_SLICE_MM, "slab_5mm_fov250": {"target_mm": TARGET_SLICE_MM, "fov_mm": RSNA_FOV_MM}}
 THRESHOLDS = (0.1, 0.2, 0.3, 0.5, 0.7, 0.9)
 PERCENTILES = (5, 25, 50, 75, 90, 95, 99)
 HISTOGRAM_BINS = 20
@@ -63,6 +68,16 @@ def axial_stack(img):
     # rows running to the back and columns to the patient's left, as in an RSNA DICOM slice.
     stack = np.transpose(hu[::-1, ::-1, :], (2, 1, 0))
     return np.ascontiguousarray(np.nan_to_num(stack, nan=AIR_HU)), (z_mm, y_mm, x_mm)
+
+
+def variant_spec(spec):
+    """A variant's (target_mm, fov_mm). A number or None is a slab thickness alone; a dict may add fov_mm."""
+    if isinstance(spec, dict):
+        unknown = set(spec) - {"target_mm", "fov_mm"}
+        if unknown:
+            raise ValueError(f"Unknown variant settings {sorted(unknown)}.")
+        return spec.get("target_mm"), spec.get("fov_mm")
+    return spec, None
 
 
 def slab_weights(n_slices, slice_mm, target_mm):
@@ -116,7 +131,11 @@ def square(stack, value=AIR_HU):
 
 
 def set_field_of_view(stack, row_mm, col_mm, fov_mm):
-    """Crop or pad (with air) to a fixed field of view in mm, about the centre. Off by default."""
+    """Crop or pad (with air) to a fixed field of view in mm, about the centre.
+
+    Off in VARIANTS (EXP-16); FOV_VARIANTS sets it to RSNA_FOV_MM, so a head covers as much of the image as in
+    RSNA. The centre is the image centre, not the head's: a head far off centre in a large field could be cut.
+    """
     stack = _fit_axis(stack, 1, max(1, round(fov_mm / row_mm)))
     return _fit_axis(stack, 2, max(1, round(fov_mm / col_mm)))
 
@@ -235,8 +254,9 @@ def run_check(cases, load_image, predict, calibrator, variants=VARIANTS, primary
         row = {"case": case, "error": ""}
         try:
             img = load_image(case)
-            for name, target_mm in variants.items():
-                images, info = prepare(img, target_mm)
+            for name, spec in variants.items():
+                target_mm, fov_mm = variant_spec(spec)
+                images, info = prepare(img, target_mm, fov_mm=fov_mm)
                 if name == primary:
                     row.update(info)
                 else:
@@ -275,7 +295,8 @@ def metrics_of(table, calibrator, variants=VARIANTS, primary=PRIMARY):
         "label_note": "No bleed labels: ISLES'24 patients went on to reperfusion therapy, so every positive call is a presumed false positive.",
         "calibrator": {"method": calibrator.method, "k": calibrator.k, "kind": calibrator.kind, "threshold": calibrator.threshold},
         "primary": primary,
-        "target_slice_mm": variants[primary],
+        "target_slice_mm": variant_spec(variants[primary])[0],
+        "variant_settings": {name: dict(zip(("target_mm", "fov_mm"), variant_spec(spec))) for name, spec in variants.items()},
         "variants": {name: summarise(ok[f"{name}_confidence"], calibrator.threshold) for name in variants} if len(ok) else {},
     }
     if len(ok):
@@ -333,7 +354,7 @@ def histogram_figure(metrics, out_png=None):
     return fig
 
 
-def top_scans_figure(table, load_image, n=8, primary=PRIMARY, out_png=None):
+def top_scans_figure(table, load_image, n=8, primary=PRIMARY, out_png=None, variants=VARIANTS):
     """The brain window of the slabs that drove each of the n highest-scoring scans.
 
     Panels are labelled by rank and score, never by case ID; the table maps rank to case on Drive.
@@ -349,7 +370,8 @@ def top_scans_figure(table, load_image, n=8, primary=PRIMARY, out_png=None):
     for ax in axes.ravel():
         ax.axis("off")
     for row_axes, (_, row) in zip(axes, top.iterrows()):
-        images, _ = prepare(load_image(row["case"]), VARIANTS.get(primary, TARGET_SLICE_MM))
+        target_mm, fov_mm = variant_spec(variants.get(primary, TARGET_SLICE_MM))
+        images, _ = prepare(load_image(row["case"]), target_mm, fov_mm=fov_mm)
         slabs = [int(s) for s in str(row[f"{primary}_top_slabs"]).split(";") if s][:TOP_SLABS]
         for ax, slab in zip(row_axes, slabs):
             ax.imshow(images[slab][:, :, 0], cmap="gray", vmin=0, vmax=255)  # channel 0 is the brain window
