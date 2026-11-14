@@ -1,4 +1,4 @@
-# Vision A error analysis (EXP-15), draft
+# Vision A error analysis (EXP-15, EXP-27)
 
 Lorna, Vision A. Task 1 of `docs/team/lorna_vision_a.md`. Corrected at Parsa's review of PR #1 (13 Nov 2026).
 
@@ -226,7 +226,7 @@ The fold-0 pictures now show the AI's outline (EXP-22) in cyan next to the true 
 
 ## Example figures
 
-The pictures are on Drive in `runs/EXP-15_visionA_error_analysis/figures/`. They will be copied into this document once chosen for the report (ISLES'24 images may go in the report).
+The pictures are on Drive in `runs/EXP-15_visionA_error_analysis/figures/`. The EXP-27 pictures, which add the AI's outline in cyan, are on Drive in `runs/EXP-27_visionA_error_followups/` (in its `figures/` folder). They will be copied into this document once chosen for the report (ISLES'24 images may go in the report).
 
 - **Miss 1** (`miss_1.png`, 70 mL and over): the 101 mL infarct the AI marked as empty, with 22% visible.
 - **Best 1** (`best_1.png`): the AI's best case, for comparison.
@@ -263,7 +263,7 @@ Best 3 (21–70 mL, 67%): A medium dead area, mostly covered by a clear trouble 
 
 ## What might fix each group
 
-These are untested ideas.
+The ideas below are untested. Where EXP-27 has already checked something, the result is given instead.
 
 - **Small infarcts.**
   - In 5 of the 7 small misses (Miss 3 to 7), the AI marked at most 0.8 mL. In the other 2 it marked tissue in the wrong place (Miss 8 and 9).
@@ -278,15 +278,14 @@ These are untested ideas.
   - Add the plain CT scan (NCCT) as an extra input, which plan §8.1 allows.
   - Use the visible share as a warning: a low share should mean low confidence in the AI's core estimate (`confidence.core`, Task 2).
 - **Large infarct, little of it visible (Miss 1).**
-  - Look at the AI's outline (it marked nothing here).
-  - Check its onset-to-scan time and where the blocked artery is.
+  - Checked in EXP-27: the AI's outline is missing on every slice, so it marked nothing at all. Over all five folds, neither onset time nor the artery group shows a clear link to misses.
   - If the tissue died after the scan, no model of the first scan can be expected to find it. Report it as a limit.
 - **Visible, still missed (Miss 4).**
+  - Checked in EXP-27: the AI marked nothing on the slice with the most infarct, only small marks on 7 other slices.
   - This is the case a better AI should catch.
-  - Check it first with the AI's outline, then with folds 1 to 4.
 - **Over-call (Miss 8).**
-  - Look at where the AI's 32.6 mL sits relative to the at-risk area, with the EXP-22 outlines.
-  - This is the costly kind of error for the cut-offs, so count over-calls across all five folds.
+  - Checked in EXP-27: the AI's 32.6 mL sits in a different, deeper place than the dead spot.
+  - Over all five folds, over-calls are rare: 9 of 129, and Miss 8 is the only one that is also Dice 0. Under-calls are far more common (34), so predicting too little is the bigger risk at the cut-offs.
 
 ## Limits
 
