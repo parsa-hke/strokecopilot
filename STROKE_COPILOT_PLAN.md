@@ -123,6 +123,7 @@ strokecopilot/
 │   │   ├── __init__.py
 │   │   ├── isles24.py             # load_case(), list_cases(), slim format reader
 │   │   ├── rsna.py                # RSNA slice/scan loaders, windowing
+│   │   ├── rsna_geometry.py       # RSNA slice spacing and field of view from the shard index
 │   │   ├── prep_isles24.py        # raw archive → slim tarball (run once)
 │   │   ├── prep_rsna.py           # raw DICOM → JPEG tar shards + scan index (run once, on Kaggle)
 │   │   └── splits.py              # reads splits/folds.json; guards against held-out use
@@ -200,6 +201,7 @@ strokecopilot/
 │   ├── 11_visionA_thresholds.ipynb
 │   ├── 20_visionB_train.ipynb     # runs on Kaggle: RSNA split, slice classifier, scan calibration
 │   ├── 21_visionB_isles_check.ipynb # Colab: Vision B on ISLES'24 native NCCT (presumed no bleed)
+│   ├── 23_visionB_rsna_geometry.ipynb # Kaggle, CPU: RSNA training scans' slice spacing and field of view
 │   ├── 30_nlpA_corpus.ipynb
 │   ├── 31_nlpA_reasoner.ipynb
 │   ├── 40_nlpB_verifier.ipynb
@@ -516,7 +518,7 @@ Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the lo
 
 **Vision B**
 - [ ] Tune aggregation and threshold for high sensitivity at acceptable specificity (false "no bleed" is the worst failure in the system — state the operating point and why)
-- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate — EXP-16 (Mohamed, 8 Nov 2026, `23e2f92`): at the provisional 0.278, 45 of 129 development scans called positive (34.9%, 95% CI 27.2–43.4%) on 5 mm slabs, 61 of 129 on native thin slices; review of the top scans and a check of RSNA's slice thickness on Kaggle still open
+- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate — EXP-16 (Mohamed, 8 Nov 2026, `23e2f92`): at the provisional 0.278, 45 of 129 development scans called positive (34.9%, 95% CI 27.2–43.4%) on 5 mm slabs, 61 of 129 on native thin slices; review of the top scans and a check of RSNA's slice thickness on Kaggle still open; `rsna_geometry.py` and `23_visionB_rsna_geometry.ipynb` (14 Nov 2026) measure RSNA's slice spacing and field of view, run pending
 - [ ] Optional: per-subtype outputs if time allows
 
 **NLP A**

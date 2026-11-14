@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-11-14 — Claude Code session (Vision B: RSNA slice spacing and field of view, PR #3 review items 2 and 3)
+- **Scope:** Parsa's PR #3 review, open items 2 (RSNA's real slice thickness) and the measurement item 3 needs (RSNA's field of view). Code and notebook only; the Kaggle run is Mohamed's. Branch `mohamed/isles-followup`, from `mohamed/isles-check`.
+- **`data/rsna_geometry.py`** (tested): from the shard index only, no images, per RSNA training scan:
+  - the gap between neighbouring slice centres (`z_mm`, ImagePositionPatient z): the slice interval, not the slice thickness, which RSNA's files do not carry (plan §5.2). Uneven spacing, repeated positions and missing z are counted;
+  - field of view = 512 × `pixel_spacing_mm`. The image size is not in the index, so RSNA's documented 512 is assumed;
+  - the distribution across scans, the share within 0.25 mm of the documented 5 mm, and the most common values.
+- **`notebooks/23_visionB_rsna_geometry.ipynb`** (Kaggle, CPU): reads the four index files, rebuilds the split (checked against EXP-6's fingerprint when its `metrics.json` is attached), keeps training rows only, refuses to run if `ALLOW_RSNA_TEST` is set, and saves `config.json` and `metrics.json` after an ID check. Dry-run locally on fake indexes; not run on the real data, so every number is unmeasured.
+- **Found while checking the branch:** notebook 21's section 8 ("Save and check") has lost its code cell, so a rerun would save nothing. To be restored with item 3's change.
+- pytest: 487 passed (4 new; `test_real_repo_is_clean` needs a git checkout and was run separately).
+- **Notion sync** (not done; for Mohamed):
+  - Experiments → a new row (Status *Running*) for the notebook 23 run; afterwards the median slice spacing, the share near 5 mm, the median field of view and the commit.
+  - Tasks → Vision B "Domain shift check": items 2 and 3 in progress.
+
 ## 2026-11-12 — Claude Code session (Phase 3: fold jobs, offer watcher, A3 approvals, verifier fixes, model list)
 - **Phase 3, Parsa's tasks A1–A3.** Nothing below used a held-out case; `folds.json` was checked by sha256 only.
 - **A1, nnU-Net folds 1–4 (commit `7c67c5b`):**
