@@ -16,7 +16,9 @@ Design (Phase 3, Benny; review fixes by Parsa, 12 Nov 2026):
 
 Open, for Benny (review): the sample is flagged claims only, so agreement with the verifier is its precision and
 missed hallucinations are never measured. Metric §8 asks for a sample across claims; see the PR #5 review comment.
-"""
+
+----- NEW CODE -----"""
+
 
 import csv
 import json
@@ -27,10 +29,9 @@ from pathlib import Path
 from strokecopilot.data import splits
 
 LABELS = ("real_reasoner_error", "verifier_mistake")
-FLAGGED_FILES = ("flagged_rescore.json", "flagged.json")  # newest scoring first
-SHEET_FIELDS = ["sample_id", "case_alias", "field", "claim", "declared_sources", "label_A", "label_B", "note_A", "note_B"]
-KEY_FIELDS = ["sample_id", "model", "experiment", "run_folder", "case", "claim_id", "subtype", "critical", "reason"]
-
+FLAGGED_FILES = ("flagged_rescore.json", "flagged.json", "flagged_phase3_judge_v3.json")
+SHEET_FIELDS = ["sample_id", "case_alias", "field", "claim", "declared_sources", "label_A", "label_B", "consensus", "note_A", "note_B", "note_consensus"]
+KEY_FIELDS = ["sample_id", "model", "experiment", "run_folder", "case", "claim_id", "subtype", "critical", "verifier_verdict"]
 
 def _flagged_file(folder, flagged_name=None):
     if flagged_name:
@@ -38,76 +39,136 @@ def _flagged_file(folder, flagged_name=None):
     for name in FLAGGED_FILES:
         if (folder / name).exists():
             return folder / name
-    raise FileNotFoundError(f"No flagged-claims file in {folder} (looked for {', '.join(FLAGGED_FILES)}).")
+    return None # Some runs might not have a flagged file
 
+def _categorize_subtype(subtype):
+    if not subtype:
+        return "clean"
+    # Content false subtypes (1-5)
+    if subtype in ("wrong_number", "invented_finding", "wrong_rule", "misapplied_rule", "faulty_derivation"):
+        return "content_error"
+    # Citation only (6-7)
+    if subtype in ("uncited_rule", "misattributed_source"):
+        return "citation_error"
+    return "clean"
 
-def collect_flagged(run_folders, flagged_name=None):
-    """Every flagged claim of every run folder, with the model and run it came from.
+def _extract_claims(output_data, case_id, model, experiment, run_folder, flagged_lookup):
+    """Extract every claim from the reasoner output, and label with verifier verdict if flagged."""
+    claims = []
+    
+    # 1. Rationale
+    for i, entry in enumerate(output_data.get("rationale", [])):
+        text = entry.get("claim", "")
+        field = f"rationale[{i}]"
+        sources = entry.get("sources", [])
+        # Match against flagged to get verifier verdict
+        sub, crit = flagged_lookup.get((case_id, text), (None, None))
+        claims.append({
+            "model": model, "experiment": experiment, "run_folder": run_folder,
+            "case": case_id, "claim_id": f"{field}.0", "text": text, "sources": sources,
+            "field": field, "subtype": sub, "critical": crit, 
+            "verifier_verdict": _categorize_subtype(sub)
+        })
+    
+    # 2. Blocking factors (thrombolysis & thrombectomy)
+    for decision in ("thrombolysis", "thrombectomy"):
+        for i, text in enumerate(output_data.get(decision, {}).get("blocking_factors", [])):
+            field = f"{decision}.blocking_factors[{i}]"
+            sub, crit = flagged_lookup.get((case_id, text), (None, None))
+            claims.append({
+                "model": model, "experiment": experiment, "run_folder": run_folder,
+                "case": case_id, "claim_id": f"{field}.0", "text": text, "sources": [],
+                "field": field, "subtype": sub, "critical": crit,
+                "verifier_verdict": _categorize_subtype(sub)
+            })
+            
+    # 3. Uncertainties
+    for i, text in enumerate(output_data.get("uncertainties", [])):
+        field = f"uncertainties[{i}]"
+        sub, crit = flagged_lookup.get((case_id, text), (None, None))
+        claims.append({
+            "model": model, "experiment": experiment, "run_folder": run_folder,
+            "case": case_id, "claim_id": f"{field}.0", "text": text, "sources": [],
+            "field": field, "subtype": sub, "critical": crit,
+            "verifier_verdict": _categorize_subtype(sub)
+        })
+        
+    # 4. Decision citations (rule_ids)
+    for decision in ("thrombolysis", "thrombectomy"):
+        for i, rule_id in enumerate(output_data.get(decision, {}).get("rule_ids", [])):
+            text = f"Decision rests on passage {rule_id}"
+            field = f"{decision}.rule_ids[{i}]"
+            sub, crit = flagged_lookup.get((case_id, text), (None, None))
+            claims.append({
+                "model": model, "experiment": experiment, "run_folder": run_folder,
+                "case": case_id, "claim_id": f"{field}.0", "text": text, "sources": [rule_id],
+                "field": field, "subtype": sub, "critical": crit,
+                "verifier_verdict": _categorize_subtype(sub)
+            })
+    return claims
 
-    Each entry: {model, experiment, run_folder, source, flagged_file, case, claim_id, subtype, critical, reason, text,
-    sources}. `flagged_name` picks the file (for example "flagged_phase3_judge_v3.json"); by default the newest scoring.
-    """
+def collect_all_claims(run_folders, flagged_name=None):
+    """Read raw outputs, extract all claims, and match against flagged file for verdicts."""
     out = []
     for folder in map(Path, run_folders):
         config = json.loads((folder / "config.json").read_text())
-        path = _flagged_file(folder, flagged_name)
-        flagged = json.loads(path.read_text())
-        splits.check_ids({f["case"] for f in flagged})  # refuses held-out cases before Phase 4
-        for flag in flagged:
-            out.append({
-                "model": (config.get("reasoner") or {}).get("model", "unknown"),
-                "experiment": config.get("experiment", folder.name),
-                "run_folder": str(folder),
-                "source": config.get("source") or config.get("mode") or "fixtures",
-                "flagged_file": path.name,
-                "case": flag["case"],
-                "claim_id": flag["claim_id"],
-                "subtype": flag["subtype"],
-                "critical": flag.get("critical"),
-                "reason": flag.get("reason", ""),
-                "text": flag.get("text", ""),
-                "sources": flag.get("sources", []),
-            })
+        model = (config.get("reasoner") or {}).get("model", "unknown")
+        experiment = config.get("experiment", folder.name)
+        
+        # Build flagged lookup
+        flagged_path = _flagged_file(folder, flagged_name)
+        flagged_lookup = {}
+        if flagged_path and flagged_path.exists():
+            flagged = json.loads(flagged_path.read_text())
+            for f in flagged:
+                flagged_lookup[(f["case"], f["text"])] = (f["subtype"], f.get("critical"))
+                
+        # Read outputs
+        outputs_dir = folder / "outputs"
+        if not outputs_dir.exists():
+            continue
+            
+        for out_path in outputs_dir.glob("*.json"):
+            data = json.loads(out_path.read_text())
+            case_id = out_path.stem  # e.g. fx01_thrombolysis_clear
+            
+            splits.check_ids({case_id}) # Refuse held-out cases
+            
+            claims = _extract_claims(data, case_id, model, experiment, str(folder), flagged_lookup)
+            out.extend(claims)
+            
     return out
 
-
-def sample_claims(flagged, n_per_model=30, seed=20261109):
-    """Stratified sample by (model, sub-type): at most n_per_model per model, round-robin across that model's
-    sub-types. Fixed seed; the input list is not changed."""
+def sample_claims(all_claims, n_per_model=30, seed=20261109):
+    """Sample across all claims, stratified by (model, verifier_verdict)."""
     rng = random.Random(seed)
     by_model = defaultdict(list)
-    for entry in flagged:
+    for entry in all_claims:
         by_model[entry["model"]].append(entry)
+        
     sampled = []
     for model in sorted(by_model):
-        by_subtype = defaultdict(list)
+        by_verdict = defaultdict(list)
         for e in by_model[model]:
-            by_subtype[e["subtype"]].append(e)
-        lists = {k: list(v) for k, v in sorted(by_subtype.items())}
+            by_verdict[e["verifier_verdict"]].append(e)
+            
+        lists = {k: list(v) for k, v in sorted(by_verdict.items())}
         for v in lists.values():
             rng.shuffle(v)
+            
         picked = []
         while len(picked) < n_per_model and any(lists.values()):
-            for subtype in lists:
-                if lists[subtype] and len(picked) < n_per_model:
-                    picked.append(lists[subtype].pop())
+            for verdict in lists:
+                if lists[verdict] and len(picked) < n_per_model:
+                    picked.append(lists[verdict].pop())
         sampled.extend(picked)
     return sampled
-
-
-def _field(claim_id):
-    """'thrombolysis.blocking_factors[0].2' -> 'thrombolysis.blocking_factors'."""
-    return claim_id.split("[", 1)[0]
-
 
 def _sources_text(sources):
     return "; ".join(str(s) for s in sources) if sources else "(none declared)"
 
-
 def blind_and_export(sampled, sheet_path, key_path, seed=20261109):
-    """Write the labellers' sheet and the separate key. Rows are shuffled, sample IDs and case aliases are assigned in
-    shuffled order, so neither hints at the model or the case. Returns (sheet_path, key_path, aliases), where aliases maps
-    (run_folder, case) to its alias. The input list is not changed."""
+    """Write the labellers' sheet and the separate key."""
     rng = random.Random(seed)
     rows = list(sampled)
     rng.shuffle(rows)
@@ -115,10 +176,14 @@ def blind_and_export(sampled, sheet_path, key_path, seed=20261109):
     for i, entry in enumerate(rows, 1):
         alias = aliases.setdefault((entry["run_folder"], entry["case"]), f"C{len(aliases) + 1:03d}")
         sample_id = f"S{i:03d}"
-        sheet.append({"sample_id": sample_id, "case_alias": alias, "field": _field(entry["claim_id"]),
-                      "claim": entry["text"], "declared_sources": _sources_text(entry["sources"]),
-                      "label_A": "", "label_B": "", "note_A": "", "note_B": ""})
-        key.append({"sample_id": sample_id, **{k: entry.get(k) for k in KEY_FIELDS if k != "sample_id"}})
+        sheet.append({
+            "sample_id": sample_id, "case_alias": alias, "field": entry["field"],
+            "claim": entry["text"], "declared_sources": _sources_text(entry["sources"]),
+            "label_A": "", "label_B": "", "consensus": "", 
+            "note_A": "", "note_B": "", "note_consensus": ""
+        })
+        key.append({k: entry.get(k) for k in KEY_FIELDS})
+        
     for path, fields, data in ((Path(sheet_path), SHEET_FIELDS, sheet), (Path(key_path), KEY_FIELDS, key)):
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", newline="", encoding="utf-8") as f:
@@ -127,86 +192,62 @@ def blind_and_export(sampled, sheet_path, key_path, seed=20261109):
             writer.writerows(data)
     return Path(sheet_path), Path(key_path), aliases
 
-
-def export_case_inputs(aliases, out_dir, load_cases=None):
-    """One file per case alias with what the reasoner was given: the imaging JSON (without its case ID and model
-    version) and the note. `load_cases(source)` defaults to pipeline.end_to_end.load_cases; the source comes from each
-    run's config."""
-    if load_cases is None:
-        from strokecopilot.pipeline.end_to_end import load_cases  # imported here: end_to_end imports this package
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    cache = {}
-    for (run_folder, case), alias in aliases.items():
-        config = json.loads((Path(run_folder) / "config.json").read_text())
-        source = config.get("source") or config.get("mode") or "fixtures"
-        if source not in cache:
-            cache[source] = {c["id"]: c for c in load_cases(source)}
-        inputs = cache[source][case]
-        vision = {k: v for k, v in inputs["vision"].items() if k not in ("case_id", "model_version")}
-        text = (f"# Case {alias}\n\n## Imaging findings\n\n```json\n{json.dumps(vision, indent=1)}\n```\n\n"
-                f"## Triage note\n\n{inputs['note']}\n")
-        (out_dir / f"{alias}.md").write_text(text, encoding="utf-8")
-    return out_dir
-
-
 def cohen_kappa(labels_a, labels_b):
-    """Cohen's kappa between two labellers: (po - pe) / (1 - pe). None when it is undefined (both labellers used the
-    same single category throughout, so pe = 1)."""
-    if len(labels_a) != len(labels_b):
-        raise ValueError("Two label lists must be the same length.")
-    if not labels_a:
-        raise ValueError("No labels to compare.")
+    if len(labels_a) != len(labels_b): raise ValueError("Lengths differ.")
+    if not labels_a: raise ValueError("No labels.")
     n = len(labels_a)
     po = sum(a == b for a, b in zip(labels_a, labels_b)) / n
     count_a, count_b = Counter(labels_a), Counter(labels_b)
     pe = sum(count_a[c] * count_b[c] for c in set(count_a) | set(count_b)) / (n * n)
-    if pe == 1.0:
-        return None
+    if pe == 1.0: return None
     return (po - pe) / (1 - pe)
 
-
-def agreement_with_verifier(labels, subtypes=None):
-    """Share of sampled claims the labeller also calls a real reasoner error. Every sampled claim was flagged by the
-    verifier, so this is the verifier's precision as that labeller sees it. With `subtypes`, also per sub-type."""
-    if not labels:
-        return None
-    overall = sum(label == "real_reasoner_error" for label in labels) / len(labels)
-    if subtypes is None:
-        return overall
-    by = defaultdict(list)
-    for label, subtype in zip(labels, subtypes):
-        by[subtype].append(label == "real_reasoner_error")
-    return {"overall": overall, "by_subtype": {k: {"n": len(v), "agreement": sum(v) / len(v)} for k, v in sorted(by.items())}}
-
-
-def read_labels(sheet_path, key_path):
-    """Join the labelled sheet with its key: one row per sample with both labels, the model and the verifier sub-type."""
+def summarise_agreement(sheet_path, key_path):
+    """Read sheet and key. Calculates A vs B kappa, consensus accuracy, and per-model/verdict agreement."""
     with Path(key_path).open(encoding="utf-8") as f:
         key = {row["sample_id"]: row for row in csv.DictReader(f)}
     with Path(sheet_path).open(encoding="utf-8") as f:
-        rows = [{**key[row["sample_id"]], "label_A": row["label_A"].strip(), "label_B": row["label_B"].strip()}
-                for row in csv.DictReader(f)]
-    bad = {r[k] for r in rows for k in ("label_A", "label_B") if r[k] not in LABELS}
-    if bad:
-        raise ValueError(f"Labels must be one of {LABELS}; found {sorted(bad)}.")
-    return rows
+        rows = []
+        for row in csv.DictReader(f):
+            k = key[row["sample_id"]]
+            rows.append({
+                "model": k["model"], "subtype": k["subtype"], "verdict": k["verifier_verdict"],
+                "label_A": row["label_A"].strip(), "label_B": row["label_B"].strip(), "consensus": row["consensus"].strip()
+            })
+            
+    a, b, c = [r["label_A"] for r in rows], [r["label_B"] for r in rows], [r["consensus"] if r["consensus"] else (r["label_A"] if r["label_A"] == r["label_B"] else None) for r in rows]
+    
+    # Filter out any rows where consensus is still None (unresolved disagreements)
+    valid_idx = [i for i, val in enumerate(c) if val in LABELS]
+    a_valid = [a[i] for i in valid_idx]
+    b_valid = [b[i] for i in valid_idx]
+    c_valid = [c[i] for i in valid_idx]
+    rows_valid = [rows[i] for i in valid_idx]
+    
 
 
-def summarise_agreement(rows):
-    """Kappa between the labellers, and each one's agreement with the verifier: overall, per sub-type and per model."""
-    a, b = [r["label_A"] for r in rows], [r["label_B"] for r in rows]
-    subtypes = [r["subtype"] for r in rows]
+
+    
+    def agree_with_verifier(label, verdict):
+        if verdict == "clean": return label == "verifier_mistake"
+        return label == "real_reasoner_error"
+
+    agree_c = [agree_with_verifier(c_valid[i], rows_valid[i]["verdict"]) for i in range(len(c_valid))]
+    agree_a = [agree_with_verifier(a_valid[i], rows_valid[i]["verdict"]) for i in range(len(a_valid))]
+    agree_b = [agree_with_verifier(b_valid[i], rows_valid[i]["verdict"]) for i in range(len(b_valid))]
+
     by_model = defaultdict(list)
-    for r in rows:
-        by_model[r["model"]].append(r)
+    for i, r in enumerate(rows_valid):
+        by_model[r["model"]].append((agree_c[i], c_valid[i], c_valid[i]))
+
     return {
-        "n": len(rows),
-        "kappa": cohen_kappa(a, b),
-        "agreement_with_verifier_A": agreement_with_verifier(a, subtypes),
-        "agreement_with_verifier_B": agreement_with_verifier(b, subtypes),
-        "by_model": {m: {"n": len(rs), "kappa": cohen_kappa([r["label_A"] for r in rs], [r["label_B"] for r in rs]),
-                         "agreement_with_verifier_A": agreement_with_verifier([r["label_A"] for r in rs]),
-                         "agreement_with_verifier_B": agreement_with_verifier([r["label_B"] for r in rs])}
-                     for m, rs in sorted(by_model.items())},
+        "n_total": len(rows),
+        "n_valid": len(valid_idx),
+        "kappa_AB": cohen_kappa(a_valid, b_valid),
+        "agreement_with_verifier": {
+            "overall_A": sum(agree_a)/len(agree_a) if agree_a else None,
+            "overall_B": sum(agree_b)/len(agree_b) if agree_b else None,
+            "overall_consensus": sum(agree_c)/len(agree_c) if agree_c else None,
+            "by_model": {m: sum(v[0] for v in vals)/len(vals) for m, vals in by_model.items()}
+        }
     }
