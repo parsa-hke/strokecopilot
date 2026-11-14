@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## 2026-11-14, Claude Code session (Lorna, error-analysis write-up: EXP-27 five-fold follow-ups)
+- **`docs/ERROR_ANALYSIS_VISION_A.md`** gains "Five-fold follow-ups (EXP-27)". It uses EXP-27's results at commit `f493883`, on 129 development cases over 5 folds, as reported by Lorna from the Colab run. It covers:
+  - **Misses:** 39 of 129 are Dice 0. Under 21 mL, 34 of 84; at 21 mL and over, 5 of 45.
+  - **Wrong side of a cut-off:** 9 over-calls (1 of them Dice 0, Miss 8) and 34 under-calls (5 of them Dice 0). There is a per-fold table.
+  - **Visible share:** median 35% for misses against 62% for the rest. Under 25% visible: 16 of 36 misses against 14 of 90.
+  - **No perfusion data (at least 5%):** 13 of 39 misses against 14 of 90.
+  - **Onset:** known for 59 cases; median 122 min for misses against 133 for the rest, with no clear difference.
+  - **EXP-25 check:** 0 of 51 numbers differ. The case-by-case check was skipped, because there is no per-case csv in EXP-25.
+  - **Fold-0 pictures with the EXP-22 outlines:**
+    - Miss 8's AI outline is in a different, deeper place, so it is an over-call.
+    - Miss 1 and 2 have no AI outline anywhere.
+    - For Miss 4, the AI marks only 7 other slices.
+- **Artery groups held back.** The counts given (ICA 13, basilar 1, no occlusion found 2, unknown 113) have no MCA or "too far" group. `artery_group` gives both on typical values (checked locally), and about 57% of occlusions sit nearest an MCA label (`docs/DATA.md`). ICA 13 and basilar 1 match the contract's occlusion-site rule instead. The write-up says the counts await a recheck against the run's `artery_group` table.
+- **Parsa's edits kept.**
+  - The Miss 1, 2 and 8 readings change from "pending Lorna's check" to confirmed by Lorna (14 Nov) with the EXP-27 pictures.
+  - Miss 8's "the pictures do not show yet" now says where the AI marked.
+  - The Limits lines about outlines, case counts and open groupings are updated.
+- **Plan §7, "Error analysis: where does the model fail (small lesions, posterior circulation, artefacts)?", is not ticked.** The posterior-circulation question rests on the artery grouping, which is held back.
+- No code changes. pytest on Windows: 516 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
+- **Notion sync:**
+  - Experiments → EXP-27: Done, commit `f493883`, and the results above. Note that the artery counts await a recheck.
+  - Experiments → EXP-15: point to EXP-27 for the five-fold follow-ups.
+  - Tasks → Vision A error analysis: stays In progress until the artery recheck. Link the updated write-up.
+
 ## 2026-11-14 — Claude Code session (Lorna, error-analysis follow-ups, step 5 of 6: notebook 13)
 - **`notebooks/13_visionA_error_analysis_followups.ipynb`** runs all 4 follow-ups in one Colab run (CPU). Its install and Drive-mount cells are copied from notebook 12, including Parsa's split install cell. It:
   1. checks that every input is on Drive, then writes `config.json`;

@@ -2,7 +2,7 @@
 
 Lorna, Vision A. Task 1 of `docs/team/lorna_vision_a.md`. Corrected at Parsa's review of PR #1 (13 Nov 2026).
 
-This draft covers fold 0 only (26 cases). All five folds are now trained; EXP-25 has the 5-fold comparison with the threshold baseline.
+Most of this draft covers fold 0 only (26 cases). The section "Five-fold follow-ups (EXP-27)" repeats the main counts over all five folds (129 cases) and adds the AI's outlines to the fold-0 pictures.
 
 ## Summary
 
@@ -132,6 +132,73 @@ The groups overlap: a small infarct can also have little of it visible. Counts a
 - The reverse, an infarct that showed little late blood on the first scan, may be tissue that died after the scan, or tissue the scan did not capture well.
 - This is an interpretation. The data here cannot prove it.
 
+## Five-fold follow-ups (EXP-27)
+
+Parsa's review asked for four follow-ups. EXP-27 ran them in one pass (notebook 13, commit `f493883`) on all 129 development cases: fold 0 (EXP-14) and folds 1 to 4 (EXP-18 to 21), each case scored by the fold model that did not train on it. The threshold baseline is EXP-1 (`within_tmax6`). Outputs are on Drive in `runs/EXP-27_visionA_error_followups/`. All numbers are counts and medians; no case IDs.
+
+Two new terms:
+- **Over-call:** the AI's volume is larger than the true volume and lands on the wrong side of at least one cut-off (21, 31, 51 or 70 mL), at any Dice.
+- **Under-call:** the mirror: the AI's volume is smaller than the true volume and lands on the wrong side of at least one cut-off, at any Dice.
+
+### Misses over all five folds
+
+| | Cases | Dice 0 |
+|---|---|---|
+| All cases | 129 | 39 |
+| Under 21 mL | 84 | 34 |
+| 21 mL and over | 45 | 5 |
+
+- **The fold-0 pattern holds.** The AI scores Dice 0 on 39 of 129 cases. Small infarcts are missed far more often: 34 of 84 under 21 mL, against 5 of 45 at 21 mL or more. In fold 0 alone it was 7 of 17 against 2 of 9.
+
+### Over-calls and under-calls
+
+- **Under-calls are much more common than over-calls:** 34 under-calls (5 of them Dice 0) against 9 over-calls (1 of them Dice 0). When the AI lands on the wrong side of a cut-off, it is mostly because it predicted too little.
+- **Miss 8's pattern is rare.** Only 1 case in 129 is both an over-call and Dice 0, and it is Miss 8 in fold 0.
+
+**Per fold:**
+
+| Fold | Cases | Dice 0 | Over-calls | Over-calls, Dice 0 | Under-calls | Under-calls, Dice 0 |
+|---|---|---|---|---|---|---|
+| 0 | 26 | 9 | 2 | 1 | 5 | 2 |
+| 1 | 26 | 9 | 1 | 0 | 5 | 0 |
+| 2 | 26 | 7 | 1 | 0 | 10 | 1 |
+| 3 | 26 | 5 | 4 | 0 | 5 | 1 |
+| 4 | 25 | 9 | 1 | 0 | 9 | 1 |
+| **All** | **129** | **39** | **9** | **1** | **34** | **5** |
+
+### What the first scan showed
+
+| | Misses (Dice 0) | Other cases |
+|---|---|---|
+| Cases | 39 | 90 |
+| With reliable data for the visible share | 36 | 90 |
+| Median share of infarct visible (Tmax > 6 s) | 35% | 62% |
+| Under 25% visible | 16 | 14 |
+| At least 5% of the infarct with no perfusion data | 13 | 14 |
+
+- **Misses showed less of the infarct as at risk.** The median visible share is 35% for misses against 62% for the other cases. 16 of the 36 misses with reliable data are under 25% visible, against 14 of 90 other cases. This is a clearer gap than in fold 0, but no significance test was run. Small infarcts also tend to show less, so size and visibility are still mixed up.
+- **Missing perfusion data is more common in misses:** 13 of 39 misses have at least 5% of the infarct with no data, against 14 of 90 other cases.
+
+### Onset to scan
+
+Onset to scan time is known for 59 of the 129 cases. The median is 122 minutes for misses (18 cases) and 133 minutes for the rest (41 cases). There is no clear difference.
+
+### Artery groups
+
+The grouping by nearest artery within 5 mm ran, but the counts reported from the run (ICA 13, basilar 1, no occlusion found 2, unknown 113) do not fit the grouping rule. The rule should also give MCA and "too far" groups, since about 57% of occlusions sit nearest an MCA label (`docs/DATA.md`), and 12 fold-0 occlusions alone are more than 5 mm from their nearest label. ICA 13 and basilar 1 match the contract's occlusion-site rule instead. **These counts are held back until they are rechecked** against the `artery_group` table in the run's output.
+
+### Check against Parsa's EXP-25
+
+All 51 numbers recomputed from this table match EXP-25 (0 of 51 differ). That covers Dice and volume error over folds for both methods, the cut-off crossings out of 129, and each fold's own numbers. The case-by-case check was skipped, because the EXP-25 folder holds no per-case csv file.
+
+### Fold-0 pictures with the AI's outline
+
+The fold-0 pictures now show the AI's outline (EXP-22) in cyan next to the true infarct in red. These are visual readings, one slice per case.
+
+- **Miss 8:** the AI's outline sits in a different, deeper place than the true infarct. This confirms it is an over-call, as Parsa's review said.
+- **Miss 1 and Miss 2:** no AI outline anywhere.
+- **Miss 4:** 88% of the infarct showed Tmax > 6 s, but the AI marked nothing on the main slice, only on 7 other slices.
+
 ## Example figures
 
 The pictures are on Drive in `runs/EXP-15_visionA_error_analysis/figures/`. They will be copied into this document once chosen for the report (ISLES'24 images may go in the report).
@@ -141,13 +208,13 @@ The pictures are on Drive in `runs/EXP-15_visionA_error_analysis/figures/`. They
 
 ## Visual readings
 
-*Drafted with AI help, checked by Lorna, except where a reading is marked as edited at review; one slice per case, not a clinical opinion. "Noisy" is judged by eye, not measured.*
+*Drafted with AI help, checked by Lorna. The Miss 1, 2 and 8 readings were edited at Parsa's review and then confirmed by Lorna against the EXP-27 pictures. One slice per case, not a clinical opinion. "Noisy" is judged by eye, not measured.*
 
 How to read the pictures: the red outline is the brain tissue that died, seen on a scan days later. On the TMAX picture, bright means blood was arriving late, a sign of trouble at the time of the first scan. The % is how much of the dead area showed that sign, measured by the code across all slices of the dead area, not just this one slice, and counting only spots with reliable data.
 
-Miss 1 (70+ mL, 22%): A large area died, but on the first scan most of it looked normal. Only a small corner showed trouble. The scan quality was fine. The damage may not have been showing yet, or this tissue died after the scan; the data cannot tell which. *(Edited at Parsa's review, 13 Nov 2026, to match the numbers; pending Lorna's check.)*
+Miss 1 (70+ mL, 22%): A large area died, but on the first scan most of it looked normal. Only a small corner showed trouble. The scan quality was fine. The damage may not have been showing yet, or this tissue died after the scan; the data cannot tell which. *(Edited at Parsa's review, 13 Nov 2026, to match the numbers; confirmed by Lorna, 14 Nov 2026. The EXP-27 picture shows no AI outline anywhere.)*
 
-Miss 2 (21–70 mL, 62% of the part with data): The dead area is along the outer edge of the brain. On this slice, the blood-flow scans don't reach that edge, and across all slices half of the dead area has no perfusion data. Only about a third of the dead area has reliable data, and 62% of that third showed trouble: about a fifth of the whole dead area. Neither method had an input for the rest. *(Edited at Parsa's review, 13 Nov 2026, to match the numbers; pending Lorna's check.)*
+Miss 2 (21–70 mL, 62% of the part with data): The dead area is along the outer edge of the brain. On this slice, the blood-flow scans don't reach that edge, and across all slices half of the dead area has no perfusion data. Only about a third of the dead area has reliable data, and 62% of that third showed trouble: about a fifth of the whole dead area. Neither method had an input for the rest. *(Edited at Parsa's review, 13 Nov 2026, to match the numbers; confirmed by Lorna, 14 Nov 2026. The EXP-27 picture shows no AI outline anywhere.)*
 
 Miss 3 (5–21 mL, 65%): A thin, curvy strip near the front, plus two tiny spots. The trouble area on the scan is bigger than what died: it covers the strip and extends past it. So the sign was there, but it didn't show exactly which part would die, and the thin shape may have made it even harder for the AI.
 
@@ -159,7 +226,7 @@ Miss 6 (5–21 mL, 30%): Three small separate spots, one right at the edge of th
 
 Miss 7 (under 5 mL, 9%): A few tiny spots. There's a large trouble area nearby, but the tissue that died was mostly outside it.
 
-Miss 8 (under 5 mL, 75%): One small spot inside a much larger trouble area. The trouble sign was there, but it covered far more brain than actually died, so it didn't point to this spot. Most of that area likely recovered after treatment. The AI marked 32.6 mL, none of it on the dead spot, so this is an over-call rather than a case of seeing nothing. Where it marked it, the pictures do not show yet. *(Edited at Parsa's review, 13 Nov 2026, to match the numbers; pending Lorna's check.)*
+Miss 8 (under 5 mL, 75%): One small spot inside a much larger trouble area. The trouble sign was there, but it covered far more brain than actually died, so it didn't point to this spot. Most of that area likely recovered after treatment. The AI marked 32.6 mL, none of it on the dead spot, so this is an over-call rather than a case of seeing nothing. The EXP-27 picture shows where: the AI's outline sits in a different, deeper place than the dead spot. *(Edited at Parsa's review, 13 Nov 2026, to match the numbers; confirmed by Lorna, 14 Nov 2026, with the EXP-27 picture.)*
 
 Miss 9 (under 5 mL, 13%): One tiny spot near the back. It doesn't show trouble on the scan; the trouble areas are somewhere else.
 
@@ -200,10 +267,11 @@ These are untested ideas.
 
 - **One slice per picture.** The slice with the most infarct may not show what went wrong elsewhere.
 - **The visible share counts only spots with reliable data.** Where much of the infarct has no data (Miss 2), a high share can still mean little of the infarct was seen.
-- **No AI outlines in the pictures yet.** The AI's fold-0 outlines were regenerated as EXP-22 and are on Drive in `runs/EXP-22_nnunet_fold0_masks/`, but they are not drawn in these pictures yet. The predicted volumes above show *how much* the AI marked, not *where*.
-- **Only 26 cases,** from one fold. Groups of 1 to 7 cases show patterns, not proven causes.
+- **AI outlines only on fold 0, and only on one slice.** The EXP-27 pictures draw the AI's fold-0 outlines (EXP-22) next to the true infarct, but only for fold 0's misses and best cases, and only on the slice with the most infarct. The legend says when the AI marked other slices instead (Miss 4).
+- **Only 26 cases in the fold-0 sections,** from one fold. Groups of 1 to 7 cases show patterns, not proven causes. The EXP-27 section uses all 129 development cases, but its groups are still small, and no significance tests were run on it.
 - **Visual readings are not a clinical opinion.** Noise and artefacts were judged by eye, not measured.
-- **Some planned groupings are not reported yet:**
-  - The occlusion site is "unknown" in 22 of 26 cases by the contract's own rule, so grouping by it says little. Grouping by the nearest artery label would need a distance limit: 12 occlusions sit more than 5 mm from their nearest label.
-  - The front/back grouping uses the same nearest label with no distance limit, and a label numbering (TopCoW) that is not confirmed for this dataset (`docs/DATA.md`).
-  - Onset to scan time is known for only 9 of 26 cases.
+- **Groupings still open:**
+  - The occlusion site is "unknown" in 22 of 26 fold-0 cases by the contract's own rule, so grouping by it says little.
+  - The grouping by nearest artery within 5 mm ran in EXP-27, but its reported counts are held back until they are rechecked (see the EXP-27 section).
+  - The artery labels use a numbering (TopCoW) that is not confirmed for this dataset (`docs/DATA.md`).
+  - Onset to scan time is known for 59 of 129 cases. It shows no clear difference between misses and the rest.
