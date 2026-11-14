@@ -1,4 +1,4 @@
-"""Thin, identically-shaped LLM wrappers (plan §8.3). Phase 2 has Claude only.
+"""Thin, identically-shaped LLM wrappers (plan §8.3): Claude (direct and batched) and open models served by vLLM.
 
 Every wrapper is a callable `llm(system, user, schema) -> dict`: one request whose reply is JSON
 matching `schema`. The verifier (claim extractor and judge) and, later, the reasoner use this
@@ -41,21 +41,33 @@ class RefusalError(RuntimeError):
     """The model declined the request (stop_reason "refusal")."""
 
 
-def api_key():
-    """ANTHROPIC_API_KEY from Colab Secrets, Kaggle Secrets or the environment."""
+def secret(name):
+    """The secret `name` from Colab Secrets, then Kaggle Secrets, then the environment; None if none has it.
+
+    Keys never live in code. A source that is missing, not granted or empty is skipped, so the same notebook works on
+    Colab, Kaggle or a laptop. The value is returned, never logged."""
     try:
         from google.colab import userdata
 
-        return userdata.get("ANTHROPIC_API_KEY")
+        value = userdata.get(name)
+        if value:
+            return value
     except Exception:
         pass
     try:
         from kaggle_secrets import UserSecretsClient
 
-        return UserSecretsClient().get_secret("ANTHROPIC_API_KEY")
+        value = UserSecretsClient().get_secret(name)
+        if value:
+            return value
     except Exception:
         pass
-    return os.environ.get("ANTHROPIC_API_KEY")
+    return os.environ.get(name)
+
+
+def api_key():
+    """ANTHROPIC_API_KEY from Colab Secrets, Kaggle Secrets or the environment."""
+    return secret("ANTHROPIC_API_KEY")
 
 
 class ClaudeJSON:
@@ -166,3 +178,93 @@ class ClaudeBatch:
             out[key] = {"error": "no batch result", "refusal": False}
         log(f"Batch {batch.id} ended: {sum('reply' in v for v in out.values())} of {len(requests)} succeeded.")
         return out
+
+
+class VLLMJSON:
+    """Structured-output call to an open model served by vLLM's OpenAI-compatible server (DEC-24, DEC-21).
+
+    One class serves every open model in the comparison (Qwen3.5-27B, MedGemma 27B text, Gemma 3 27B, and the fallback
+    pair): only `model` and `base_url` change. It has the same call signature and attributes as ClaudeJSON, so
+    run.py, end_to_end.py and batched.py use it unchanged. It has no run() method on purpose: batched.gather treats any
+    llm with run() as a batch, and vLLM answers one request at a time.
+
+    - Temperature 0 by default (vLLM accepts it, unlike current Claude models).
+    - The schema goes in response_format as json_schema, which vLLM enforces with constrained decoding, so every model
+      gets the same schema (prompt.api_schema()) and the comparison stays fair.
+    - Only the final answer is parsed. If vLLM runs a reasoning parser, the model's thinking arrives separately and is
+      counted (usage["reasoning_tokens"]), not parsed.
+    - Usage keys match ClaudeJSON: input_tokens excludes cached prompt tokens, which go in cache_read_input_tokens.
+    - cost_usd() returns None for these models: GPU time is billed per hour by the pod, not per token, and the pod's
+      own log records it (compute/pod.py).
+    - A local vLLM server needs no key. For a server that does, pass key_name and the key comes from secret().
+    - merge_system puts the system prompt at the top of the user message, for a chat template without a system role.
+    - extra_body passes vLLM-only request options and is recorded in describe(). For example, Qwen3.5 thinks before
+      answering by default; extra_body={"chat_template_kwargs": {"enable_thinking": False}} turns that off.
+    - Context: the server's --max-model-len must hold the prompt plus max_tokens. The reasoner's system prompt is about
+      10.6k tokens (EXP-8) and its answers about 3.1k to 3.4k (EXP-8, EXP-9), so max_tokens around 8000 leaves room
+      on a 24 GB card; the 20000 used for Claude (run.REASONER_MAX_TOKENS) needs a context of about 31k.
+    - Errors from the server itself (unreachable, or a 4xx such as a schema it rejects) are not caught here, as in
+      ClaudeJSON: a run stops loudly instead of recording every case as a format failure.
+    """
+
+    def __init__(self, model, base_url="http://localhost:8000/v1", key_name=None, max_tokens=DEFAULT_MAX_TOKENS,
+                 temperature=0.0, quantization=None, merge_system=False, extra_body=None, client=None):
+        if client is None:
+            import openai
+
+            key = secret(key_name) if key_name else None
+            client = openai.OpenAI(base_url=base_url, api_key=key or "EMPTY", max_retries=2)
+        self.client = client
+        self.model, self.base_url, self.max_tokens, self.temperature = model, base_url, max_tokens, temperature
+        self.quantization, self.merge_system, self.extra_body = quantization, merge_system, extra_body
+        self.usage = {"requests": 0, "input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0,
+                      "cache_creation_input_tokens": 0, "reasoning_tokens": 0, "seconds": 0.0}
+
+    def describe(self):
+        return {"provider": "vllm", "model": self.model, "base_url": self.base_url, "temperature": self.temperature,
+                "max_tokens": self.max_tokens, "quantization": self.quantization, "merge_system": self.merge_system,
+                "extra_body": self.extra_body}
+
+    def messages(self, system, user):
+        if self.merge_system:
+            return [{"role": "user", "content": f"{system}\n\n{user}"}]
+        return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+    def __call__(self, system, user, schema):
+        started = time.perf_counter()
+        request = {
+            "model": self.model,
+            "messages": self.messages(system, user),
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "response_format": {"type": "json_schema",
+                                "json_schema": {"name": "response", "schema": schema, "strict": True}},
+        }
+        if self.extra_body:
+            request["extra_body"] = self.extra_body
+        response = self.client.chat.completions.create(**request)
+        self.usage["requests"] += 1
+        self.usage["seconds"] += time.perf_counter() - started
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            prompt = getattr(usage, "prompt_tokens", 0) or 0
+            cached = getattr(getattr(usage, "prompt_tokens_details", None), "cached_tokens", 0) or 0
+            self.usage["input_tokens"] += prompt - cached
+            self.usage["cache_read_input_tokens"] += cached
+            self.usage["output_tokens"] += getattr(usage, "completion_tokens", 0) or 0
+            details = getattr(usage, "completion_tokens_details", None)
+            self.usage["reasoning_tokens"] += getattr(details, "reasoning_tokens", 0) or 0
+        choice = response.choices[0]
+        message = choice.message
+        if getattr(message, "refusal", None):
+            raise RefusalError(f"{self.model} declined the request: {message.refusal}")
+        if choice.finish_reason == "length":
+            raise RuntimeError(f"{self.model} hit max_tokens ({self.max_tokens}) before finishing the JSON.")
+        text = message.content
+        if not text or not text.strip():
+            raise RuntimeError(f"{self.model} returned no content (finish_reason {choice.finish_reason!r}).")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            # A RuntimeError, so run.py records it as "no valid JSON" with the start of the raw reply kept in calls/.
+            raise RuntimeError(f"no valid JSON from {self.model}: {e}; reply began {text[:500]!r}") from e

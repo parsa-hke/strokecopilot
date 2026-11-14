@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-11-14 — Hana (NLP A: providers.py adapter for the open models, DEC-24)
+- **`providers.VLLMJSON`** (new): one adapter for every open model in DEC-24 (Qwen3.5-27B, MedGemma 27B text, Gemma 3 27B, and the Baichuan-M2-32B / Qwen2.5-32B fallback), served by vLLM's OpenAI-compatible server on the rented 4090 (DEC-21). Only `model` and `base_url` change between models.
+  - Same call signature and attributes as `ClaudeJSON` (`llm(system, user, schema) -> dict`, `.model`, `.usage`, `describe()`), so `run.py`, `end_to_end.py` and `batched.py` use it unchanged. No `run()` method, so `batched.gather` calls it one request at a time.
+  - Temperature 0 by default. The schema goes in `response_format` as `json_schema`, which vLLM enforces by constrained decoding; every model gets the same `prompt.api_schema()`.
+  - Usage keys match `ClaudeJSON` (cached prompt tokens split into `cache_read_input_tokens`), plus `reasoning_tokens`. `cost_usd()` returns None: GPU cost comes from the pod's billing, not tokens.
+  - Errors the pipeline already records: refusal → `RefusalError`; `finish_reason` length, empty content, or JSON that does not parse → `RuntimeError` (the last keeps the start of the raw reply). Server errors (unreachable, 4xx) are not caught, as in `ClaudeJSON`, so a broken server stops the run loudly.
+  - `extra_body` passes vLLM-only options and is recorded in `describe()`, e.g. `{"chat_template_kwargs": {"enable_thinking": False}}` to turn Qwen3.5's thinking off. `merge_system` puts the system prompt in the user message for a chat template without a system role. `quantization` is recorded only.
+  - Key: none for a local server; otherwise `key_name`, read through `secret()`.
+- **`providers.secret(name)`** (new): Colab Secrets, then Kaggle Secrets, then the environment, skipping a source that is missing or empty. `api_key()` now calls `secret("ANTHROPIC_API_KEY")`, with the same behaviour.
+- **`pyproject.toml`:** `openai>=1.40` added to the optional `llm` extra (imported only when `VLLMJSON` builds its own client).
+- **`tests/test_providers.py`:** 10 new tests with a stub client and fake keys, no network: secrets order and fall-through; request shape (model, temperature 0, messages, `response_format`); usage over two calls; `extra_body`; `merge_system`; each failure raises what the pipeline catches; `batched.gather` calls it directly; a fixture runs through `reasoner.run.recommend` and `run_fixtures` and writes a normal run folder; the client is built with no key or a key from `secret()`.
+- **For Parsa (the first real call, not done here):**
+  - Context: the reasoner's system prompt is about 10.6k tokens (EXP-8) and its answers about 3.1k–3.4k (EXP-8, EXP-9). `--max-model-len` must hold the prompt plus `max_tokens`: about 19k with `max_tokens=8000`, about 31k with the 20,000 used for Claude, which may not fit a 27B model at 4-bit on 24 GB.
+  - Not checked against a real server: that vLLM's structured-output backend accepts every keyword in `prompt.api_schema()` (`anyOf`, `const`, `enum`). A one-request dummy, like EXP-8 for Claude, would show it before a full run.
+  - Model IDs, quantised checkpoints, the thinking setting for Qwen3.5 and the MedGemma terms (HAI-DEF §3.2) are yours to set at the paid-run step.
+- pytest: on Windows (Python 3.14), the NLP tests (`test_providers`, `test_reasoner`, `test_reasoner_v2`, `test_batched`, `test_end_to_end`, `test_verifier_run`, `test_claims`, `test_trace`, `test_verifier_phase3_fixes`, `test_contract`): 193 passed. The full suite stops at collection on this laptop because `nibabel` (vision) is not installed; not related to this change.
+- **Notion sync:**
+  - pending: Tasks → "providers.py adapters for the chosen models": In review once the PR is open, with a link to it and a note that the first real call on the 4090 is Parsa's.
+
 ## 2026-11-13 — Parsa's review of PR #1 (Lorna's Vision A error analysis, EXP-15)
 - **Write-up corrected** (`docs/ERROR_ANALYSIS_VISION_A.md`), every number re-checked against EXP-15's `per_case.csv` on Drive (counts and anonymous labels only):
   - **New failure group, no perfusion data.** 3 of the 4 cases with ≥ 5% of the infarct at Tmax −30 are misses. Miss 2 has 51% with no data, so its "62% visible" covers only the third with reliable data. The Limits line that said the slice disagreed with the whole-case number is replaced.
