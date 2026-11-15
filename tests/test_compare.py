@@ -1,11 +1,11 @@
-"""Tests for pipeline/compare.py."""
+"""Tests for pipeline/compare.py: the flat table per run folder, the pivot (models x source x arm) and the figure."""
 
 import json
 from pathlib import Path
 
 import pytest
 
-from strokecopilot.pipeline.compare import build_table, load_run, plot_table
+from strokecopilot.pipeline.compare import METRICS, build_table, format_pivot, load_run, pivot_table, plot_table
 
 
 @pytest.fixture
@@ -35,6 +35,7 @@ def test_load_run(exp12_folder):
     assert run["model"] == "claude-sonnet-5-5"
     assert run["source"] == "fixtures"
     assert run["arm"] == "with_rulebook"
+    assert run["metrics_file"] == "metrics.json" and run["run_folder"] == str(exp12_folder)
 
 
 def test_build_table_one_row(exp12_folder):
@@ -98,3 +99,44 @@ def test_unmeasured_rates_are_not_plotted_as_zero(exp12_folder, tmp_path):
     table = build_table([exp12_folder])
     assert table[0]["critical_hallucination_rate"] is None
     plot_table(table, tmp_path / "f.png")  # draws n/a, does not fail on None
+
+
+def _run(tmp_path, name, model, arm, value, ci=None, source="scenarios"):
+    folder = tmp_path / name
+    folder.mkdir()
+    (folder / "config.json").write_text(json.dumps({"experiment": name, "source": source, "arm": arm,
+                                                    "reasoner": {"model": model}}))
+    (folder / "metrics.json").write_text(json.dumps({"summary": {
+        "hallucination_rate": {"value": value, "ci95": ci},
+        "critical_hallucination_rate": {"value": None, "ci95": None},
+        "omission_rate": {"value": 0.0, "ci95": None}}, "per_case": []}))
+    return folder
+
+
+def test_pivot_is_models_by_source_and_arm(tmp_path):
+    folders = [_run(tmp_path, "E1", "m-a", "with_rulebook", 0.05, [0.03, 0.08]),
+               _run(tmp_path, "E2", "m-a", "without_rulebook", 0.12),
+               _run(tmp_path, "E3", "m-b", "with_rulebook", 0.07),
+               _run(tmp_path, "E4", "m-b", "without_rulebook", 0.20)]
+    table = build_table(folders)
+    assert len(table) == 4  # flat: one row per run, what plot_table draws
+    pivot = pivot_table(table)
+    assert pivot["columns"] == [("scenarios", "with_rulebook"), ("scenarios", "without_rulebook")]
+    assert [r["model"] for r in pivot["rows"]] == ["m-a", "m-b"]
+    cell = pivot["rows"][0]["cells"][("scenarios", "with_rulebook")]
+    assert cell["hallucination_rate"] == 0.05 and cell["hallucination_rate_ci"] == [0.03, 0.08] and cell["experiment"] == "E1"
+    assert pivot["rows"][1]["cells"][("scenarios", "without_rulebook")]["hallucination_rate"] == 0.20
+    text = format_pivot(pivot)
+    assert len(text) == 2 and len(text[0]["cells"]) == 2 * len(METRICS)
+    assert text[0]["cells"][("scenarios", "with_rulebook", "hallucination_rate")] == "0.050 [0.030, 0.080]"
+    assert text[0]["cells"][("scenarios", "without_rulebook", "hallucination_rate")] == "0.120"
+    assert text[0]["cells"][("scenarios", "with_rulebook", "critical_hallucination_rate")] == "n/a"
+
+
+def test_pivot_marks_a_missing_cell_and_refuses_duplicates(tmp_path):
+    folders = [_run(tmp_path, "E1", "m-a", "with_rulebook", 0.05), _run(tmp_path, "E2", "m-b", "without_rulebook", 0.1)]
+    text = format_pivot(pivot_table(build_table(folders)))
+    assert text[0]["cells"][("scenarios", "without_rulebook", "hallucination_rate")] == "not run"
+    again = _run(tmp_path, "E9", "m-a", "with_rulebook", 0.06)
+    with pytest.raises(ValueError, match="E1.*E9"):
+        pivot_table(build_table(folders + [again]))
