@@ -197,6 +197,23 @@
 - pytest: 578 passed (567 before the review).
 - **Notion sync:** none from the review.
 
+## 2026-11-15 — Parsa's review of PR #5 (second round)
+- **Merged `origin/main`** into the branch (15 commits behind); CHANGELOG kept main's entries and placed Benny's 12 Nov entry first among the 12 Nov ones.
+- **What Benny's second round got right:** sampling now includes clean claims, a consensus column, and the models × (source × arm) shape. **What it broke:** 12 tests failed. It deleted `export_case_inputs`, `read_labels` and label validation, agreement per sub-type and per-model kappa, and `source` in the claims; it removed `experiment`, `metrics_file` and `run_folder` from `compare.load_run`, so `build_table` returned a pivot that `plot_table` could not read (every bar n/a); notebook 41 built its own table, installed from his branch, dropped the token redaction and `del token`, and was committed with outputs (about 45 KB, a PNG) and a GPU runtime.
+- **Correctness bugs fixed:**
+  - **Kappa** was computed only on rows with a consensus, so unresolved disagreements were dropped and kappa inflated. It now uses every row both labellers filled.
+  - **Claims were rebuilt from whole output entries and looked up by exact text**, but the verifier's claims are atomic, reworded by the extractor, with IDs like `rationale[0].2`. On EXP-12 at `judge_v3` it gave 125 entry-level "claims" (the metric counts 350) and matched none of the 19 flags, so every claim was clean. `collect_all_claims` now reads each run's `traces/<case>.json` and joins it to the flagged file by (case, claim ID); verdict, sub-type and criticality come from the flagged file, every other claim is clean.
+  - **A missing flagged file silently counted every claim as clean.** It now raises, unless `allow_missing_flagged=True`.
+  - **A rescore scores a different claim set** than the one saved in `traces/` (restatements dropped, regex and citation claims rebuilt). The kit takes, per case, the claim set whose count matches the metrics file of the same scoring, and raises if neither does; a flagged claim ID not among the claims also raises. EXP-12 with `flagged_phase3_judge_v3.json`: 350 claims, as its metrics count, 19 flagged (11 content, 8 citation). The older `flagged_rescore.json` is refused, because it was scored with older code.
+- **`adjudicate.py` restored and rebuilt:** `export_case_inputs`, `read_labels` (now for `label_A`, `label_B` and `consensus`, validated), `_field`, `source` and the docstrings are back; the "NEW CODE" marker is gone. Labels are `error` / `no_error` (the old `real_reasoner_error` / `verifier_mistake` still read). Sampling: about 100 claims in total by default (was 30 per model), stratified by model × verdict (clean, content error 1–5, citation error 6–7), equal allocation across strata with a fixed seed, because flagged claims are a few percent of all claims and a proportional sample would hold too few for agreement per sub-type. Each sampled claim carries its stratum size and weight, and the key file keeps them. `summarise_agreement`: kappa on every row both labelled; consensus = the consensus column, else A when A = B; agreement of the verifier with the consensus overall (also re-weighted to all claims), per verdict, per sub-type and per model (with per-model kappa); unresolved disagreements counted.
+- **`compare.py`:** `load_run` rows have `experiment`, `metrics_file` and `run_folder` again; `build_table` stays flat (one row per run, what `plot_table` draws); new `pivot_table` gives models × (source × arm) with the rates, CIs, experiment and metrics file per cell, merges runs of the same model, and raises on two runs for the same model, source and arm; `format_pivot` gives display text ("0.054 [0.030, 0.080]", "n/a", "not run").
+- **Notebook 41** is thin again: it calls `build_table`, `pivot_table`, `format_pivot` and `plot_table` only; installs `REPO_REF = 'main'` pinned to its commit, with the token redacted from errors and deleted (the notebook 51 pattern); outputs stripped, CPU runtime, valid nbformat 4.5. Run locally against EXP-12 at `judge_v3`: one row, 0.054 / 0.009 / 0.000.
+- **`docs/LABELLING_GUIDE.md`:** the sheet's real columns (it listed `claim_id`, `subtype` and `reason`, which the blind sheet does not show), all claims rather than flagged ones, the new labels, and the consensus step.
+- **Tests:** `test_adjudicate.py` and `test_compare.py` updated to the API, with new tests for the join by claim ID with reworded text, a missing flagged file, a rescore's claim set, clean claims labelled `no_error`, kappa on all rows (an unresolved disagreement lowers it), the consensus fallback, agreement per sub-type and per model, old labels, the pivot for 2 models × 2 arms and its duplicate check, held-out refusal, and sample size and strata.
+- pytest: 587 passed.
+- **Back to Benny:** nothing to redo; read the changes, and run the kit once the paid runs exist.
+- **Notion sync:** none.
+
 ## 2026-11-14 — Lorna (Vision A error-analysis follow-ups, EXP-27; 7 working sessions folded into one entry at review)
 - **Branch `lorna/error-analysis-followups`**, from `main` at `dfc832f`: the four follow-ups from Parsa's PR #1 review (all five folds, artery groups and onset, AI outlines on the pictures), in one notebook and one Colab run.
 - **Code, `error_analysis`:**
@@ -515,6 +532,34 @@
 - pytest: on Windows (Python 3.14), `test_reasoner_v2.py` + `test_reasoner.py` 15 passed (1 unrelated deprecation warning from the anyio pytest plugin). Full suite not re-run.
 - **Notion sync:**
   - pending: Tasks → "Reasoner prompt v2 from the EXP-12 findings": note the conditions fix before Parsa's paid v1/v2 run.
+
+## 2026-11-12 — Benny's NLP B work (PR #5), with Parsa's review fixes
+- **Benny's deliverables:**
+  - `docs/ERROR_TAXONOMY.md`: the 8 types with real examples, detection and criticality.
+  - His independent labels of the 28 EXP-12 flags (Drive `EXP-12_benny_labels.csv`): 22 real reasoner errors, 6 verifier mistakes. Parsa's earlier reading was about 9 and 19; the gap is mostly uncertainty claims and true-but-miscited claims.
+  - `pipeline/compare.py` and `notebooks/41_nlpB_model_comparison.ipynb` (Task 2).
+  - `nlp/verifier/adjudicate.py` and `docs/LABELLING_GUIDE.md` (Task 3).
+- **Review fixes (Parsa):**
+  - **Cohen's kappa** divided by (1 − po) instead of (1 − pe): it crashed on perfect agreement and returned 1.20 where the true value is 0.545. Fixed, with known-value tests; one of the original tests expected a negative kappa for two constant labellers, where the true value is 0.
+  - **`compare.py`** read `metrics.json`, which keeps a run's first scoring. For EXP-12 that showed 0.235 with no critical or omission rate; the current scoring is 0.054 (EXP-23). It now reads the newest scoring by default or a named file, records which file each row came from, takes the source from `source` (current runs) or `mode`, shows an unmeasured rate as n/a rather than 0, and imports matplotlib only to plot.
+  - **`adjudicate.py`** read an old run layout (`per_fixture`), so new runs gave no claims. It now:
+    - reads the flagged-claims files and refuses held-out cases through the split's own check;
+    - writes a blind sheet (claim text, field, declared sources and an opaque case alias; no model, run, case ID or verifier verdict, since showing the verifier's sub-type would anchor the labellers);
+    - writes a separate key file for unblinding, and the case inputs per alias;
+    - reports agreement with the verifier overall, per sub-type and per model.
+  - **Docs:** `ERROR_TAXONOMY.md` and `LABELLING_GUIDE.md` now match the metric:
+    - omissions are their own rate, not "always critical";
+    - uncertainties are never charged 6 or 7;
+    - faulty-derivation criticality follows §5;
+    - correct medicine with no source in the inputs is still an error;
+    - the null, rounding and restatement rules are stated;
+    - `judge_v3` (DEC-23) is named.
+  - **Notebook 41:** installs with `GITHUB_TOKEN` (the repo is private), reads EXP-12 at its current scoring, and writes the figure to `runs/comparison/`, not into a finished run.
+- **Back to Benny (spec in the PR #5 review comment):**
+  - **The sampling design.** It samples only flagged claims, so it measures the verifier's precision but never its misses. Metric §8 asks for a sample across claims, with a consensus label and agreement per sub-type.
+  - **The table's shape:** models × (source × arm).
+- pytest: 454 passed.
+- **Notion sync:** Tasks → Benny's taxonomy, comparison notebook and labelling kit: In review, with this note.
 
 ## 2026-11-09 — Hana (NLP A: reasoner prompt v2 from the EXP-12 findings)
 - **`prompts/reasoner_v2.md`** (new; `reasoner_v1` unchanged and still the default). Built from Benny's labels of the 28 EXP-12 flags (22 real reasoner errors, 6 verifier mistakes):
