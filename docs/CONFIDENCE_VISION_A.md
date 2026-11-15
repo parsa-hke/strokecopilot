@@ -130,19 +130,39 @@ All three are cross-fitted by fold and split into three equal bands (about 43 ca
 - **v1 ranks the overall volume error a little better** (Spearman −0.33 against −0.287), but our main measure is the cut-off error, not the volume error.
 - The full band tables for each version, including the middle band, are in `metrics.json` on Drive.
 
+### The cut-off distance alone (checked at Parsa's review)
+
+The review compared each version with the simplest score there is: the distance to the nearest cut-off itself, with no fitting (farther from a cut-off, more confident). The measure is the AUC for the wrong side of any cut-off: the chance that a random case on the wrong side gets lower confidence than a random case on the right side (0.5 is chance, 1 is perfect). Computed from EXP-31's `per_case.csv` with `baseline_check`, using the cross-fitted confidences; 43 of the 129 cases are on the wrong side. These numbers are not in EXP-31's `metrics.json`; a rerun of notebook 14 adds them.
+
+| Score | AUC, wrong side of any cut-off |
+|---|---|
+| Cut-off distance alone (not fitted) | **0.755** |
+| v2 (chosen) | 0.722 |
+| v3 | 0.703 |
+| v1 | 0.695 |
+| confidence.penumbra | 0.538 |
+
+- **v2 minus the distance alone: −0.033**, with a paired bootstrap 95% interval of −0.066 to −0.002 (5000 resamples, seed 0).
+- **Said plainly:** v2 was chosen after seeing the results, and the simpler signal does at least as well. On these 129 cases it does a little better, and the interval sits below zero.
+- **confidence.penumbra hardly ranks the cut-off errors** (0.538), as expected for a data-quality score.
+- Which one the contract uses, the distance alone or v2, is Parsa's decision (pending a DEC). Until then the code's default stays v2.
+
 ### confidence.penumbra
 
 After the fix: median 0.885, lowest 0.596, and 94 of 129 cases under 0.9. Before the fix it was median 0.678, with all 129 under 0.9. It now reflects missing perfusion data more than scan coverage, but it is still a data-quality score only.
 
+### Near-empty predictions (complete misses, checked at Parsa's review)
+
+From EXP-31's `per_case.csv` with `complete_miss_check`:
+- **25 cases have an nnU-Net core under 0.5 mL.** Their median v2 confidence is 0.90, and 5 of them are on the wrong side of a cut-off. All 5 are under-calls, and all 5 got a confidence of 0.88 or more.
+- **Can one signal flag them?** Tested cross-fitted by fold (fit on 4 folds, score the 5th): flag a case when nnU-Net predicts under 1 mL and its Tmax > 6 s volume reaches a cut-off learned on the other folds. 30 cases are under 1 mL, 5 of them on the wrong side. The flag marks 5 cases, and only 1 of them is on the wrong side. The learned cut-offs are 263 to 314 mL.
+- **Why it fails:** under 1 mL, the wrong-side cases do not have bigger at-risk areas. Their Tmax > 6 s volumes run from 14 to 314 mL (median 93), against 25 to 382 mL (median 122) for the 25 on the right side. A large at-risk area with no core is common in cases that turn out fine.
+- **Other settings do no better:** under 0.5 mL, 9 flagged and 1 on the wrong side; under 2 mL, 10 flagged and 3 on the wrong side (of 7). Using missing data near the at-risk area instead: 10 flagged, 1 on the wrong side.
+- **Options for Parsa's decision:** leave confidence.core as it is and say in the contract notes that a near-empty prediction gets high confidence; cap confidence.core for near-empty predictions at a fixed value, accepting that 20 of the 25 are right; or wait for nnU-Net's per-voxel probabilities (Future work). None of these is applied: `confidence_core` and the default method are unchanged.
+
 ### Version chosen: v2
 
 **Lorna's choice**, with Parsa's go-ahead to decide the design. `confidence.py` uses v2 by default, and `mapping_v2.json` from EXP-31 is the mapping for scoring new cases.
-
-### Which values build.py uses
-
-- **Development cases (the 129):** the cross-fitted `confidence_core_v2` and `confidence_penumbra` in EXP-31's `per_case.csv`, read with `development_confidence`. Each comes from a mapping that never saw the case.
-- **Held-out cases (Phase 4 only):** `mapping_v2.json`, loaded with `load_default_mapping` and applied with `case_confidence`.
-- **Why not `mapping_v2.json` for everything:** it was fitted on all 129 development cases, so scoring one of them with it is marking its own homework. It looks better than it is (AUC 0.757 against 0.722 cross-fitted).
 
 **Why v2:**
 - Our main measure is a case landing on the wrong side of a cut-off, and v2 puts the most of those in the low band.
@@ -153,16 +173,32 @@ After the fix: median 0.885, lowest 0.596, and 94 of 129 cases under 0.9. Before
 - The choice was made after seeing all three results.
 - v1 and v2 differ by only 2 cases in the low band.
 - v1 is slightly better on the overall volume-error ranking.
+- The cut-off distance alone, with no fitting, does at least as well (AUC 0.755 against 0.722; see above).
 
 So v2's advantage is small, and Phase 4's held-out cases are its real test.
 
+### Which values build.py uses
+
+- **Development cases (the 129):** the cross-fitted `confidence_core_v2` and `confidence_penumbra` in EXP-31's `per_case.csv`, read with `development_confidence`. Each comes from a mapping that never saw the case.
+- **Held-out cases (Phase 4 only):** `mapping_v2.json`, loaded with `load_default_mapping` and applied with `case_confidence`.
+- **Why not `mapping_v2.json` for everything:** it was fitted on all 129 development cases, so scoring one of them with it is marking its own homework. It looks better than it is (AUC 0.757 against 0.722 cross-fitted).
+
+## What confidence.core means
+
+For the reasoner: read `confidence.core` as roughly the chance that the core volume is on the right side of every cut-off (21, 31, 51 and 70 mL), that is, that the volume does not put the case in the wrong treatment bracket. It is not a measure of how many mL the volume is off by.
+
+- **It is roughly calibrated on the 129** (cross-fitted): mean confidence 0.665, against 0.667 of cases on the right side. By band: high 0.87 against 0.84 on the right side, middle 0.68 against 0.77, low 0.45 against 0.40.
+- **It does not rise or fall steadily with volume.** From `mapping_v2.json`, with average missing data near the at-risk area (11.9%) and nnU-Net and the threshold agreeing: 0 mL gives 0.91, 5 mL 0.66, 10 mL 0.52, 21 mL 0.36, 31 mL 0.38, 51 mL 0.40, 70 mL 0.41, 100 mL 0.53 and 150 mL 0.65. It dips near the cut-offs and rises away from them.
+- **Missing data moves it a lot:** at 21 mL, 0.53 with no missing data and 0.17 with 30% missing.
+- **So low confidence means "near a cut-off, or poor data", not "a big stroke".** And high confidence on a near-empty prediction does not rule out a complete miss (see above).
+
 ## Limits
 
-- **Complete misses still get high confidence.** In every version, all 7 cases on the wrong side of a cut-off in the high band are under-calls: the AI predicted too little. A complete miss like Miss 1 (0 mL predicted for a 101 mL infarct) looks like a confident small prediction, far from any cut-off. The at-risk volume (v3) was meant to catch these, and it did not.
+- **Complete misses still get high confidence.** In every version, all 7 cases on the wrong side of a cut-off in the high band are under-calls: the AI predicted too little. A complete miss like Miss 1 (0 mL predicted for a 101 mL infarct) looks like a confident small prediction, far from any cut-off. The at-risk volume (v3) was meant to catch these, and it did not. Of 25 cases predicted under 0.5 mL, 5 are on the wrong side, with a median confidence of 0.90 for the 25; a cross-fitted Tmax > 6 s flag caught 1 of the 5 (see Near-empty predictions).
 - **The missing-data signal is weak alone** (weight 0.015) once missing data is counted correctly, but it carries a weight of 0.248 inside v2, so its effect depends on the other signals.
 - **confidence.penumbra is a data-quality score only.** It is not validated against any penumbra label, because none exists in ISLES'24. It says how complete the perfusion data is, not how right the penumbra volume is.
 - **Only 129 cases,** about 43 per band, so differences between bands and between versions are rough.
-- **The version was chosen on the same cases it was scored on.** Picking the best of three flatters the winner a little, and v1 and v2 differ by 2 cases. The real test comes in Phase 4, on the held-out cases.
+- **The version was chosen on the same cases it was scored on.** Picking the best of three flatters the winner a little, v1 and v2 differ by 2 cases, and the cut-off distance alone does at least as well. The real test comes in Phase 4, on the held-out cases.
 - **Simple signals.** They catch doubtful volumes, but not every reason the AI can be wrong, for example tissue that dies after the scan.
 - **The measurement area is approximate.** The holes in the perfusion maps' area are filled slice by slice, so a gap that reaches the edge of the brain on a slice is not counted as missing.
 

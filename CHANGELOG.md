@@ -9,9 +9,12 @@
   - v2's final weights: cut-off distance −1.188, missing data 0.248, core size −0.249, disagreement −0.017;
   - the per-signal story corrected to match them: inside v2 a bigger core gives slightly higher confidence, and missing data carries a real weight;
   - a "Which values build.py uses" note.
-- **Notebook 14:** confidence.penumbra described as the share of the measurement area, not of the brain.
-- **Pending Parsa's decision (a DEC):** the method (cut-off distance alone or v2); the complete misses (25 cases predicted under 0.5 mL get a median confidence of 0.90, and 5 of them are on the wrong side of a cut-off); and what the reasoner should read `confidence.core` as.
-- **Tests:** 590 passed.
+- **Notebook 14:** confidence.penumbra described as the share of the measurement area, not of the brain; the save step now also records the two checks below in `metrics.json`.
+- **Cut-off distance alone against the versions** (`baseline_check`, run at review on EXP-31's `per_case.csv`): AUC for the wrong side of any cut-off, distance alone 0.755, v2 0.722, v3 0.703, v1 0.695, penumbra 0.538. v2 minus the distance alone −0.033, paired bootstrap 95% interval −0.066 to −0.002 (seed 0, 5000 resamples). v2 was chosen after seeing the results, and the simpler signal does at least as well.
+- **Complete misses** (`complete_miss_check`): 25 cases predicted under 0.5 mL, 5 on the wrong side of a cut-off, median v2 confidence 0.90. A cross-fitted flag (under 1 mL and a large Tmax > 6 s volume) marks 5 cases and catches 1 of the 5 wrong-side ones, so it does not work. Written up as options; `confidence_core` and the default method are unchanged.
+- **"What confidence.core means"** added to the write-up for the reasoner: roughly the chance the volume is on the right side of every cut-off; not steady in volume (0 mL 0.91, 21 mL 0.36, 100 mL 0.53 at average inputs).
+- **Remaining, for Parsa (a DEC):** the method choice (cut-off distance alone or v2) and how complete misses are handled. Nothing goes back to Lorna.
+- **Tests:** 593 passed.
 - **Notion sync:** none from the review.
 
 ## 2026-11-16, Claude Code session (Lorna, Vision A confidence: EXP-31 results, v2 chosen, Task 2 done)

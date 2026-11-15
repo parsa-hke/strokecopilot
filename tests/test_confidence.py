@@ -302,6 +302,44 @@ def test_slab_check():
     assert s["area_slices"]["median"] == 20.0
 
 
+def test_auc_low_confidence_on_a_hand_example():
+    # Pairs (wrong, right): 0.1<0.2, 0.1<0.9, 0.8>0.2, 0.8<0.9 -> 3 of 4.
+    assert conf.auc_low_confidence([0.1, 0.2, 0.8, 0.9], [True, False, True, False]) == 0.75
+    assert conf.auc_low_confidence([0.5] * 4, [True, False, True, False]) == 0.5
+    assert conf.auc_low_confidence([0.1, 0.2], [False, False]) is None
+
+
+def test_baseline_check_compares_with_the_cutoff_distance_alone():
+    table = _fake_table()
+    table["confidence_penumbra"] = 1 - table["at_risk_no_data_share"]
+    _, confidences = conf.compare_versions(table)
+    out = conf.baseline_check(table, confidences, n_boot=200)
+    assert set(out["auc_wrong_side"]) == {"v1", "v2", "v3", "cutoff_distance_alone", "penumbra"}
+    assert all(0.0 <= v <= 1.0 for v in out["auc_wrong_side"].values())
+    d = out["difference"]
+    assert d["estimate"] == pytest.approx(out["auc_wrong_side"]["v2"] - out["auc_wrong_side"]["cutoff_distance_alone"],
+                                          abs=0.002)
+    assert d["ci95"][0] <= d["estimate"] <= d["ci95"][1] and d["resamples"] == 200
+    assert out == conf.baseline_check(table, confidences, n_boot=200)  # the seed fixes the interval
+    json.dumps(out)
+
+
+def test_complete_miss_check_is_cross_fitted():
+    # Per fold: a near-empty wrong-side case with a large Tmax > 6 s area, a near-empty right-side case with a small
+    # one, and a large right-side prediction. The other folds teach the 200 mL cut-off, so the flag catches all 5.
+    rows = []
+    for fold in range(5):
+        rows += [[f"c{fold}a", fold, 0.0, 200.0, True, 0.9], [f"c{fold}b", fold, 0.2, 20.0, False, 0.8],
+                 [f"c{fold}c", fold, 80.0, 300.0, False, 0.5]]
+    table = pd.DataFrame(rows, columns=["case", "fold", "nnunet_pred_ml", "tmax6_ml", "large_error",
+                                        "confidence_core_v2"])
+    out = conf.complete_miss_check(table)
+    assert out["near_empty"] == {"below_ml": 0.5, "cases": 10, "wrong_side": 5, "confidence_median": 0.85}
+    assert out["flag"]["candidates"] == 10 and out["flag"]["flagged"] == 5 and out["flag"]["flagged_wrong_side"] == 5
+    assert set(out["flag"]["cutoff_by_fold"].values()) == {200.0}
+    json.dumps(out)
+
+
 # ------------------------------------------------------------------------------- Run record
 
 
@@ -338,6 +376,13 @@ def test_build_metrics_end_to_end_and_refuses_case_ids(tmp_path):
     saved = json.loads(conf.write_metrics(tmp_path, metrics).read_text())
     assert saved["cases"] == 100 and saved["git_commit"] == "def" and saved["config_git_commit"] == "abc"
     assert set(saved["versions"]) == {"v1", "v2", "v3"} and saved["undercall_cases"] == int(table["undercall"].sum())
+    assert "baseline_check" not in saved and "complete_miss_check" not in saved
+    versions, confidences = conf.compare_versions(table)
+    table["confidence_core_v2"] = confidences["v2"]
+    metrics = conf.build_metrics(table, {}, "def", versions, {}, {}, conf.baseline_check(table, confidences, n_boot=50),
+                                 conf.complete_miss_check(table))
+    assert metrics["baseline_check"]["difference"]["resamples"] == 50
+    assert metrics["complete_miss_check"]["near_empty"]["below_ml"] == 0.5
     versions["v1"]["bands"]["low"]["note"] = "sub-007"
     with pytest.raises(ValueError, match="case IDs"):
         conf.build_metrics(table, {}, "def", versions, {}, {})

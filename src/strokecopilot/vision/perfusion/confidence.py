@@ -490,6 +490,92 @@ def compare_versions(table, versions=VERSIONS):
     return results, confidences
 
 
+def auc_low_confidence(confidence, wrong):
+    """How well low confidence picks out the wrong-side cases: the chance that a random wrong-side case has lower
+    confidence than a random right-side one (ties count half). 0.5 is chance, 1 is perfect; None if a group is empty."""
+    from scipy import stats
+
+    confidence = np.asarray(confidence, dtype=float)
+    wrong = np.asarray(wrong, dtype=bool)
+    n_wrong, n_right = int(wrong.sum()), int((~wrong).sum())
+    if not n_wrong or not n_right:
+        return None
+    ranks = stats.rankdata(-confidence)  # lowest confidence ranks highest
+    return float((ranks[wrong].sum() - n_wrong * (n_wrong + 1) / 2) / (n_wrong * n_right))
+
+
+def baseline_check(table, confidences, reference=CHOSEN_VERSION, seed=0, n_boot=5000):
+    """The distance to the nearest cut-off alone against the fitted versions.
+
+    AUC for the wrong side of any cut-off (low confidence -> wrong) for each version's cross-fitted confidence
+    (`confidences`, as compare_versions returns), for log_cutoff_distance itself (not fitted: farther from a cut-off
+    is more confident) and for confidence.penumbra when the table has it. Also a paired bootstrap 95% interval for
+    `reference` minus the distance alone (cases resampled together, `n_boot` times). Counts and summaries only.
+    """
+    wrong = table["large_error"].astype(bool).to_numpy()
+    scores = {name: np.asarray(c, dtype=float) for name, c in confidences.items()}
+    scores["cutoff_distance_alone"] = table["log_cutoff_distance"].astype(float).to_numpy()
+    if "confidence_penumbra" in table.columns:
+        scores["penumbra"] = table["confidence_penumbra"].astype(float).to_numpy()
+    auc = {name: _num(auc_low_confidence(s, wrong)) for name, s in scores.items()}
+    rng = np.random.default_rng(seed)
+    diffs = []
+    for _ in range(n_boot):
+        i = rng.integers(0, len(wrong), len(wrong))
+        a = auc_low_confidence(scores[reference][i], wrong[i])
+        b = auc_low_confidence(scores["cutoff_distance_alone"][i], wrong[i])
+        if a is not None and b is not None:
+            diffs.append(a - b)
+    estimate = auc_low_confidence(scores[reference], wrong) - auc_low_confidence(scores["cutoff_distance_alone"], wrong)
+    return {
+        "auc_wrong_side": auc,
+        "difference": {"compared": f"{reference} minus cutoff_distance_alone", "estimate": _num(estimate),
+                       "ci95": [_num(np.percentile(diffs, 2.5)), _num(np.percentile(diffs, 97.5))],
+                       "seed": seed, "resamples": len(diffs)},
+    }
+
+
+def complete_miss_check(table, confidence_col=f"confidence_core_{CHOSEN_VERSION}", small_ml=0.5, flag_ml=1.0,
+                        signal="tmax6_ml"):
+    """How confidence.core treats near-empty predictions, and whether one signal could flag the bad ones.
+
+    Near-empty: nnU-Net predicts under `small_ml`. Reports how many there are, how many are on the wrong side of a
+    cut-off, and their median confidence. Then a cross-fitted flag (fit on 4 folds, score the 5th): a case is
+    flagged when nnU-Net predicts under `flag_ml` and `signal` (the Tmax > 6 s volume) reaches a cut-off learned on
+    the other folds' predictions under `flag_ml`, the one that best separates their wrong-side cases (Youden's J;
+    the highest such cut-off on a tie). Reports what the flag catches. Counts and summaries only; this is a check,
+    not part of confidence.core.
+    """
+    pred = table["nnunet_pred_ml"].astype(float).to_numpy()
+    wrong = table["large_error"].astype(bool).to_numpy()
+    folds = table["fold"].astype(int).to_numpy()
+    value = table[signal].astype(float).to_numpy()
+    small = pred < small_ml
+    candidate = pred < flag_ml
+    flagged = np.zeros(len(table), dtype=bool)
+    cutoffs = {}
+    for fold in sorted(set(folds.tolist())):
+        train = candidate & (folds != fold)
+        best, best_j = np.inf, 0.0
+        if wrong[train].any() and (~wrong[train]).any():
+            for t in np.unique(value[train]):
+                hit = value[train] >= t
+                j = hit[wrong[train]].mean() - hit[~wrong[train]].mean()
+                if j > best_j or (j == best_j and j > 0 and t > best):
+                    best, best_j = t, j
+        cutoffs[str(fold)] = _num(best, 1) if np.isfinite(best) else None
+        test = candidate & (folds == fold)
+        flagged[test] = value[test] >= best
+    return {
+        "near_empty": {"below_ml": small_ml, "cases": int(small.sum()), "wrong_side": int((small & wrong).sum()),
+                       "confidence_median": _num(np.median(table.loc[small, confidence_col])) if small.any() else None},
+        "flag": {"rule": f"nnU-Net under {flag_ml:g} mL and {signal} at or above a cut-off learned on the other folds",
+                 "candidates": int(candidate.sum()), "candidates_wrong_side": int((candidate & wrong).sum()),
+                 "flagged": int(flagged.sum()), "flagged_wrong_side": int((flagged & wrong).sum()),
+                 "cutoff_by_fold": cutoffs},
+    }
+
+
 def slab_check(table):
     """Before/after the slab and footprint fix: the no-data share over all plain-CT tissue against over the
     measurement area, and the slice counts. Medians and ranges only."""
@@ -562,9 +648,10 @@ def write_config(run_dir, git_commit, experiment, inputs, notes=""):
     return config
 
 
-def build_metrics(table, config, git_commit, versions, alone, slab):
-    """metrics.json for the confidence run: every version's results, the signals-alone check, the slab check and
-    confidence.penumbra. Raises if any case ID appears anywhere in it."""
+def build_metrics(table, config, git_commit, versions, alone, slab, baseline=None, complete_misses=None):
+    """metrics.json for the confidence run: every version's results, the signals-alone check, the slab check,
+    confidence.penumbra, and when given the baseline check (baseline_check) and the complete-miss check
+    (complete_miss_check). Raises if any case ID appears anywhere in it."""
     if not git_commit:
         raise ValueError("git_commit is required: the commit this run installed.")
     penumbra = table["confidence_penumbra"]
@@ -583,6 +670,10 @@ def build_metrics(table, config, git_commit, versions, alone, slab):
         "penumbra": {"median": _num(penumbra.median()), "min": _num(penumbra.min()),
                      "under_0_9": int((penumbra < 0.9).sum())},
     }
+    if baseline is not None:
+        metrics["baseline_check"] = baseline
+    if complete_misses is not None:
+        metrics["complete_miss_check"] = complete_misses
     leaked = _ids_in(metrics, set(table["case"].astype(str)))
     if leaked:
         raise ValueError(f"{len(leaked)} case IDs reached metrics.json. Nothing was written.")
