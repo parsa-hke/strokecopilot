@@ -435,12 +435,13 @@ def test_up_refuses_an_offer_whose_contract_ends_too_soon(stubbed):
     assert "contract 2.0 h left" in Vast(key="k").describe({"id": 1, "end_date": time.time() + 7200 + 60})
 
 
-def test_serve_runs_ask_for_a_48gb_gpu_and_keep_policy_off():
+def test_serve_runs_ask_for_a_48gb_gpu_with_parsas_policy():
     for exp in ("EXP-36", "EXP-37"):
         spec = jobs.get(exp)
         assert spec["filters"]["gpu_ram"] == {"gte": 44_000} and spec["filters"]["dph_total"] == {"lte": 0.90}
         assert "gpu_name" not in spec["filters"] and spec["disk_gb"] == 200
-        assert spec["serve"] == {"models": ("gemma-3-27b", "medgemma-27b-text"), "allow_gated": False, "allow_medgemma": False}
+        assert spec["serve"] == {"models": ("gemma-3-27b", "medgemma-27b-text"), "allow_gated": True, "allow_medgemma": True}
+    assert "rm -f /root/sc/hf_env" in remote.FORGET_TOKEN
 
 
 def test_search_passes_a_runs_own_filters():

@@ -88,8 +88,9 @@ def test_api_llm_routes_qwen_through_openrouter_without_storing_a_key():
     sent = client.sent[0]
     assert sent["model"] == "qwen/qwen3.5-27b" and sent["temperature"] == 0.0 and sent["max_tokens"] == 20000
     assert sent["response_format"]["type"] == "json_schema"
-    assert sent["extra_body"]["provider"] == {"require_parameters": True, "quantizations": ["bf16"],
+    assert sent["extra_body"]["provider"] == {"order": ["alibaba"], "allow_fallbacks": False, "require_parameters": True,
                                               "data_collection": "deny"}
+    assert "JSON" in __import__("strokecopilot.nlp.reasoner.prompt", fromlist=["x"]).system_prompt("reasoner_v2")
     d = llm.describe()
     assert d["provider"] == "openrouter" and d["base_url"] == om.OPENROUTER_URL and d["billing"] == "per token (API)"
     assert "key" not in str(d).lower().replace("key_name", "")

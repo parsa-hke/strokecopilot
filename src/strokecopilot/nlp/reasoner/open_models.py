@@ -156,10 +156,14 @@ API_ROUTES = {
     "qwen3.5-27b": ApiRoute(
         name="qwen3.5-27b", provider="openrouter", base_url=OPENROUTER_URL, model_id="qwen/qwen3.5-27b",
         key_name="OPENROUTER_API_KEY", max_tokens=20000,
-        # OpenRouter provider routing: only providers that honour every request parameter (response_format with the
-        # json_schema, temperature), serve 16-bit weights, and do not keep prompts for training.
-        extra_body={"provider": {"require_parameters": True, "quantizations": ["bf16"], "data_collection": "deny"}},
-        notes="DEC-24 amended (15 Nov 2026): full precision through OpenRouter instead of a 4-bit build on the pod. "
+        # OpenRouter provider routing, pinned to Alibaba (Qwen's developer), with no fallback: it honours every request
+        # parameter (the json_schema, temperature) and does not keep prompts. Checked 16 Nov 2026: of the six
+        # providers, the only one listed at 16-bit (Novita) lacks structured outputs, the other four run fp8, and
+        # Alibaba lists no precision (most likely the original weights). Alibaba refuses JSON output unless a message
+        # says "json"; the reasoner prompt does ("Return one JSON object").
+        extra_body={"provider": {"order": ["alibaba"], "allow_fallbacks": False, "require_parameters": True,
+                                 "data_collection": "deny"}},
+        notes="DEC-24 amended (15 Nov 2026): through OpenRouter, pinned to Alibaba, instead of a 4-bit build on the pod. "
               "List price about $0.20 in / $1.56 out per million tokens (15 Nov 2026; providers vary). The model "
               "thinks by default; whether to turn that off is a run-plan choice. max_tokens matches the Claude "
               "reasoner's 20000, since the API context (262k) is not the limit a pod's is.",

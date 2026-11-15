@@ -1,5 +1,53 @@
 # CHANGELOG
 
+## 2026-11-16 — Claude Code session (C8: Parsa's three decisions, the without-rulebook arm, first test requests)
+- **Decisions (Parsa, 16 Nov 2026):**
+  - **DEC-21 amended:** a Hugging Face token may go to the serve pod for the gated Gemma weights.
+    - It must be a fine-grained, read-only token for the two repositories.
+    - It travels on SSH's stdin into a root-only file and is never logged.
+    - It is **removed from the pod as soon as the last model is being served** (new: `remote.FORGET_TOKEN`, run on errors too).
+    - Parsa revokes it after the run.
+  - **DEC-24:** MedGemma's HAI-DEF terms cleared, so the Gemma pair stays.
+  - `jobs.SERVE_POLICY` turned on.
+  - **DEC-29 (new): the without-rulebook arm.**
+    - The prompt is `prompts/reasoner_v2_norulebook.md`, v2 with the rulebook removed. Rules come from the model's own knowledge, named in the claim and cited as `OWN-KNOWLEDGE`, so the frozen schema still validates.
+    - The verifier (`trace.py`) drops the placeholder and checks rule content against the corpus like an uncited rule. It does not charge passage attribution (6 and 7). Imaging and note citations stay checked.
+    - `HALLUCINATION_METRIC.md` gains point 16, with the limits.
+  - Plan §2 rows DEC-21, DEC-24 and DEC-29 updated.
+- **Code:**
+  - `prompt.system_prompt(..., rulebook=False)`.
+  - `Inputs.rulebook`; `attribute(passages=False)`.
+  - `run_cases`, `run_batched` and `collect_judge_requests` take `rulebook`, and the batched judge stays byte-identical in this arm.
+  - `paid_runs` runs all 7 arms.
+  - **Fixed:** `run_batched` did not pass the prompt version on to `run_cases`, so a run with any prompt but the default could not find its own answers.
+  - **Qwen pinned to Alibaba on OpenRouter**, with no fallback, structured outputs and no data collection. Of six providers, the only one listed at 16-bit (Novita) lacks structured outputs, the other four run 8-bit, and Alibaba lists no precision. The full-precision rule could not be met, so it was dropped.
+  - New `paid_runs smoke-pod` command for the Gemma test.
+- **Tests, 6 added:** the no-rulebook prompt, the placeholder in both arms, attribution in this arm, a batched no-rulebook run against a live one, token removal, the pod test.
+- **Test requests, EXP-36** (`runs/EXP-36_paid_runs_test/smoke.jsonl`, fixture fx02, prompt v2 with the rulebook). Both returned valid recommendations:
+
+  | Model | Time | Output tokens | Cost |
+  |---|---|---|---|
+  | Sonnet 5.5, live at the batch settings | 20 s | 3,042 | $0.032 |
+  | Qwen3.5-27B | 99 s | 9,098 (7,950 thinking) | $0.016 |
+
+  - An earlier Qwen attempt hit OpenRouter's "no endpoint" error under the first provider settings. Sonnet's result from that attempt was lost, which is why `smoke` now saves each result as it arrives.
+  - Three routing probes cost under a cent.
+- **The Gemma pair moves to Colab (Parsa: keep the Vast credit for Phase 4).** DEC-24 note added.
+  - `notebooks/53_paid_runs_colab.ipynb`, with `MODE` set to `'test'` (EXP-36: one request per model, with the start time) or `'run'` (EXP-37: every cell, 295 requests per model):
+    - installs vLLM and the package at the pushed commit;
+    - copies the contracts and notes to local disk;
+    - serves each model in turn on the A100 at `--quantization fp8`;
+    - saves each answer to Drive as it arrives, so Run all again resumes.
+  - The Hugging Face token comes from Colab Secrets into the server's environment only. No Anthropic or OpenRouter key is used on Colab.
+  - `paid_runs.reasoner_pass` sends only the reasoner requests, with no API key.
+  - `paid_runs.import_answers` / `scripts/paid_runs import --from <Drive run> --out <Mac run>` copy the answers in. The Mac then runs extraction and judge as batches (`advance`).
+  - The paid runs' prompt is v2 (`paid_runs.PROMPT`), the only one with a without-rulebook variant. The v1 vs v2 check is still to run.
+  - **Tests:** 1 added, covering Colab's answers imported on the Mac and every cell finished without asking the model again. Also a local run of the notebook's input, run-record and summary cells against the real Drive files, which wrote nothing to Drive.
+  - The Vast serve-pod code stays for Phase 4.
+- `pytest`: 723 passed. **Spend:** about $0.10 of API (Sonnet $0.065, Qwen $0.016, probes under $0.01); no GPU.
+- **Notion sync:**
+  - Decisions: DEC-29 (new), DEC-21 and DEC-24 amended.
+
 ## 2026-11-16 — Claude Code session (C8 prep: batched judge, batches that survive a closed laptop, the run plan)
 - **DEC-24 amended (Parsa): the judge runs through the Batch API too.** Plan §2 row updated.
 - **`pipeline/batched.py`:**

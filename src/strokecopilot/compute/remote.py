@@ -100,6 +100,9 @@ def start_serve(argv):
             f"&& sleep 2 && tmux has-session -t serve && echo serve started")
 
 
+# Remove the Hugging Face token from the pod once the last gated model's weights are on disk (DEC-21, amended 16 Nov
+# 2026): a running vLLM server needs it no more, and the pod keeps no key of ours for the rest of the run.
+FORGET_TOKEN = "rm -f /root/sc/hf_env; test ! -e /root/sc/hf_env && echo token removed"
 STOP_SERVE = ("tmux kill-session -t serve 2>/dev/null; sleep 8; "
               "nvidia-smi --query-gpu=memory.used --format=csv,noheader; echo serve stopped")
 SERVE_LOG = "tail -n 25 /root/sc/serve.log 2>/dev/null; true"

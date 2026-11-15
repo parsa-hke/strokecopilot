@@ -278,14 +278,14 @@ class CollectingJudge(vr.CachedJudge):
 
 
 def collect_judge_requests(cases, reasoner_answers, extractor_answers, judge_results, judge, retriever, out_dir,
-                           tau=tr.TAU, judge_prompt=tr.JUDGE_PROMPT, version=rp.REASONER_PROMPT):
+                           tau=tr.TAU, judge_prompt=tr.JUDGE_PROMPT, version=rp.REASONER_PROMPT, rulebook=True):
     """{key: (system, user, schema)}: every judge request the live path would send next, given the answers so far.
 
     Each case is walked as run_cases walks it: the same recommendation, the same claims, the same candidates from the
     same retrieval cache, claim by claim in order. A claim that reaches an unanswered request is left for the next
     round. A case whose extraction or judging fails stops where the live path would stop."""
     out = Path(out_dir)
-    system = rp.system_prompt(version)
+    system = rp.system_prompt(version, rulebook=rulebook)
     corpus = ingest.load()
     recorder = Recording(judge_results, judge)
     # A copy of the saved verdicts, in memory only: run_cases fills the real judge cache, and counts its calls, as in
@@ -303,7 +303,7 @@ def collect_judge_requests(cases, reasoner_answers, extractor_answers, judge_res
             claims = cl.extract(rec, cached_extractor)
         except (RefusalError, RuntimeError, json.JSONDecodeError, KeyError):
             continue  # run_cases records this case as a verifier failure
-        inputs = e2e._inputs(case, cached_judge, cached_retriever, tau, corpus, rec)
+        inputs = e2e._inputs(case, cached_judge, cached_retriever, tau, corpus, rec, rulebook)
         for claim in claims:
             try:
                 tr.trace_claim(claim, inputs)
@@ -322,7 +322,7 @@ def _waiting(role, ledger, log):
 
 
 def run_batched(cases, reasoner, extractor, judge, retriever, out_dir, log=print, source=None, version=rp.REASONER_PROMPT,
-                extra_config=None, reasoner_workers=1, wait=True, **run_kwargs):
+                extra_config=None, reasoner_workers=1, wait=True, rulebook=True, **run_kwargs):
     """The passes, then run_cases. `reasoner`, `extractor` and `judge` may each be a batch llm (ClaudeBatch) or any
     direct llm; reasoner_workers is how many direct reasoner requests go at once (gather's workers).
 
@@ -331,7 +331,7 @@ def run_batched(cases, reasoner, extractor, judge, retriever, out_dir, log=print
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     ledger = Ledger(out / LEDGER_FILE)
-    system = rp.system_prompt(version)
+    system = rp.system_prompt(version, rulebook=rulebook)
     schema = rp.api_schema()
     requests = {request_key(system, rp.user_message(c["vision"], c["note"])): (system, rp.user_message(c["vision"], c["note"]), schema)
                 for c in cases}
@@ -370,7 +370,7 @@ def run_batched(cases, reasoner, extractor, judge, retriever, out_dir, log=print
         judge_results = load_answers(out / ANSWER_FILES["judge"], getattr(judge, "model", "unknown"))
         while True:
             wanted = collect_judge_requests(cases, reasoner_answers, extractor_answers, judge_results, judge, retriever,
-                                            out, tau, judge_prompt, version)
+                                            out, tau, judge_prompt, version, rulebook)
             if not wanted:
                 break
             judge_rounds += 1
@@ -392,4 +392,4 @@ def run_batched(cases, reasoner, extractor, judge, retriever, out_dir, log=print
     if resumed:
         config["resumed_reasoner_answers"] = resumed  # answers saved by an earlier session; usage covers all sessions
     return e2e.run_cases(cases, reasoner_answers, extractor_answers, judge_llm, retriever, out, log=log, extra_config=config,
-                         source=source, **run_kwargs)
+                         source=source, version=version, rulebook=rulebook, **run_kwargs)

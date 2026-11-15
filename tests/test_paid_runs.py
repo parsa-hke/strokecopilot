@@ -15,9 +15,9 @@ from strokecopilot.pipeline import paid_runs as pr  # noqa: E402
 
 
 def test_cells_follow_the_dec24_matrix():
-    ready = pr.cells()
-    assert len(ready) == 4 * 4 + 2  # four ready arms per model, plus Sonnet's two repeats
-    everything = pr.cells(ready_only=False)
+    ready = pr.cells(rulebook_only=True)
+    assert len(ready) == 4 * 4 + 2  # four rulebook arms per model, plus Sonnet's two repeats
+    everything = pr.cells()
     assert len(everything) == 4 * 7 + 2
     assert [arm for model, arm in ready if model == pr.SONNET][-2:] == ["real_predicted_repeat2", "real_predicted_repeat3"]
     assert not any("repeat" in arm for model, arm in everything if model != pr.SONNET)
@@ -65,7 +65,7 @@ def test_advance_moves_a_cell_stage_by_stage_and_status_reads_the_folder(tmp_pat
                           Staged(Fake("extractor"), pr.SONNET, server), Staged(PickyJudge(seen), "claude-haiku-5-5", server),
                           retriever, log=lambda *_: None)
 
-    assert [r["state"] for r in pr.status([pr.SONNET], paths)] == ["not started"] * 6
+    assert [r["state"] for r in pr.status([pr.SONNET], paths)] == ["not started"] * 9
     assert step()["waiting"] == "reasoner"
     assert pr.status([pr.SONNET], paths)[0] == {"model": pr.SONNET, "arm": "fixtures_rulebook", "state": "waiting: reasoner batch"}
     for _ in range(8):
@@ -77,8 +77,7 @@ def test_advance_moves_a_cell_stage_by_stage_and_status_reads_the_folder(tmp_pat
     assert pr.status([pr.SONNET], paths)[0]["state"] == "done"
     config = __import__("json").loads((pr.cell_dir(paths, pr.SONNET, "fixtures_rulebook") / "config.json").read_text())
     assert config["paid_run"] == {"model": pr.SONNET, "arm": "fixtures_rulebook", "cases": 5, "source": "fixtures", "rulebook": True}
-    with pytest.raises(pr.NotReady, match="not defined yet"):
-        pr.advance(pr.SONNET, "fixtures_norulebook", paths, None, None, None, retriever)
+    assert config["rulebook"] is True
 
 
 class FakeOps:
@@ -107,6 +106,10 @@ class FakeOps:
     def stop(self):
         self.events.append("stop")
         return "serve stopped"
+
+    def forget_token(self):
+        self.events.append("forget token")
+        return "token removed"
 
     def log_tail(self):
         return "last lines"
@@ -142,7 +145,8 @@ def test_pod_driver_serves_each_model_then_destroys_the_pod(tmp_path, monkeypatc
     results = pr.run_pod_models("EXP-98", paths, retriever, log=lambda *_: None, ops=ops, verifier=verifier,
                                 llm_for=lambda model, port: DirectFake(model), ready=lambda port, model, log: ready.append(model),
                                 only_arms=["fixtures_rulebook"])
-    assert ops.events == ["tunnel 8000", "start qwen2.5-32b", "stop", "start baichuan-m2-32b", "stop", "tunnel closed", "down"]
+    assert ops.events == ["tunnel 8000", "start qwen2.5-32b", "stop", "start baichuan-m2-32b", "forget token", "stop",
+                          "tunnel closed", "forget token", "down"]
     assert ready == ["qwen2.5-32b", "baichuan-m2-32b"]
     assert results[("qwen2.5-32b", "fixtures_rulebook")]["waiting"] == "extractor"  # answers saved, extraction submitted
     assert pr.reasoner_answered("qwen2.5-32b", "fixtures_rulebook", paths)
@@ -151,7 +155,7 @@ def test_pod_driver_serves_each_model_then_destroys_the_pod(tmp_path, monkeypatc
     assert pr.run_pod_models("EXP-98", paths, retriever, log=lambda *_: None, ops=again, verifier=verifier,
                              llm_for=lambda model, port: DirectFake(model), ready=lambda *a, **k: None,
                              only_arms=["fixtures_rulebook"]) == {}
-    assert again.events == ["tunnel 8000", "tunnel closed", "down"]
+    assert again.events == ["tunnel 8000", "tunnel closed", "forget token", "down"]
 
 
 def test_pod_driver_destroys_the_pod_when_the_server_fails(tmp_path, monkeypatch):
@@ -161,7 +165,7 @@ def test_pod_driver_destroys_the_pod_when_the_server_fails(tmp_path, monkeypatch
         pr.run_pod_models("EXP-98", paths, retriever, log=lambda *_: None, ops=ops, verifier=verifier,
                           llm_for=lambda model, port: DirectFake(model, crash=True), ready=lambda *a, **k: None,
                           only_arms=["fixtures_rulebook"])
-    assert ops.events == ["tunnel 8000", "start qwen2.5-32b", "stop", "tunnel closed", "down"]
+    assert ops.events == ["tunnel 8000", "start qwen2.5-32b", "stop", "tunnel closed", "forget token", "down"]
     assert not pr.reasoner_answered("qwen2.5-32b", "fixtures_rulebook", paths)
 
 
@@ -174,7 +178,7 @@ def test_pod_driver_refuses_gated_models_until_the_policy_allows_them(tmp_path, 
         pr.run_pod_models("EXP-98", paths, retriever, log=lambda *_: None, ops=ops, verifier=verifier,
                           llm_for=lambda model, port: DirectFake(model), ready=lambda *a, **k: None,
                           only_arms=["fixtures_rulebook"])
-    assert ops.events == ["tunnel 8000", "tunnel closed", "down"]  # nothing was served, and the pod is not left up
+    assert ops.events == ["tunnel 8000", "tunnel closed", "forget token", "down"]  # nothing served; the pod is not left up
 
 
 def test_wait_ready_polls_until_the_model_is_listed():
@@ -203,3 +207,61 @@ def test_smoke_reports_one_request_and_advance_all_skips_pod_models(tmp_path):
     rows = pr.advance_all(["gemma-3-27b"], paths, retriever, log=lambda *_: None, verifier=verifier,
                           llm_for=lambda model: DirectFake(model), only_arms=["fixtures_rulebook", "scenarios_rulebook"])
     assert [r["state"] for r in rows] == ["needs the pod", "needs the pod"]
+
+
+def test_smoke_pod_tests_each_model_then_destroys_the_pod(tmp_path, monkeypatch):
+    _serve_setup(tmp_path, monkeypatch)
+    ops = FakeOps()
+    rows = pr.smoke_pod("EXP-98", log=lambda *_: None, ops=ops, llm_for=lambda model, port: DirectFake(model),
+                        ready=lambda *a, **k: None)
+    assert [r["valid"] for r in rows] == [True, True] and all("start_seconds" in r for r in rows)
+    assert rows[0]["serve_log_tail"] == "last lines"
+    assert ops.events == ["tunnel 8000", "start qwen2.5-32b", "stop", "start baichuan-m2-32b", "forget token", "stop",
+                          "tunnel closed", "forget token", "down"]
+    broken = FakeOps()
+    rows = pr.smoke_pod("EXP-98", log=lambda *_: None, ops=broken, llm_for=lambda model, port: DirectFake(model, crash=True),
+                        ready=lambda *a, **k: None)
+    assert [r["valid"] for r in rows] == [False, False] and "ConnectionError" in rows[0]["error"]
+    assert broken.events[-1] == "down"
+
+
+def test_reasoner_pass_saves_answers_that_the_mac_imports_and_finishes(tmp_path):
+    colab = pr.Paths(tmp_path, tmp_path, tmp_path, tmp_path / "drive")
+    arms = ["fixtures_rulebook", "fixtures_norulebook"]
+    real_cells = pr.cells
+    pr.cells = lambda models, rulebook_only=False: [(m, a) for m, a in real_cells(models, rulebook_only) if a in arms]
+    try:
+        calls = []
+
+        class Counting(DirectFake):
+            def __call__(self, *req):
+                calls.append(req[1])
+                return super().__call__(*req)
+
+        first = pr.reasoner_pass(["gemma-3-27b"], colab, lambda m: Counting(m), log=lambda *_: None)
+        assert first == {("gemma-3-27b", "fixtures_rulebook"): 5, ("gemma-3-27b", "fixtures_norulebook"): 5}
+        assert pr.reasoner_pass(["gemma-3-27b"], colab, lambda m: Counting(m), log=lambda *_: None) == {
+            ("gemma-3-27b", "fixtures_rulebook"): 0, ("gemma-3-27b", "fixtures_norulebook"): 0}  # resumes: nothing asked
+        assert len(calls) == 10
+        mac = pr.Paths(tmp_path, tmp_path, tmp_path, tmp_path / "mac")
+        assert pr.import_answers(colab.out_root, mac.out_root, ["gemma-3-27b"]) == {
+            ("gemma-3-27b", "fixtures_rulebook"): 5, ("gemma-3-27b", "fixtures_norulebook"): 5}
+        assert pr.import_answers(colab.out_root, mac.out_root, ["gemma-3-27b"])[("gemma-3-27b", "fixtures_rulebook")] == 0
+        assert all(pr.reasoner_answered("gemma-3-27b", a, mac) for a in arms)
+        server = {"batches": {}, "ended": set()}
+        verifier = (Staged(Fake("extractor"), pr.SONNET, server), Staged(PickyJudge([]), "claude-haiku-5-5", server))
+
+        def never(model):  # the Mac cannot reach Colab's server: every answer must come from the imported file
+            class Unreachable(DirectFake):
+                def __call__(self, *req):
+                    raise AssertionError("asked the reasoner again")
+            return Unreachable(model)
+
+        for _ in range(6):
+            rows = pr.advance_all(["gemma-3-27b"], mac, retriever, log=lambda *_: None, llm_for=never, verifier=verifier)
+            server["ended"].update(server["batches"])
+            if all(r["state"] == "done" for r in rows):
+                break
+        assert [r["state"] for r in rows] == ["done", "done"] and len(calls) == 10
+    finally:
+        pr.cells = real_cells

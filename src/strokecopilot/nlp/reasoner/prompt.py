@@ -21,7 +21,17 @@ VISION_HIDDEN = ("schema_version", "case_id", "model_version")
 _UNSUPPORTED = ("minLength", "maxLength", "minItems", "maxItems", "pattern", "$schema", "$id")
 
 
-def system_prompt(version=REASONER_PROMPT, rulebook_path=ingest.PASSAGES):
+def system_prompt(version=REASONER_PROMPT, rulebook_path=ingest.PASSAGES, rulebook=True):
+    """The reasoner's system prompt. With rulebook False (the without-rulebook arm, DEC-29) it is <version>_norulebook.md:
+    the same instructions, with rules from the model's own knowledge named in the claim and cited as OWN-KNOWLEDGE."""
+    if not rulebook:
+        path = Path(PROMPTS_DIR) / f"{version}_norulebook.md"
+        if not path.exists():
+            raise ValueError(f"{version} has no without-rulebook variant ({path.name}).")
+        template = path.read_text(encoding="utf-8")
+        if "{{RULEBOOK}}" in template or "OWN-KNOWLEDGE" not in template:
+            raise ValueError(f"{path.name} must have no rulebook slot and must name the OWN-KNOWLEDGE placeholder.")
+        return template
     template = (Path(PROMPTS_DIR) / f"{version}.md").read_text(encoding="utf-8")
     if "{{RULEBOOK}}" not in template:
         raise ValueError(f"{version} has no {{{{RULEBOOK}}}} slot")

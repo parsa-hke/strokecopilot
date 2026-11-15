@@ -111,9 +111,10 @@ def flagged_claims(case_id, claims, traces):
     return out
 
 
-def _inputs(case, judge, retriever, tau, corpus, rec=None):
+def _inputs(case, judge, retriever, tau, corpus, rec=None, rulebook=True):
     return tr.Inputs(vision=case["vision"], note=case["note"], facts=case["facts"], corpus=corpus, judge=judge,
-                     retriever=retriever, tau=tau, decision_passages=tr.decision_passages(rec) if rec else [])
+                     retriever=retriever, tau=tau, decision_passages=tr.decision_passages(rec) if rec else [],
+                     rulebook=rulebook)
 
 
 def _score(case, rec, claims, traces):
@@ -128,20 +129,21 @@ def _score(case, rec, claims, traces):
 
 
 def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU, log=print, extra_config=None, source=None,
-              judge_prompt=tr.JUDGE_PROMPT, version=rp.REASONER_PROMPT):
+              judge_prompt=tr.JUDGE_PROMPT, version=rp.REASONER_PROMPT, rulebook=True):
     """Writes config.json, metrics.json, flagged.json, and outputs/, traces/ and calls/ per case; returns the metrics.
-    reasoner, extractor and judge are llm(system, user, schema) callables (providers.ClaudeJSON)."""
+    reasoner, extractor and judge are llm(system, user, schema) callables (providers.ClaudeJSON). rulebook False is
+    the without-rulebook arm (DEC-29): the no-rulebook prompt, and the verifier's placeholder rule."""
     out = Path(out_dir)
     for sub in ("outputs", "traces", "calls"):
         (out / sub).mkdir(parents=True, exist_ok=True)
-    system = rp.system_prompt(version)
+    system = rp.system_prompt(version, rulebook=rulebook)
     corpus = ingest.load()
     cached_extractor = vr.CachedExtractor(extractor, vr.JsonCache(out / "extraction_cache.json"))
     cached_judge = vr.CachedJudge(tr.Judge(judge, judge_prompt), vr.JsonCache(out / "judge_cache.json"), version=judge_prompt)
     cached_retriever = vr.CachedRetriever(retriever, vr.JsonCache(out / "retrieval_cache.json"))
     describe = lambda llm: getattr(llm, "describe", lambda: {"model": getattr(llm, "model", "unknown")})()
     config = {"source": source, "cases": [c["id"] for c in cases], "reasoner": describe(reasoner),
-              "prompt_version": version, "extractor": describe(extractor), "judge": describe(judge),
+              "prompt_version": version, "rulebook": rulebook, "extractor": describe(extractor), "judge": describe(judge),
               "judge_prompt": judge_prompt, "tau": tau, "top_k": tr.TOP_K, "corpus_sha256": ingest.version(),
               "corpus_draft": ingest.unchecked(ingest.read()), **(extra_config or {})}
     if source == "scenarios":
@@ -160,7 +162,8 @@ def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU,
             continue
         (out / "outputs" / f"{case['id']}.json").write_text(json.dumps(rec, indent=1, ensure_ascii=False))
         try:
-            claims, traces = vr.verify(rec, _inputs(case, cached_judge, cached_retriever, tau, corpus, rec), cached_extractor)
+            claims, traces = vr.verify(rec, _inputs(case, cached_judge, cached_retriever, tau, corpus, rec, rulebook),
+                                       cached_extractor)
         except (RefusalError, RuntimeError, json.JSONDecodeError, KeyError) as e:
             row["error"] = f"verifier failed: {str(e)[:300]}"
             rows.append(row)

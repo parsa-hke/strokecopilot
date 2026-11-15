@@ -11,8 +11,8 @@ Arms (DEC-24's matrix, per model):
 - real_predicted, real_groundtruth: 20 development cases (4 per fold, seeded) with the predicted contracts (EXP-33) and
   with the ground-truth contracts (EXP-34): arm 2 of plan §8.4.
 - fixtures_norulebook, scenarios_norulebook (75: every second scenario, ordered by decision path), real_norulebook: arm 1's
-  other half. NOT READY: what the reasoner is told and how its uncitable rule claims are scored is Parsa's decision,
-  pending; advance() refuses these arms until then.
+  other half (DEC-29): <prompt>_norulebook.md, rules from the model's own knowledge cited as OWN-KNOWLEDGE, scored on
+  content only (passage attribution is not charged).
 - real_predicted_repeat2 and _repeat3: the same 20 cases again, for Claude Sonnet 5.5 only (run-to-run variation).
 
 Models: Claude Sonnet 5.5 through the Batch API; Qwen3.5-27B through OpenRouter; Gemma 3 27B and MedGemma 27B text on
@@ -40,6 +40,9 @@ MODELS = (SONNET, "qwen3.5-27b", "gemma-3-27b", "medgemma-27b-text")
 FALLBACK_PAIR = ("qwen2.5-32b", "baichuan-m2-32b")  # replaces the Gemma pair if Parsa rules it out (DEC-24)
 REAL_CASES = 20
 WORKERS = 8  # direct reasoner requests sent at once (OpenRouter, vLLM)
+# The paid runs' prompt: v2 (Hana, from the EXP-12 findings), the only one with a without-rulebook variant (DEC-29).
+# The v1 vs v2 check on the fixtures is still to run; if it favours v1, v1 needs its own variant first.
+PROMPT = "reasoner_v2"
 
 ARMS = {
     "fixtures_rulebook": {"source": "fixtures", "rulebook": True},
@@ -54,10 +57,6 @@ SONNET_REPEATS = {name: {"source": "real", "vision": "predicted", "rulebook": Tr
                   for name in ("real_predicted_repeat2", "real_predicted_repeat3")}
 
 
-class NotReady(RuntimeError):
-    """An arm that cannot run yet."""
-
-
 @dataclass(frozen=True)
 class Paths:
     predicted: Path  # artifacts/vision_outputs_v1 (EXP-33)
@@ -70,9 +69,9 @@ def arms_for(model):
     return {**ARMS, **(SONNET_REPEATS if model == SONNET else {})}
 
 
-def cells(models=MODELS, ready_only=True):
-    """[(model, arm)] in run order; without the arms that are not ready unless ready_only is False."""
-    return [(model, arm) for model in models for arm, spec in arms_for(model).items() if spec["rulebook"] or not ready_only]
+def cells(models=MODELS, rulebook_only=False):
+    """[(model, arm)] in run order; only the rulebook arms if rulebook_only."""
+    return [(model, arm) for model in models for arm, spec in arms_for(model).items() if spec["rulebook"] or not rulebook_only]
 
 
 def half_scenarios(cases):
@@ -114,17 +113,15 @@ def cell_dir(paths, model, arm):
     return Path(paths.out_root) / model.replace("/", "_") / arm
 
 
-def advance(model, arm, paths, reasoner, extractor, judge, retriever, version=rp.REASONER_PROMPT, wait=False, log=print,
+def advance(model, arm, paths, reasoner, extractor, judge, retriever, version=PROMPT, wait=False, log=print,
             folds=None, extra_config=None):
     """Move one cell forward. Returns {"done": metrics summary} or {"waiting": role, ...} (batched.run_batched)."""
     spec = arms_for(model)[arm]
-    if not spec["rulebook"]:
-        raise NotReady(f"{arm}: the without-rulebook arm is not defined yet (Parsa's decision).")
     cases = arm_cases(model, arm, paths, folds)
     out = cell_dir(paths, model, arm)
     result = batched.run_batched(
         cases, reasoner, extractor, judge, retriever, out, log=log, source=spec["source"], version=version,
-        reasoner_workers=WORKERS, wait=wait,
+        reasoner_workers=WORKERS, wait=wait, rulebook=spec["rulebook"],
         extra_config={"paid_run": {"model": model, "arm": arm, "cases": len(cases), **spec}, **(extra_config or {})})
     if "waiting" in result:
         return result
@@ -132,7 +129,7 @@ def advance(model, arm, paths, reasoner, extractor, judge, retriever, version=rp
 
 
 def status(models, paths):
-    """One row per ready cell from the files on disk, with no model or network: done, the stage it waits for, or not
+    """One row per cell from the files on disk, with no model or network: done, the stage it waits for, or not
     started. For the monitor and for planning the next sitting."""
     import json
 
@@ -165,9 +162,9 @@ def answer_model(model):
     return om.API_ROUTES[model].model_id if model in om.API_ROUTES else model
 
 
-def reasoner_answered(model, arm, paths, version=rp.REASONER_PROMPT, folds=None):
+def reasoner_answered(model, arm, paths, version=PROMPT, folds=None):
     """True when every reasoner request of the cell already has a saved answer, so the cell needs no reasoner call."""
-    system = rp.system_prompt(version)
+    system = rp.system_prompt(version, rulebook=arms_for(model)[arm]["rulebook"])
     wanted = {batched.request_key(system, rp.user_message(c["vision"], c["note"])) for c in arm_cases(model, arm, paths, folds)}
     saved = batched.load_answers(cell_dir(paths, model, arm) / batched.ANSWERS_FILE, answer_model(model))
     return wanted <= set(saved)
@@ -217,6 +214,9 @@ class PodOps:
     def stop(self):
         return self.pod.remote_sh(self.state, self.remote.STOP_SERVE).strip()
 
+    def forget_token(self):
+        return self.pod.remote_sh(self.state, self.remote.FORGET_TOKEN).strip()
+
     def log_tail(self):
         return self.pod.remote_sh(self.state, self.remote.SERVE_LOG)
 
@@ -224,11 +224,12 @@ class PodOps:
         self.pod.down(self.exp, log=log)
 
 
-def run_pod_models(exp, paths, retriever, version=rp.REASONER_PROMPT, log=print, port=8000, ops=None, verifier=None,
+def run_pod_models(exp, paths, retriever, version=PROMPT, log=print, port=8000, ops=None, verifier=None,
                    llm_for=reasoner_llm, ready=wait_ready, only_arms=None, folds=None):
     """The reasoner pass of the pod models: for each model of the serve run, start vLLM, wait for it, answer every
     cell that still lacks answers (each saved on the Mac as it arrives, WORKERS at a time), and stop the server. The
     pod is destroyed at the end whatever happens, with the server's last log lines kept in the cell folder's parent.
+    The Hugging Face token file is removed from the pod as soon as the last model is being served (DEC-21 amended).
     Returns {(model, arm): advance()'s result}; the extraction batches of finished cells are submitted on the way."""
     from strokecopilot.compute import jobs
 
@@ -238,7 +239,7 @@ def run_pod_models(exp, paths, retriever, version=rp.REASONER_PROMPT, log=print,
     results = {}
     try:
         with ops.tunnel(port):
-            for model in serve["models"]:
+            for i, model in enumerate(serve["models"]):
                 todo = [arm for _, arm in cells([model]) if (only_arms is None or arm in only_arms)
                         and not reasoner_answered(model, arm, paths, version, folds)]
                 if not todo:
@@ -248,6 +249,8 @@ def run_pod_models(exp, paths, retriever, version=rp.REASONER_PROMPT, log=print,
                 log(f"{model}: {ops.start(argv)}")
                 try:
                     ready(port, model, log=log)
+                    if i == len(serve["models"]) - 1:
+                        log(ops.forget_token())  # every model's weights are on disk now
                     for arm in todo:
                         results[(model, arm)] = advance(model, arm, paths, llm_for(model, port), extractor, judge, retriever,
                                                         version, log=log, folds=folds)
@@ -258,11 +261,15 @@ def run_pod_models(exp, paths, retriever, version=rp.REASONER_PROMPT, log=print,
                     (out / "serve_log_tail.txt").write_text(tail or "")
                     log(f"{model}: {ops.stop()}")
     finally:
+        try:
+            ops.forget_token()
+        except Exception:  # the pod is destroyed next in any case
+            pass
         ops.down(log=log)
     return results
 
 
-def smoke(model, llm, version=rp.REASONER_PROMPT, stem="fx02_thrombectomy_large_mismatch"):
+def smoke(model, llm, version=PROMPT, stem="fx02_thrombectomy_large_mismatch"):
     """One reasoner request (a fixture) to a model: did it return a valid recommendation, how long, how many tokens,
     and what a full run of N requests would cost at that size. Numbers only."""
     case = next(c for c in e2e.load_cases("fixtures") if c["id"] == stem)
@@ -273,7 +280,91 @@ def smoke(model, llm, version=rp.REASONER_PROMPT, stem="fx02_thrombectomy_large_
             "cost_usd": cost, "projected_cost_usd": {n: None if cost is None else round(cost * n, 2) for n in (195, 295)}}
 
 
-def advance_all(models, paths, retriever, version=rp.REASONER_PROMPT, wait=False, log=print, llm_for=reasoner_llm, verifier=None,
+def reasoner_pass(models, paths, llm_for, version=PROMPT, log=print, workers=WORKERS, folds=None):
+    """Only the reasoner, for open models served next to this process (Colab, DEC-24 amended 16 Nov 2026): for every
+    cell of `models` that lacks answers, send its requests (`workers` at a time) and save each answer as it arrives in
+    the cell's reasoner_answers.jsonl. No API key and no batch: the Mac runs the extraction and judge later, from the
+    same files (import_answers, then advance). Returns {(model, arm): requests answered in this call}."""
+    done = {}
+    for model, arm in cells(models):
+        spec = arms_for(model)[arm]
+        system = rp.system_prompt(version, rulebook=spec["rulebook"])
+        schema = rp.api_schema()
+        requests = {}
+        for case in arm_cases(model, arm, paths, folds):
+            user = rp.user_message(case["vision"], case["note"])
+            requests[batched.request_key(system, user)] = (system, user, schema)
+        out = cell_dir(paths, model, arm)
+        out.mkdir(parents=True, exist_ok=True)
+        path = out / batched.ANSWERS_FILE
+        before = len(set(requests) & set(batched.load_answers(path, answer_model(model))))
+        llm = llm_for(model)
+        answers = batched.gather(requests, llm, log=lambda *_: None, answers_path=path, workers=workers)
+        replies = sum("reply" in r for r in answers.values())
+        done[(model, arm)] = len(requests) - before
+        log(f"{model} / {arm}: {replies} of {len(requests)} valid ({before} saved before this run).")
+    return done
+
+
+def import_answers(src_root, dst_root, models):
+    """Copy the reasoner answers that another machine wrote (Colab, on Drive) into this machine's run folder, cell by
+    cell. An answer already here is kept; only new keys are appended. Answers from a different model stop the copy.
+    Returns {(model, arm): answers added}."""
+    added = {}
+    for model, arm in cells(models):
+        rel = Path(model.replace("/", "_")) / arm / batched.ANSWERS_FILE
+        src, dst = Path(src_root) / rel, Path(dst_root) / rel
+        if not src.exists():
+            continue
+        name = answer_model(model)
+        theirs = batched.load_answers(src, name)
+        mine = batched.load_answers(dst, name)
+        new = {k: v for k, v in theirs.items() if k not in mine}
+        if new:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            batched._save_answers(dst, name, new)
+        added[(model, arm)] = len(new)
+    return added
+
+
+def smoke_pod(exp, version=PROMPT, log=print, port=8000, ops=None, llm_for=reasoner_llm, ready=wait_ready):
+    """The pod's test (EXP-36): for each model of the serve run, start vLLM, time the first start (download and load),
+    send one request (smoke), stop. The pod is destroyed at the end whatever happens, and the token removed first."""
+    import time
+
+    from strokecopilot.compute import jobs
+
+    serve = jobs.get(exp)["serve"]
+    ops = ops or PodOps(exp)
+    rows = []
+    try:
+        with ops.tunnel(port):
+            for i, model in enumerate(serve["models"]):
+                argv = om.serve_command(model, port, allow_gated=serve["allow_gated"], allow_medgemma=serve["allow_medgemma"])
+                log(f"{model}: {ops.start(argv)}")
+                started = time.time()
+                try:
+                    ready(port, model, log=log)
+                    if i == len(serve["models"]) - 1:
+                        log(ops.forget_token())
+                    row = {"start_seconds": round(time.time() - started), **smoke(model, llm_for(model, port), version)}
+                except Exception as e:
+                    row = {"model": model, "valid": False, "error": f"{type(e).__name__}: {str(e)[:300]}",
+                           "start_seconds": round(time.time() - started)}
+                finally:
+                    row["serve_log_tail"] = (ops.log_tail() or "")[-1500:]
+                    log(f"{model}: {ops.stop()}")
+                rows.append(row)
+    finally:
+        try:
+            ops.forget_token()
+        except Exception:
+            pass
+        ops.down(log=log)
+    return rows
+
+
+def advance_all(models, paths, retriever, version=PROMPT, wait=False, log=print, llm_for=reasoner_llm, verifier=None,
                 only_arms=None):
     """Move every ready cell of `models` one step. A pod model's cell is skipped until its reasoner answers are saved
     (run_pod_models). Returns [{model, arm, state}]."""
@@ -297,10 +388,11 @@ def main(argv=None):
 
     repo = Path(__file__).resolve().parents[3]
     parser = argparse.ArgumentParser(description="The paid model runs (C8): status, advance, serve, smoke.")
-    parser.add_argument("command", choices=("status", "advance", "serve", "smoke"))
+    parser.add_argument("command", choices=("status", "advance", "serve", "smoke", "smoke-pod", "import"))
+    parser.add_argument("--from", dest="src", help="import: the run folder another machine wrote, e.g. on Drive")
     parser.add_argument("--out", required=True, help="the run folder, e.g. runs/EXP-37_paid_runs")
     parser.add_argument("--models", default=",".join(MODELS))
-    parser.add_argument("--prompt", default=rp.REASONER_PROMPT)
+    parser.add_argument("--prompt", default=PROMPT)
     parser.add_argument("--exp", help="serve: the pod's run, e.g. EXP-37")
     parser.add_argument("--wait", action="store_true", help="advance: poll each batch instead of returning")
     parser.add_argument("--artifacts", default=str(repo / "data" / "local" / "artifacts"))
@@ -312,12 +404,33 @@ def main(argv=None):
         rows = status(models, paths)
     elif args.command == "advance":
         rows = advance_all(models, paths, make_retriever(), args.prompt, wait=args.wait)
+    elif args.command == "import":
+        rows = [{"model": m, "arm": a, "added": n} for (m, a), n in import_answers(args.src, args.out, models).items()]
+    elif args.command == "smoke-pod":
+        rows = smoke_pod(args.exp, args.prompt)
+        out = Path(args.out)
+        out.mkdir(parents=True, exist_ok=True)
+        with (out / "smoke.jsonl").open("a") as sink:
+            for row in rows:
+                sink.write(json.dumps({"prompt": args.prompt, **row}) + "\n")
     elif args.command == "serve":
         results = run_pod_models(args.exp, paths, make_retriever(), args.prompt)
         rows = [{"model": m, "arm": a, "state": "done" if "done" in r else f"waiting: {r['waiting']} batch"}
                 for (m, a), r in results.items()]
-    else:
-        rows = [smoke(m, reasoner_llm(m), args.prompt) for m in models]
+    else:  # one live request per model; Sonnet live at the batch's settings, so the timing and tokens are known now
+        live = lambda m: (providers.ClaudeJSON(SONNET, effort=SONNET_EFFORT, max_tokens=rr.REASONER_MAX_TOKENS)
+                          if m == SONNET else reasoner_llm(m))
+        out = Path(args.out)
+        out.mkdir(parents=True, exist_ok=True)
+        rows = []
+        for m in models:  # each result saved as it arrives
+            try:
+                row = smoke(m, live(m), args.prompt)
+            except Exception as e:  # a provider error: recorded, and the next model still runs
+                row = {"model": m, "valid": False, "error": f"{type(e).__name__}: {str(e)[:300]}"}
+            rows.append(row)
+            with (out / "smoke.jsonl").open("a") as sink:
+                sink.write(json.dumps({"prompt": args.prompt, **row}) + "\n")
     print(json.dumps(rows, indent=1))
 
 

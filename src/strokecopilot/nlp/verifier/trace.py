@@ -20,7 +20,7 @@ import json
 import math
 import operator
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 from strokecopilot.config import PROMPTS_DIR
@@ -70,6 +70,7 @@ class Inputs:
     retriever: object = None  # callable(text, k) -> [(passage id, similarity)]
     tau: float = TAU
     decision_passages: list = field(default_factory=list)  # both decisions' rule_ids: candidates for uncertainties
+    rulebook: bool = True  # False in the without-rulebook arm (DEC-29): rules from the model's own knowledge
 
 
 @dataclass
@@ -520,7 +521,20 @@ def _backs(source, trace, note):
     return source["id"] in trace.supported_passages
 
 
-def attribute(traces, declared, note, own_sources=True, charge=True):
+# The without-rulebook arm (DEC-29): the reasoner has no passage IDs, so a rule from its own knowledge is cited as this
+# placeholder (prompts/reasoner_v2_norulebook.md). The verifier ignores it: the rule's content is checked against the
+# corpus like any uncited rule, and passage attribution (sub-types 6 and 7) is not charged. In the rulebook arm the
+# placeholder is a passage that does not exist (sub-type 3).
+OWN_KNOWLEDGE = "OWN-KNOWLEDGE"
+
+
+def without_placeholder(claim):
+    """The claim with OWN_KNOWLEDGE dropped from its declared sources."""
+    return replace(claim, declared_sources=[s for s in claim.declared_sources
+                                            if not (s.get("type") == "passage" and s.get("id") == OWN_KNOWLEDGE)])
+
+
+def attribute(traces, declared, note, own_sources=True, charge=True, passages=True):
     """Sub-types 6 and 7 and the incomplete flag, for the claims of one entry, which share its sources.
 
     A claim needs a declared source for each part it rests on. A part left uncovered while the entry
@@ -529,10 +543,15 @@ def attribute(traces, declared, note, own_sources=True, charge=True):
     which still counts as clean. A declared source that supports nothing is charged to a claim even
     when every claim is covered.
 
+    With passages False (the without-rulebook arm, DEC-29) passage citations are not charged either way: a rule part
+    needs no passage, and no passage counts as an unsupported source. Imaging and note citations are still checked.
+
     Blocking factors have no sources of their own and inherit their decision's rule_ids
     (own_sources False), so a passage they do not use is not held against them.
     """
     orphans = [s for s in declared if not any(_backs(s, t, note) for t in traces)] if own_sources and charge else []
+    if not passages:
+        orphans = [s for s in orphans if s["type"] != "passage"]
     # A passage the entry cites but no claim uses is charged only to a claim that rests on a rule: a passage is never
     # the source of a patient or imaging fact, and an unextracted rule sentence often explains it (EXP-12).
     if not any(t._rule_part for t in traces):
@@ -543,7 +562,7 @@ def attribute(traces, declared, note, own_sources=True, charge=True):
             continue
         needs = {u["type"] for u in t.used} | ({"passage"} if t._rule_part else set())
         unmet = {kind for kind in needs if not any(s["type"] == kind and _backs(s, t, note) for s in declared)}
-        if t.kind == "citation":
+        if t.kind == "citation" or not passages:
             unmet.discard("passage")
         mine = orphans if t._rule_part else [s for s in orphans if s["type"] != "passage"]
         if unmet and mine:
@@ -599,6 +618,8 @@ def _number_claim(claim, inputs):
 
 def trace_claim(claim, inputs):
     """Content check of one claim (sub-types 1-5). Attribution needs the whole entry: see trace_all."""
+    if not inputs.rulebook:
+        claim = without_placeholder(claim)
     subtype, used, supported, reason, rule_part = None, [], [], "", False
     cited = [s["id"] for s in claim.declared_sources if s["type"] == "passage"]
     if claim.kind == "number":
@@ -659,5 +680,5 @@ def trace_all(claims, inputs):
     for (field_name, _), (declared, group) in groups.items():
         # Uncertainties have no sources in the schema, so only their content is scored there (§9).
         attribute(group, declared, inputs.note, own_sources=not field_name.endswith(".blocking_factors"),
-                  charge=field_name != "uncertainties")
+                  charge=field_name != "uncertainties", passages=inputs.rulebook)
     return traces

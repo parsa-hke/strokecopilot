@@ -35,7 +35,10 @@ SERVE_MODELS = ("gemma-3-27b", "medgemma-27b-text")
 # Policy switches, off until Parsa decides; a commit that turns one on is the record of that decision.
 # allow_gated: a Hugging Face token (read-only, for these repositories) goes to the pod, which DEC-21 forbade.
 # allow_medgemma: Parsa has read the HAI-DEF terms section 3.2.
-SERVE_POLICY = {"allow_gated": False, "allow_medgemma": False}
+# Both decided by Parsa on 16 Nov 2026 (DEC-21 amended: a fine-grained read-only token for the two gated repositories,
+# stored only root-readable on the pod, removed once the weights are downloaded, and revoked after the run; DEC-24:
+# MedGemma's HAI-DEF terms cleared).
+SERVE_POLICY = {"allow_gated": True, "allow_medgemma": True}
 
 
 def _serve(what, run_dir, hours, est_hours):
