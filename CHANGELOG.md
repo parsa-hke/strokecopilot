@@ -1,5 +1,96 @@
 # CHANGELOG
 
+## 2026-11-16, Claude Code session (Lorna, Vision A confidence: EXP-31 results, v2 chosen, Task 2 done)
+- **EXP-31 at `217bc59`** (numbers from Lorna's Colab run; full tables in `metrics.json` on Drive):
+  - **All three versions pass the done check.**
+  - **Missing-data share:** median 11.5% over the measurement area, against 32.2% over all plain-CT tissue (EXP-30).
+  - **Penumbra:** median 0.885, lowest 0.596, 94 of 129 under 0.9.
+  - **Signals alone (weight / Spearman with volume error):**
+
+    | Signal | Weight / Spearman |
+    |---|---|
+    | cut-off distance | −0.911 / −0.324 |
+    | predicted size | 0.703 / 0.353 |
+    | disagreement | −0.437 / −0.08 |
+    | no-data | 0.015 / 0.074 |
+    | Tmax > 6 s volume | 0.17 / 0.11 |
+
+  - **Versions:**
+
+    | Version | Wrong side, low / high | 10 mL errors, low / high | Under-calls in high band | Spearman |
+    |---|---|---|---|---|
+    | v1 | 24 / 7 | 33 / 17 | 7 of 34 | −0.33 |
+    | v2 | 26 / 7 | 32 / 16 | 7 of 34 | −0.287 |
+    | v3 | 26 / 7 | 31 / 17 | 7 of 34 | −0.267 |
+
+- **Lorna chose v2.**
+  - Her reasons: it puts the most cut-off errors in the low band, and distance to a cut-off is the clearest clinical reason for doubt; v3 adds nothing.
+  - Recorded honestly: the choice was made after seeing all three, v1 and v2 differ by 2 cases, and v1 ranks the overall volume error slightly better.
+- **`confidence.py`:**
+  - `CHOSEN_VERSION = "v2"`, and `FEATURES` (the default for fitting) is v2's signals.
+  - `load_default_mapping(run_dir)` loads `mapping_v2.json` and refuses a file with other signals.
+  - `confidence_core` scores one case from it, and v2 needs no Tmax > 6 s volume.
+  - The saved mapping is EXP-31's on Drive. It is not copied into the repo.
+- **`docs/CONFIDENCE_VISION_A.md` filled in:**
+  - status done;
+  - the before/after missing-data share;
+  - the signals-alone table;
+  - the three versions side by side;
+  - penumbra;
+  - the version chosen and why.
+
+  Its limits:
+  - all 7 high-band cut-off errors are under-calls in every version, so complete misses like Miss 1 still get high confidence;
+  - the no-data signal adds little;
+  - penumbra is a data-quality score only;
+  - the choice was made on the same cases.
+- **Plan §7, "Confidence estimates", is ticked** and reworded to the method used: v2's signals, a cross-fitted logistic map, penumbra as data quality, and no fold-ensemble disagreement or MC dropout.
+- **Tests:** 25 in `test_confidence.py`. The new one covers the v2 default, single-case scoring from `mapping_v2.json`, and refusing a mapping file with the wrong version.
+- **Notion sync:**
+  - Experiments → EXP-30: Done (first run at `aac4cb0`, before the fix; results above in the 2026-11-16 slab-fix entry).
+  - Experiments → EXP-31: Done, Git commit `217bc59`, with the results above and "v2 chosen".
+  - Tasks → Vision A confidence (Task 2): Done. Link `docs/CONFIDENCE_VISION_A.md`.
+
+## 2026-11-16, Claude Code session (Lorna, Vision A confidence: slab fix, checks, three versions)
+- **First run, EXP-30 at `aac4cb0` (v1, numbers from Lorna):**
+  - **The done check passed:** wrong side of a cut-off, low band against high, 24 against 7; errors of 10 mL or more, 33 against 17; Spearman −0.345.
+  - **Final weights:** at-risk no-data 0.239, log predicted core 0.667, log disagreement −0.212.
+  - **Penumbra:** median 0.678, all 129 cases under 0.9.
+  - **Brain no-data share:** median 0.322, range 0.172 to 0.700.
+- **Two problems, and what was done:**
+  - **The no-data share was inflated** by the plain CT covering the whole head (scalp included) while the perfusion scan covers a slab. `confidence.measurement_area` now counts missing data only in plain-CT tissue inside the perfusion region (`perfusion_region`): the slices from the first to the last with perfusion values, and in each the maps' area with holes filled. A covered slice with no values takes the slab's outline, so a missing slice still counts. This applies to the at-risk signal and to confidence.penumbra. The old whole-tissue share is kept as `tissue_no_data_share` for a before/after `slab_check`.
+  - **Two signals pointed against the design:** a bigger core gave lower confidence, and more disagreement gave higher confidence. The likely reasons, written in `docs/CONFIDENCE_VISION_A.md`: small predictions rarely cross a cut-off, errors grow with size, and disagreement overlaps with size.
+- **Checks added:**
+  - `signals_alone` gives each signal's weight when fitted alone, and its Spearman correlation with the volume error.
+  - `add_targets` marks `undercall` (smaller than true and on the wrong side of a cut-off), and the band table counts under-calls per band.
+- **Two candidate signals (Lorna's decision, with Parsa's go-ahead):**
+  - `log_cutoff_distance`: |log(1 + nnU-Net mL) − log(1 + nearest cut-off)|, nearest on the log scale;
+  - `log_tmax6_ml`: log(1 + mL of reliable Tmax > 6 s).
+- **Three versions:**
+  - v1: the 3 approved signals;
+  - v2: v1 plus the cut-off distance;
+  - v3: v2 plus the Tmax > 6 s volume.
+
+  `compare_versions` cross-fits every version on the same cases and reports each band table, done check (now with under-calls in the high band) and final mapping. All versions are kept. `fit_mapping`, `cross_fitted_confidence` and `confidence_core` take any version's signals.
+- **Notebook 14:** slab check (section 5), signals alone (6), the three versions side by side with band tables and final weights (7), `mapping_v1/v2/v3.json` and penumbra (8), save (9).
+  - **The notebook stops if the run folder's `config.json` is from the first run,** because that file predates the changes. The rerun is EXP-31 (Lorna's new Notion row), set in a follow-up commit; its folder is `runs/EXP-31_visionA_confidence`.
+- **`docs/CONFIDENCE_VISION_A.md`** now has:
+  - the measurement area and the five signals;
+  - the three versions;
+  - the first run and its two problems;
+  - empty tables for the slab check, signals alone, the three versions, and the version chosen.
+- **Tests:** `tests/test_confidence.py`, 24 tests (from 15). New ones cover:
+  - the slab and footprint fix (scalp and uncovered slices not counted; an enclosed gap and a missing slice inside the slab still counted);
+  - the Tmax > 6 s volume and the cut-off distance;
+  - under-calls;
+  - every version's leak check and single-case scoring;
+  - the signals-alone check, the side-by-side versions and the slab check.
+- pytest on Windows: 513 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
+- **Notion sync:**
+  - Experiments → EXP-30: record the first run's results, and that the method changed after it.
+  - Experiments → EXP-31 added by Lorna for the rerun (Running); fill in the commit and results after the run.
+  - Tasks → Vision A confidence: In progress.
+
 ## 2026-11-15 — Parsa's review of PR #7 (Lorna's Vision A error-analysis follow-ups, EXP-27)
 - **Notebook 13:** `REPO_REF` is `main`, for reruns after merge. The per-fold table shows `no_infarct`. Still output-free.
 - **Code, cases with no final infarct (0 mL):** `error_analysis.has_no_infarct`, `is_miss` (Dice 0 on a case with a final infarct) and `miss_kind` (the `miss` column, now with "no infarct"). These cases score Dice 0 whenever anything is marked, but miss nothing. They are now counted apart (`no_infarct`) and left out of the Dice-0 miss counts, the miss rate by size, both sides of the miss comparisons, the onset groups, `group_summary`'s `dice0`, `miss_profile` and the figure picks. They stay in the over-call and under-call counts. The follow-up `config.json` definitions say so. 5 new tests (84 in `test_error_analysis.py`). No fold-0 (EXP-15) number changes: fold 0 has no such case.
@@ -17,6 +108,59 @@
 - **Back to Lorna:** only rerun notebook 13 after merge, to refresh `metrics.json` and the figures with the new rule.
 - `pytest` (Mac): 594 passed.
 - **Notion sync:** none from this review.
+
+## 2026-11-15 — Parsa's review of PR #9
+- **Development cases now read their cross-fitted confidence.** `mapping_v2.json` was fitted on all 129 development cases, so scoring one of them with it is in-sample (AUC 0.757 against 0.722 cross-fitted). New `development_confidence(per_case_csv, version="v2")` reads `confidence_core_v2` and `confidence_penumbra` from EXP-31's `per_case.csv` as {case: {"core", "penumbra"}}. It refuses a missing column, a repeated case, a value that is missing or outside 0 to 1, and held-out cases (`splits.check_ids`).
+- **One call for held-out cases:** `case_confidence(case, mapping, nnunet_ml, threshold_ml)` returns {"core", "penumbra"}, so `contract/build.py` does not stitch `case_signals` and `confidence_core` itself. The module text and docstrings say `mapping_v2` is for held-out (Phase 4) cases only.
+- **A NaN core volume now raises `ValueError`** instead of silently becoming 0 mL (`max(0.0, nan)` is 0.0). A NaN Tmax > 6 s volume counts as missing, like `None`.
+- **`docs/CONFIDENCE_VISION_A.md`:**
+  - the slab-check range after the fix, 6.1% to 40.4% (from EXP-31's `metrics.json`);
+  - v2's final weights: cut-off distance −1.188, missing data 0.248, core size −0.249, disagreement −0.017;
+  - the per-signal story corrected to match them: inside v2 a bigger core gives slightly higher confidence, and missing data carries a real weight;
+  - a "Which values build.py uses" note.
+- **Notebook 14:** confidence.penumbra described as the share of the measurement area, not of the brain; the save step now also records the two checks below in `metrics.json`.
+- **Cut-off distance alone against the versions** (`baseline_check`, run at review on EXP-31's `per_case.csv`): AUC for the wrong side of any cut-off, distance alone 0.755, v2 0.722, v3 0.703, v1 0.695, penumbra 0.538. v2 minus the distance alone −0.033, paired bootstrap 95% interval −0.066 to −0.002 (seed 0, 5000 resamples). v2 was chosen after seeing the results, and the simpler signal does at least as well.
+- **Complete misses** (`complete_miss_check`): 25 cases predicted under 0.5 mL, 5 on the wrong side of a cut-off, median v2 confidence 0.90. A cross-fitted flag (under 1 mL and a large Tmax > 6 s volume) marks 5 cases and catches 1 of the 5 wrong-side ones, so it does not work. Written up as options; `confidence_core` and the default method are unchanged.
+- **"What confidence.core means"** added to the write-up for the reasoner: roughly the chance the volume is on the right side of every cut-off; not steady in volume (0 mL 0.91, 21 mL 0.36, 100 mL 0.53 at average inputs).
+- **Remaining, for Parsa (a DEC):** the method choice (cut-off distance alone or v2) and how complete misses are handled. Nothing goes back to Lorna.
+- **Tests:** 593 passed.
+- **Notion sync:** none from the review.
+
+## 2026-11-15, Claude Code session (Lorna, Vision A Task 2: confidence, built on fake data)
+- **Branch `lorna/confidence` from `main` at `dfc832f`.** Design approved by Parsa (15 Nov 2026). Choices agreed with Lorna:
+  - the main error measure is the wrong side of at least one cut-off; a volume error of 10 mL or more is the second;
+  - the no-data signal counts the Tmax > 6 s area plus a 10 mm margin;
+  - log(1 + mL) is used for the volumes;
+  - the cases are split into three equal bands.
+- **`vision/perfusion/confidence.py`:**
+  - **Signals from the scan, never the infarct:**
+    - `at_risk_no_data_share`: no or unreliable Tmax in the Tmax > 6 s area plus 10 mm, inside plain-CT tissue; the whole brain if there is no such area;
+    - `brain_no_data_share`.
+  - **Volume signals:** `add_volume_signals` gives `log_pred_ml` and `log_disagreement`.
+  - **Targets:** `add_targets` gives `large_error` and `error_10ml`.
+  - **The mapping:** `fit_mapping` is a logistic regression on standardised signals, with ridge 1.0 and missing values filled with the training mean, written with scipy so no new dependency is needed. `predict_confidence` gives confidence.core = 1 − P(large error).
+  - **Cross-fitting:** `cross_fitted_confidence` fits on 4 folds and scores the 5th.
+  - **For inference:** `confidence_core` scores one case from a saved mapping.
+  - **Bands and the check:** `bands` gives three equal bands, `band_table` the per-band errors and crossings, and `done_check` whether low beats high, plus the Spearman correlation.
+  - **Penumbra:** `penumbra_confidence` = 1 − the brain's no-data share. It is a data-quality score only.
+  - **Run record:** `write_config` refuses a placeholder experiment ID. `build_metrics` refuses case IDs.
+- **`notebooks/14_visionA_confidence.ipynb`** (CPU). Install and mount are copied from notebook 12. It:
+  1. writes `config.json`;
+  2. reads EXP-27's `per_case.csv` and checks it against the split;
+  3. measures the scan signals from the slim tar (Tmax, CBF and NCCT only);
+  4. computes the cross-fitted confidence and the band table and check;
+  5. fits the final mapping (`mapping.json`) and summarises confidence.penumbra;
+  6. saves `per_case.csv` (Drive only, held-out check first), then `metrics.json`, last.
+
+  `EXPERIMENT` is `EXP-30`, Lorna's Notion row, set in a follow-up commit; the run folder is `runs/EXP-30_visionA_confidence`. Reading EXP-27's table means this branch does not need the unmerged follow-ups code.
+- **`docs/CONFIDENCE_VISION_A.md`:** the method in plain English, with empty results tables for after the run.
+- `schemas/vision_output.json` and `contract/build.py` are unchanged.
+- **Tests:** `tests/test_confidence.py`, 15 tests on fake data. They include:
+  - a leak check: flipping a case's own label leaves its own score unchanged;
+  - an end-to-end metrics test.
+- pytest on Windows: 504 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
+- Plan §7 "Confidence estimates" is not ticked yet: no results. The item's wording ("fold ensemble disagreement or MC dropout") will be updated to the approved method when it is ticked.
+- **Notion sync:** Experiments → EXP-30 added by Lorna (Running); fill in the commit and results after the run. Tasks → Vision A confidence: In progress.
 
 ## 2026-11-14 — Lorna (Vision A error-analysis follow-ups, EXP-27; 7 working sessions folded into one entry at review)
 - **Branch `lorna/error-analysis-followups`**, from `main` at `dfc832f`: the four follow-ups from Parsa's PR #1 review (all five folds, artery groups and onset, AI outlines on the pictures), in one notebook and one Colab run.
