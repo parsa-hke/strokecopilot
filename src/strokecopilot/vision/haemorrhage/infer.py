@@ -11,6 +11,21 @@ from strokecopilot.vision.haemorrhage import model as hmodel
 from strokecopilot.vision.haemorrhage.aggregate import Calibrator
 
 
+# DEC-28 (Parsa, 15 Nov 2026): the contract's threshold on the calibrated scale. EXP-17's proposal for a 96% target
+# (cross-fitted on RSNA validation: sensitivity 0.961, specificity 0.878), replacing EXP-6's 0.278, which was chosen
+# and measured on the same split. On ISLES'24 it flags 68 of 129 presumed bleed-free scans (EXP-16), so the
+# predicted-vision arm will carry many false "bleed" flags; that is a reported result, not tuned away.
+CONTRACT_THRESHOLD = 0.174984
+
+
+def contract_calibrator(calibration_json):
+    """EXP-6's calibration (`calibration.json`: aggregation and Platt scaling) with DEC-28's threshold. The file's own
+    threshold (EXP-6's 0.278) is kept on disk as the run recorded it and replaced here."""
+    calibrator = Calibrator.from_json(calibration_json)
+    calibrator.threshold = CONTRACT_THRESHOLD
+    return calibrator
+
+
 def scan_score(slice_probs, method, k=None):
     probs = np.sort(np.asarray(slice_probs, dtype=float))
     if probs.size == 0:

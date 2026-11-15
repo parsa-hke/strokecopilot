@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 2026-11-15 — Claude Code session (Phase 3: PRs #5–#9 reviewed, fixed and merged; DEC-27 confidence)
+## 2026-11-15 — Claude Code session (Phase 3: PRs #5–#9 reviewed, fixed and merged; DEC-27 confidence; DEC-28 Vision B threshold)
 - **Five teammate PRs reviewed, fixed on their branches and squash-merged** (one review agent per PR, findings re-checked by hand; the review entries for each PR are below):
   - #7 `0920766`, #9 `e17999b`, #6 `3305288`, #8 `6b10cd0`, #5 `3847cf6`.
   - Each branch was updated from main before its merge, with the CHANGELOG entries combined; `main` passes all tests after each one.
@@ -26,9 +26,15 @@
   - **Tests:** updated for the new default, and a test added for the warning.
   - **Docs:** `docs/CONFIDENCE_VISION_A.md` gets a DEC-27 section, and Lorna's v2 sections stay for the record. Notebook 14's markdown names the fourth version.
   - **Plan:** §2 row DEC-27 added; the §7 confidence note updated.
-- `pytest`: 690 passed. **Spend:** no GPU, no API.
+- **DEC-28 (Parsa): the Vision B threshold is 0.175**, replacing EXP-6's provisional 0.278.
+  - **Evidence (EXP-17, on RSNA validation):** sensitivity 0.961 and specificity 0.878, cross-fitted. That is 3.9 missed bleeds per 100, against about 5.5 at 0.278.
+  - **Cost on ISLES'24:** 68 of 129 presumed bleed-free scans are flagged, against 45 at 0.278. This is reported as domain shift, not tuned away, and the predicted-vision arm will show its downstream cost.
+  - **Code:** `vision/haemorrhage/infer.py` has `CONTRACT_THRESHOLD = 0.174984` and `contract_calibrator(calibration_json)`, which applies it over EXP-6's calibration and leaves the Drive file unchanged. A test was added.
+  - **Plan:** §2 row DEC-28 added; the §7 "Tune aggregation and threshold" item ticked. The domain-shift item stays open for Mohamed's image checks.
+- `pytest`: 691 passed. **Spend:** no GPU, no API.
 - **Notion sync:**
-  - Decisions: DEC-27.
+  - Decisions: DEC-27, DEC-28.
+  - Tasks: the Vision B operating-point task set to Done.
   - Experiments: EXP-32.
   - Tasks: a note on Lorna's confidence task.
 

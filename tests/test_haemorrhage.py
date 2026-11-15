@@ -84,6 +84,19 @@ def test_haemorrhage_output_fits_the_contract():
     validate_vision_output(fixture)
 
 
+def test_contract_calibrator_uses_dec28_threshold(tmp_path):
+    from strokecopilot.vision.haemorrhage.infer import CONTRACT_THRESHOLD, contract_calibrator, haemorrhage_output
+
+    path = tmp_path / "calibration.json"
+    agg.Calibrator(method="topk", k=2, temperature=1.0, bias=0.0, threshold=0.2777, kind="platt").to_json(path)
+    calibrator = contract_calibrator(path)
+    assert CONTRACT_THRESHOLD == pytest.approx(0.175, abs=1e-3) and calibrator.threshold == CONTRACT_THRESHOLD
+    assert calibrator.method == "topk" and calibrator.k == 2  # the rest of EXP-6's calibration is kept
+    assert haemorrhage_output([0.2, 0.2], calibrator)["present"]  # 0.2 is under EXP-6's 0.278, over DEC-28's 0.175
+    assert not haemorrhage_output([0.17, 0.17], calibrator)["present"]
+    assert json.load(open(path))["threshold"] == 0.2777  # the file on disk is not changed
+
+
 # Training on CPU with a randomly initialised model and tiny images. Needs torch and timm.
 
 SIZE = 32
