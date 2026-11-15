@@ -40,9 +40,9 @@ MODELS = (SONNET, "qwen3.5-27b", "gemma-3-27b", "medgemma-27b-text")
 FALLBACK_PAIR = ("qwen2.5-32b", "baichuan-m2-32b")  # replaces the Gemma pair if Parsa rules it out (DEC-24)
 REAL_CASES = 20
 WORKERS = 8  # direct reasoner requests sent at once (OpenRouter, vLLM)
-# The paid runs' prompt: v2 (Hana, from the EXP-12 findings), the only one with a without-rulebook variant (DEC-29).
-# The v1 vs v2 check on the fixtures is still to run; if it favours v1, v1 needs its own variant first.
-PROMPT = "reasoner_v2"
+# The paid runs' prompt: v3 = v2 (Hana, from the EXP-12 findings; chosen over v1 in EXP-38) plus one rule_ids sentence
+# (EXP-39: rule_ids name only passages about their own treatment). Its without-rulebook variant is v2's, unchanged (DEC-29).
+PROMPT = "reasoner_v3"
 
 ARMS = {
     "fixtures_rulebook": {"source": "fixtures", "rulebook": True},

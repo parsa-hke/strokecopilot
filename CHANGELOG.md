@@ -1,5 +1,55 @@
 # CHANGELOG
 
+## 2026-11-16 — Claude Code session (v2's critical flags checked; EXP-39: prompt v3)
+- **v2's 9 critical flags (EXP-38) checked: all 9 are verifier mis-scores, not reasoner errors.** The judge was re-asked for each flagged claim with the same inputs to get its reasons ($0.008).
+  - **3 come from a clash between v2 and the citation rule (§1).** v2 told the model to list limit-setting passages under a decision against a treatment, "under either treatment". The model listed thrombectomy passages (6–24 h ASPECTS 6–10 on fx02, the two DAWN passages on fx05) under thrombolysis's `rule_ids`. Those become citation claims "Passage X is a rule about thrombolysis", flagged as wrong rule. The reasoning is right, and blocking factors are already checked against both decisions' `rule_ids` (metric point 8).
+  - **6 come from the judge** on "the patient meets the thrombectomy criteria, so extended-window thrombolysis does not apply":
+    - 3 did not come back when the judge was asked again.
+    - 2 (fx04) hinge on imaging at exactly 6 h 0 min. One run read it as outside "within 6 hours" and then charged the unreported mass effect of the 6–24 h rule. The other run accepted it. The fixture expects thrombectomy yes on both rules.
+    - 1 (fx05) misread the claim as "the rule does not apply to that group", while a near-identical claim in the same case was supported.
+- **Prompt v3** (`prompts/reasoner_v3.md`): v2 with one sentence changed. `rule_ids` list only passages about their own treatment; when the reason against a treatment is that the patient meets the other's criteria, those passages go under the other decision. `reasoner_v3_norulebook.md` is a byte copy of v2's (DEC-29's prompt, unchanged: there `rule_ids` is only `OWN-KNOWLEDGE`). Tests: `tests/test_reasoner_v3.py`.
+- **EXP-39** (`runs/EXP-39_prompt_v3/run.py`; on Drive): v3 on the 5 fixtures with EXP-38's settings. Cost **$0.35** (reasoner $0.20, extractor $0.13, judge $0.02).
+
+  | | v2 (EXP-38) | v3 (EXP-39) |
+  |---|---|---|
+  | Decisions right | 10/10 | 10/10 |
+  | Format failures, omissions | 0 | 0 |
+  | Claims | 154 | 142 |
+  | Flagged | 13 (8.4%) | 5 (3.5%) |
+  | `rule_ids` citation flags | 4 | 0 |
+  | Wrong numbers, invented findings, faulty derivations | 0 | 0 |
+  | Critical | 9 (3 cases) | 4 (3 cases) |
+
+  - **v3's 4 critical flags, judge reasons kept ($0.004; Claude's reading, not adjudicated):** none is a reasoner error.
+    - 2 did not come back when the judge was asked again (fx03 "ASPECTS range cannot be checked", fx05 rationale).
+    - fx01 "Imaging is within 6 hours of onset" (2 h 30 min): the judge says the passage's window counts to treatment, not imaging.
+    - fx05 "Meeting DAWN criteria puts the patient outside the extended-window thrombolysis recommendations" chains two passages (DAWN for eligibility, the wake-up passage for the exclusion), and the judge wants one passage that says both.
+  - The one non-critical flag (fx04, "fits the criteria for thrombectomy 6 to 24 hours after onset" without naming the unreported mass effect) is a fair call.
+- **judge_v3 is not changed.** The remaining mis-scores are judge variance on borderline "meets the other treatment's criteria" claims. Changing the judge is a DEC-23 change with an EXP-11 re-check, and the labelled sample measures the judge's error on the main run anyway. Known limit to report: claims that chain two passages.
+- **`paid_runs.PROMPT` is now `reasoner_v3`.** Colab notebook 53 installs the package at `main`'s latest commit, so this must be pushed before the Colab run, or Colab answers with v2.
+- pytest: 726 passed.
+- **Notion sync:** Experiments: EXP-39; the EXP-38 page gains the flag check.
+
+## 2026-11-16 — Claude Code session (EXP-38: reasoner prompt v1 vs v2)
+- **EXP-38** (`runs/EXP-38_prompt_v1_v2/run.py`; on Drive): the 5 fixtures with the rulebook, Claude Sonnet 5.5 (effort high), verified live with the paid runs' settings (extractor Sonnet, judge Haiku `judge_v3`, τ 0.6). Cost **$0.95** (v1 $0.60, v2 $0.36).
+
+  | | v1 | v2 |
+  |---|---|---|
+  | Decisions right | 10/10 | 10/10 |
+  | Format failures, omissions | 0 | 0 |
+  | Claims | 339 | 154 |
+  | Flagged | 27 (8.0%) | 13 (8.4%) |
+  | Wrong numbers, invented findings, faulty derivations | 9 | 0 |
+  | Uncited or mis-attributed | 6 | 0 |
+  | Wrong or misapplied rules | 12 | 13 |
+  | Critical | 8 (3 cases) | 9 (3 cases) |
+
+- **v2 stays the paid runs' prompt.** Plan §7 ticked.
+- **To check before the main run (Claude's reading, not adjudicated):** 8 of v2's 9 critical flags fall on the step v2 asks for: "eligible for thrombectomy, so extended-window thrombolysis does not apply". That step is correct on fx04 and fx05, which both expect thrombectomy yes.
+  - The step is flagged as misapplied or wrong rule.
+  - Thrombectomy passages listed under thrombolysis's `rule_ids` (as v2 instructs, for limit-setting passages) become citation claims "Passage DAWN-… is a rule about thrombolysis", flagged as wrong rule.
+- **Notion sync:** Experiments: EXP-38.
+
 ## 2026-11-16 — Claude Code session (C8: Parsa's three decisions, the without-rulebook arm, first test requests)
 - **Decisions (Parsa, 16 Nov 2026):**
   - **DEC-21 amended:** a Hugging Face token may go to the serve pod for the gated Gemma weights.
