@@ -2,7 +2,8 @@
 docs/team/lorna_vision_a.md). Design approved by Parsa, 15 Nov 2026; Lorna decides the final version (16 Nov 2026).
 
 confidence.core uses only signals that exist when a prediction is made, never the true infarct. Three versions
-are fitted and reported side by side (VERSIONS), and Lorna picks one:
+are fitted and reported side by side (VERSIONS); Lorna chose v2 after EXP-31 (CHOSEN_VERSION), which is the default
+for fitting and for scoring one case (load_default_mapping, confidence_core):
 - v1, the approved three: missing Tmax data around the at-risk area; nnU-Net's predicted core as log(1 + mL);
   the gap between nnU-Net's and the threshold's core volumes on that log scale;
 - v2, v1 plus how close nnU-Net's volume is to the nearest decision cut-off (on the same log scale);
@@ -55,8 +56,14 @@ VERSIONS = {
     "v2": ("at_risk_no_data_share", "log_pred_ml", "log_disagreement", "log_cutoff_distance"),
     "v3": ("at_risk_no_data_share", "log_pred_ml", "log_disagreement", "log_cutoff_distance", "log_tmax6_ml"),
 }
-FEATURES = VERSIONS["v1"]
+# Lorna's choice after EXP-31 (16 Nov 2026): v2. It puts the most cut-off errors in the low band, and distance to a
+# cut-off is the clearest clinical reason for doubt; v3 added nothing. The choice was made after seeing all three,
+# and v1 and v2 differ by 2 cases (docs/CONFIDENCE_VISION_A.md).
+CHOSEN_VERSION = "v2"
+FEATURES = VERSIONS[CHOSEN_VERSION]
 ALL_SIGNALS = VERSIONS["v3"]
+# The chosen version's final mapping, as notebook 14 saves it in its run folder (EXP-31 on Drive).
+DEFAULT_MAPPING_FILE = f"mapping_{CHOSEN_VERSION}.json"
 # Ridge penalty on the standardised weights (not the intercept): keeps a few numbers stable on about 100 cases.
 L2 = 1.0
 BANDS = ("low", "middle", "high")
@@ -297,7 +304,8 @@ def cross_fitted_confidence(table, features=FEATURES, l2=L2):
 
 
 def confidence_core(mapping, at_risk_share, nnunet_ml, threshold_ml, tmax6=None):
-    """confidence.core for one case at inference, from a saved mapping (any version) and the case's inputs."""
+    """confidence.core for one case at inference, from a saved mapping and the case's inputs. Use the chosen
+    version's mapping (load_default_mapping, v2) unless comparing versions; v2 does not need `tmax6`."""
     row = signal_row(at_risk_share, nnunet_ml, threshold_ml, tmax6)
     return float(predict_confidence(mapping, [[row[f] for f in mapping["features"]]])[0])
 
@@ -309,6 +317,15 @@ def save_mapping(path, mapping):
 
 def load_mapping(path):
     return json.loads(Path(path).read_text())
+
+
+def load_default_mapping(run_dir):
+    """The chosen version's final mapping (`mapping_v2.json`) from a confidence run folder, such as EXP-31's.
+    Raises if the file holds a different version's signals."""
+    mapping = load_mapping(Path(run_dir) / DEFAULT_MAPPING_FILE)
+    if mapping["features"] != list(FEATURES):
+        raise ValueError(f"{DEFAULT_MAPPING_FILE} has signals {mapping['features']}, not {CHOSEN_VERSION}'s.")
+    return mapping
 
 
 # ---------------------------------------------------------------------------- Bands and the checks

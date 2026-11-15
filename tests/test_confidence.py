@@ -189,12 +189,32 @@ def test_fit_mapping_learns_the_direction():
 
 def test_fit_mapping_handles_missing_and_refuses_bad_input():
     X = np.array([[np.nan, 1.0, 0.1], [0.2, 2.0, 0.3], [0.1, 3.0, 0.0], [0.0, 0.5, 1.0]])
-    mapping = conf.fit_mapping(X, [True, False, False, True])
+    v1 = conf.VERSIONS["v1"]
+    mapping = conf.fit_mapping(X, [True, False, False, True], features=v1)
     assert np.isfinite(conf.predict_confidence(mapping, X)).all()
     with pytest.raises(ValueError, match="one class"):
-        conf.fit_mapping(X, [False, False, False, False])
+        conf.fit_mapping(X, [False, False, False, False], features=v1)
     with pytest.raises(ValueError, match="columns"):
-        conf.fit_mapping(X, [True, False, False, True], features=conf.VERSIONS["v2"])
+        conf.fit_mapping(X, [True, False, False, True])  # the default is v2, with 4 signals
+
+
+def test_v2_is_the_default(tmp_path):
+    assert conf.CHOSEN_VERSION == "v2" and conf.FEATURES == conf.VERSIONS["v2"]
+    assert conf.DEFAULT_MAPPING_FILE == "mapping_v2.json"
+    table = _fake_table()
+    scores, mappings = conf.cross_fitted_confidence(table)
+    assert mappings["0"]["features"] == list(conf.VERSIONS["v2"])
+    mapping = conf.fit_mapping(table[list(conf.FEATURES)].to_numpy(), table["large_error"].to_numpy())
+    conf.save_mapping(tmp_path / "mapping_v2.json", mapping)
+    loaded = conf.load_default_mapping(tmp_path)
+    row = table.iloc[5]  # v2 needs no Tmax > 6 s volume
+    single = conf.confidence_core(loaded, row["at_risk_no_data_share"], row["nnunet_pred_ml"], row["threshold_pred_ml"])
+    assert single == pytest.approx(conf.predict_confidence(mapping, table[list(conf.FEATURES)].to_numpy())[5])
+    v3 = conf.fit_mapping(table[list(conf.VERSIONS["v3"])].to_numpy(), table["large_error"].to_numpy(),
+                          features=conf.VERSIONS["v3"])
+    conf.save_mapping(tmp_path / "mapping_v2.json", v3)  # the wrong version under the default name
+    with pytest.raises(ValueError, match="not v2"):
+        conf.load_default_mapping(tmp_path)
 
 
 def test_cross_fitted_confidence_never_sees_its_own_case():

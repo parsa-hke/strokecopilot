@@ -1,5 +1,56 @@
 # CHANGELOG
 
+## 2026-11-16, Claude Code session (Lorna, Vision A confidence: EXP-31 results, v2 chosen, Task 2 done)
+- **EXP-31 at `217bc59`** (numbers from Lorna's Colab run; full tables in `metrics.json` on Drive):
+  - **All three versions pass the done check.**
+  - **Missing-data share:** median 11.5% over the measurement area, against 32.2% over all plain-CT tissue (EXP-30).
+  - **Penumbra:** median 0.885, lowest 0.596, 94 of 129 under 0.9.
+  - **Signals alone (weight / Spearman with volume error):**
+
+    | Signal | Weight / Spearman |
+    |---|---|
+    | cut-off distance | −0.911 / −0.324 |
+    | predicted size | 0.703 / 0.353 |
+    | disagreement | −0.437 / −0.08 |
+    | no-data | 0.015 / 0.074 |
+    | Tmax > 6 s volume | 0.17 / 0.11 |
+
+  - **Versions:**
+
+    | Version | Wrong side, low / high | 10 mL errors, low / high | Under-calls in high band | Spearman |
+    |---|---|---|---|---|
+    | v1 | 24 / 7 | 33 / 17 | 7 of 34 | −0.33 |
+    | v2 | 26 / 7 | 32 / 16 | 7 of 34 | −0.287 |
+    | v3 | 26 / 7 | 31 / 17 | 7 of 34 | −0.267 |
+
+- **Lorna chose v2.**
+  - Her reasons: it puts the most cut-off errors in the low band, and distance to a cut-off is the clearest clinical reason for doubt; v3 adds nothing.
+  - Recorded honestly: the choice was made after seeing all three, v1 and v2 differ by 2 cases, and v1 ranks the overall volume error slightly better.
+- **`confidence.py`:**
+  - `CHOSEN_VERSION = "v2"`, and `FEATURES` (the default for fitting) is v2's signals.
+  - `load_default_mapping(run_dir)` loads `mapping_v2.json` and refuses a file with other signals.
+  - `confidence_core` scores one case from it, and v2 needs no Tmax > 6 s volume.
+  - The saved mapping is EXP-31's on Drive. It is not copied into the repo.
+- **`docs/CONFIDENCE_VISION_A.md` filled in:**
+  - status done;
+  - the before/after missing-data share;
+  - the signals-alone table;
+  - the three versions side by side;
+  - penumbra;
+  - the version chosen and why.
+
+  Its limits:
+  - all 7 high-band cut-off errors are under-calls in every version, so complete misses like Miss 1 still get high confidence;
+  - the no-data signal adds little;
+  - penumbra is a data-quality score only;
+  - the choice was made on the same cases.
+- **Plan §7, "Confidence estimates", is ticked** and reworded to the method used: v2's signals, a cross-fitted logistic map, penumbra as data quality, and no fold-ensemble disagreement or MC dropout.
+- **Tests:** 25 in `test_confidence.py`. The new one covers the v2 default, single-case scoring from `mapping_v2.json`, and refusing a mapping file with the wrong version.
+- **Notion sync:**
+  - Experiments → EXP-30: Done (first run at `aac4cb0`, before the fix; results above in the 2026-11-16 slab-fix entry).
+  - Experiments → EXP-31: Done, Git commit `217bc59`, with the results above and "v2 chosen".
+  - Tasks → Vision A confidence (Task 2): Done. Link `docs/CONFIDENCE_VISION_A.md`.
+
 ## 2026-11-16, Claude Code session (Lorna, Vision A confidence: slab fix, checks, three versions)
 - **First run, EXP-30 at `aac4cb0` (v1, numbers from Lorna):**
   - **The done check passed:** wrong side of a cut-off, low band against high, 24 against 7; errors of 10 mL or more, 33 against 17; Spearman −0.345.

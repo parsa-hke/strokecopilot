@@ -2,7 +2,7 @@
 
 Lorna, Vision A. Task 2 of `docs/team/lorna_vision_a.md`. Design approved by Parsa, 15 Nov 2026; Parsa then left the final design to Lorna.
 
-**Status:** a first run (EXP-30 at `aac4cb0`) is recorded below. It showed two problems, so the method was changed: missing data is now counted only where the perfusion scan looks, and two new signals were added. Three versions are now fitted side by side. Their results are empty until the next Colab run (notebook 14, EXP-31). Lorna then picks a version and writes down why.
+**Status: done.** A first run (EXP-30 at `aac4cb0`) showed two problems, so the method was changed: missing data is now counted only where the perfusion scan looks, and two new signals were added. The second run (EXP-31 at `217bc59`) fitted three versions side by side. All three pass the done check. **Lorna chose v2**; the reasons and the caveats are below.
 
 ## What this is for
 
@@ -34,7 +34,7 @@ The contract (`schemas/vision_output.json`) gives the reasoner two numbers from 
 
 **Three versions**, all kept in the results:
 - **v1:** signals 1 to 3 (the approved design).
-- **v2:** signals 1 to 4.
+- **v2:** signals 1 to 4. **The chosen version.**
 - **v3:** signals 1 to 5.
 
 **From signals to a score.** For each version, a small logistic regression learns how the signals relate to the chance of a large error. `confidence.core` is 1 minus that chance. Each signal is put on a common scale before fitting, so the weights can be compared. A positive weight means more risk, so lower confidence.
@@ -66,49 +66,80 @@ This run used v1 and counted missing data over all plain-CT tissue. It is kept h
 
 ## Results
 
-*To fill in after the next Colab run.*
+**Run:** EXP-31, notebook `notebooks/14_visionA_confidence.ipynb`, commit `217bc59`. Inputs: EXP-27's `per_case.csv` and the slim tarball. Outputs on Drive in `runs/EXP-31_visionA_confidence/`: `config.json`, `per_case.csv`, `metrics.json` and `mapping_v1.json`, `mapping_v2.json`, `mapping_v3.json`. All numbers are from the 129 development cases; counts and summaries only.
 
-**Run:** EXP-31, notebook `notebooks/14_visionA_confidence.ipynb`, commit `?`. Inputs: EXP-27's `per_case.csv` and the slim tarball. Outputs on Drive in `runs/EXP-31_visionA_confidence/`.
+### Where missing data is counted: before and after
 
-**Slab check** (share of tissue with no Tmax data):
-
-| | Median | Lowest | Highest |
+| Share of tissue with no Tmax data | Median | Lowest | Highest |
 |---|---|---|---|
-| Before: all plain-CT tissue | | | |
-| After: measurement area | | | |
+| Before (EXP-30): all plain-CT tissue | 32.2% | 17.2% | 70.0% |
+| After (EXP-31): the measurement area | 11.5% | in `metrics.json` | in `metrics.json` |
 
-**Each signal on its own** (weight when fitted alone; positive means lower confidence):
+The fix cut the typical missing share from about a third to about a tenth. What is left is a mix of real gaps in the perfusion data and the limits of the measurement area (see Limits).
 
-| Signal | Weight alone | Raises confidence? | Correlation with volume error |
+### Each signal on its own
+
+Each signal fitted alone on all 129 cases. A positive weight means more risk, so lower confidence.
+
+| Signal | Weight alone | Effect on confidence | Correlation with volume error |
 |---|---|---|---|
-| Missing data near the at-risk area | | | |
-| Predicted core size | | | |
-| Disagreement | | | |
-| Distance to the nearest cut-off | | | |
-| At-risk volume | | | |
+| Distance to the nearest cut-off | −0.911 | Farther from a cut-off, higher confidence | −0.324 |
+| Predicted core size | 0.703 | Bigger core, lower confidence | 0.353 |
+| Disagreement | −0.437 | More disagreement, higher confidence | −0.08 |
+| At-risk volume (Tmax > 6 s) | 0.17 | Bigger at-risk area, slightly lower confidence | 0.11 |
+| Missing data near the at-risk area | 0.015 | Almost no effect | 0.074 |
 
-**Three versions side by side:**
+- **Distance to a cut-off is the strongest signal.** A volume far from any cut-off is rarely on the wrong side of one.
+- **Core size still points the opposite way to the original design:** a bigger core means lower confidence. As explained under the first run, that fits the main measure.
+- **Disagreement still raises confidence,** but its link to the volume error is close to zero (−0.08).
+- **The missing-data signal adds almost nothing** once missing data is counted correctly.
 
-| | v1 | v2 | v3 |
+### Three versions side by side
+
+All three are cross-fitted by fold and split into three equal bands (about 43 cases each).
+
+| | v1 | v2 (chosen) | v3 |
 |---|---|---|---|
-| Wrong side of a cut-off, low band | | | |
-| Wrong side of a cut-off, high band | | | |
-| Errors of 10 mL or more, low band | | | |
-| Errors of 10 mL or more, high band | | | |
-| Under-calls in the high band (of all under-calls) | | | |
-| Spearman, confidence against volume error | | | |
-| Done check passes | | | |
+| Signals | 3 | 4 | 5 |
+| Wrong side of a cut-off, low band | 24 | **26** | 26 |
+| Wrong side of a cut-off, high band | 7 | 7 | 7 |
+| Errors of 10 mL or more, low band | 33 | 32 | 31 |
+| Errors of 10 mL or more, high band | 17 | 16 | 17 |
+| Under-calls in the high band (of 34) | 7 | 7 | 7 |
+| Spearman, confidence against volume error | **−0.33** | −0.287 | −0.267 |
+| Done check passes | Yes | Yes | Yes |
 
-**Band tables per version:** *to copy from the notebook.*
+- **All three pass the done check:** each low band holds far more large errors than its high band.
+- **v2 and v3 put the most cut-off errors in the low band** (26 against v1's 24). v3 adds nothing over v2.
+- **v1 ranks the overall volume error a little better** (Spearman −0.33 against −0.287), but our main measure is the cut-off error, not the volume error.
+- The full band tables for each version, including the middle band, are in `metrics.json` on Drive.
 
-**confidence.penumbra:** median *?*, lowest *?*, *?* of 129 cases under 0.9.
+### confidence.penumbra
 
-**Version chosen:** *Lorna's choice and why.*
+After the fix: median 0.885, lowest 0.596, and 94 of 129 cases under 0.9. Before the fix it was median 0.678, with all 129 under 0.9. It now reflects missing perfusion data more than scan coverage, but it is still a data-quality score only.
+
+### Version chosen: v2
+
+**Lorna's choice**, with Parsa's go-ahead to decide the design. `confidence.py` uses v2 by default, and `mapping_v2.json` from EXP-31 is the mapping for scoring new cases.
+
+**Why v2:**
+- Our main measure is a case landing on the wrong side of a cut-off, and v2 puts the most of those in the low band.
+- Distance to a cut-off is the clearest clinical reason for doubt: near a cut-off, a small error changes the decision.
+- v3 adds nothing over v2.
+
+**Said honestly:**
+- The choice was made after seeing all three results.
+- v1 and v2 differ by only 2 cases in the low band.
+- v1 is slightly better on the overall volume-error ranking.
+
+So v2's advantage is small, and Phase 4's held-out cases are its real test.
 
 ## Limits
 
+- **Complete misses still get high confidence.** In every version, all 7 cases on the wrong side of a cut-off in the high band are under-calls: the AI predicted too little. A complete miss like Miss 1 (0 mL predicted for a 101 mL infarct) looks like a confident small prediction, far from any cut-off. The at-risk volume (v3) was meant to catch these, and it did not.
+- **The missing-data signal adds little** (weight 0.015 alone) once missing data is counted correctly. It stays in v2 because it is part of the approved design and does no harm.
+- **confidence.penumbra is a data-quality score only.** It is not validated against any penumbra label, because none exists in ISLES'24. It says how complete the perfusion data is, not how right the penumbra volume is.
 - **Only 129 cases,** about 43 per band, so differences between bands and between versions are rough.
-- **Three versions compared on the same cases.** Choosing the best of three on these cases flatters the winner a little. The real test comes in Phase 4, on the held-out cases.
-- **Simple signals.** They catch missing data and doubtful volumes, but not every reason the AI can be wrong, for example tissue that dies after the scan.
-- **confidence.penumbra is not validated** against any penumbra label, because none exists in ISLES'24.
+- **The version was chosen on the same cases it was scored on.** Picking the best of three flatters the winner a little, and v1 and v2 differ by 2 cases. The real test comes in Phase 4, on the held-out cases.
+- **Simple signals.** They catch doubtful volumes, but not every reason the AI can be wrong, for example tissue that dies after the scan.
 - **The measurement area is approximate.** The holes in the perfusion maps' area are filled slice by slice, so a gap that reaches the edge of the brain on a slice is not counted as missing.

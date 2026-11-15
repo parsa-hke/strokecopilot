@@ -514,7 +514,10 @@ Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the lo
 - [x] All 5 folds for nnU-Net; mean ± std Dice; compare against threshold baseline — done 13 Nov 2026 as EXP-14, EXP-18..21 and the summary EXP-25: Dice 0.215 ± 0.046 over 5 folds against the threshold's 0.111 ± 0.031 (paired +0.104, 95% CI +0.078 to +0.133); abs volume error 23.5 ± 3.9 mL against 25.2 ± 5.0 mL (paired −1.6 mL, CI −4.5 to +1.3, not a clear difference); wrong side of 21/31/51/70 mL in 30/28/20/17 of 129 against 35/29/23/17. Fold costs measured from the Vast credit, about $8.8 for folds 1–4 with failed attempts
 - [x] Core/penumbra heads or a two-stage approach (predict final infarct = core proxy; penumbra from Tmax) — decide and record — DEC-26, 13 Nov 2026: two-stage (nnU-Net core proxy, Tmax > 6 s penumbra), no heads and no volume calibration; EXP-26
 - [x] Decide which core feeds the contract: rCBF < 30% threshold or learned model, compared on volume error and decision-threshold crossings (§8.1) — DEC-25, 13 Nov 2026: nnU-Net (each development case from the fold model that did not train on it). On EXP-25 it is no worse on volume error or crossings and clearly better on Dice; its volume is not measurably better, which the report states
-- [ ] Confidence estimates (`confidence.core/penumbra`) from fold ensemble disagreement or MC dropout
+- [x] Confidence estimates (`confidence.core/penumbra`). Done by Lorna (EXP-30, EXP-31; `docs/CONFIDENCE_VISION_A.md`).
+  - `confidence.core` comes from inference-time signals: missing Tmax near the at-risk area, predicted core size, disagreement with the threshold core, and distance to the nearest cut-off. That is version v2, chosen from three. A logistic map, cross-fitted by fold, turns them into a score.
+  - `confidence.penumbra` is a data-quality score: 1 minus the share of the perfusion-covered tissue with no reliable Tmax.
+  - Fold-ensemble disagreement and MC dropout were not used, because each development case was trained on by 4 of the 5 fold models.
 - [ ] Error analysis: where does the model fail (small lesions, posterior circulation, artefacts)?
 - [ ] `contract/build.py` produces valid `vision_output.json` for every non-held-out case; validate all
 
