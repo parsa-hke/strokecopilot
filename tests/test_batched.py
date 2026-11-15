@@ -81,7 +81,7 @@ def test_two_pass_run_matches_a_direct_run(tmp_path):
     assert two["summary"]["claims"] == direct["summary"]["claims"]
     assert two["summary"]["hallucination_rate"] == direct["summary"]["hallucination_rate"]
     config = json.loads((tmp_path / "two" / "config.json").read_text())
-    assert config["batched"] == {"reasoner": False, "extractor": False, "batch_ids": []}
+    assert config["batched"] == {"reasoner": False, "extractor": False, "reasoner_workers": 1, "batch_ids": []}
 
 
 class FakeBatch:
@@ -186,3 +186,58 @@ def test_run_batched_resumes_a_crashed_direct_reasoner_run(tmp_path):
     assert reasoner.calls == 3 and metrics["summary"]["cases"] == 5
     config = json.loads((tmp_path / "config.json").read_text())
     assert config["resumed_reasoner_answers"] == 2
+
+
+class Slow:
+    """A direct llm that sleeps, records how many calls overlap, and fails on request "boom"."""
+
+    model = "slow-model"
+
+    def __init__(self, pause=0.05):
+        import threading
+
+        self.pause, self.lock, self.active, self.peak, self.calls = pause, threading.Lock(), 0, 0, 0
+        self.usage = {"requests": 0}
+
+    def __call__(self, system, user, schema):
+        import time
+
+        with self.lock:
+            self.active += 1
+            self.calls += 1
+            self.peak = max(self.peak, self.active)
+        try:
+            time.sleep(self.pause)
+            if user == "boom":
+                raise ConnectionError("server unreachable")
+            if user == "refuse":
+                raise RefusalError("declined")
+            return {"echo": user}
+        finally:
+            with self.lock:
+                self.active -= 1
+
+
+def test_gather_runs_direct_requests_concurrently_and_saves_each(tmp_path):
+    reqs = {f"k{i}": ("s", f"u{i}", {}) for i in range(12)}
+    reqs["kr"] = ("s", "refuse", {})
+    llm, path = Slow(), tmp_path / "answers.jsonl"
+    out = batched.gather(reqs, llm, log=lambda *_: None, answers_path=path, workers=4)
+    assert set(out) == set(reqs) and out["k3"] == {"reply": {"echo": "u3"}} and out["kr"]["refusal"]
+    assert 1 < llm.peak <= 4
+    assert len(path.read_text().splitlines()) == 13
+    again = Slow()
+    assert batched.gather(reqs, again, log=lambda *_: None, answers_path=path, workers=4) == out and again.calls == 0
+    serial = Slow()
+    batched.gather({k: reqs[k] for k in ("k0", "k1")}, serial, log=lambda *_: None)
+    assert serial.peak == 1  # workers defaults to 1: one at a time, as before
+
+
+def test_gather_stops_on_a_server_error_and_keeps_finished_answers(tmp_path):
+    reqs = {f"k{i}": ("s", f"u{i}", {}) for i in range(3)}
+    reqs["kb"] = ("s", "boom", {})
+    path = tmp_path / "answers.jsonl"
+    with pytest.raises(ConnectionError):
+        batched.gather(reqs, Slow(), log=lambda *_: None, answers_path=path, workers=2)
+    saved = batched.load_answers(path, "slow-model")
+    assert "kb" not in saved and all("reply" in r for r in saved.values())

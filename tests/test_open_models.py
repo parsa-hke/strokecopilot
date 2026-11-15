@@ -30,9 +30,8 @@ def test_serve_command_binds_to_localhost_for_an_ssh_tunnel():
 
 
 def test_serve_command_refuses_unverified_entries():
-    for key in ("qwen3.5-27b", "gemma-3-27b", "medgemma-27b-text"):
-        with pytest.raises(om.NotServable, match="verify"):
-            om.serve_command(key, allow_gated=True, allow_medgemma=True)
+    with pytest.raises(om.NotServable, match="verify"):
+        om.serve_command("qwen3.5-27b")  # served through OpenRouter instead (DEC-24 amended)
     unchecked = dataclasses.replace(om.MODELS["qwen2.5-32b"], max_model_len=None)
     with pytest.raises(om.NotServable, match="max_model_len"):
         om.serve_command(unchecked)
@@ -54,3 +53,50 @@ def test_serve_command_refuses_gated_and_medgemma_without_explicit_flags():
     with pytest.raises(om.NotServable, match="gated"):
         om.serve_command(med, allow_medgemma=True)
     assert om.serve_command(med, allow_gated=True, allow_medgemma=True)[2] == "example/medgemma-4bit"
+
+
+def test_gemma_pair_is_served_identically_at_online_fp8():
+    gemma = om.serve_command("gemma-3-27b", allow_gated=True)
+    med = om.serve_command("medgemma-27b-text", allow_gated=True, allow_medgemma=True)
+    assert gemma[2] == "google/gemma-3-27b-it" and med[2] == "google/medgemma-27b-text-it"
+    assert gemma[gemma.index("--quantization") + 1] == "fp8" == med[med.index("--quantization") + 1]
+    strip = lambda argv: [a for a in argv[3:] if a not in ("gemma-3-27b", "medgemma-27b-text")]
+    assert strip(gemma) == strip(med)  # same settings apart from the model
+    with pytest.raises(om.NotServable, match="gated"):
+        om.serve_command("gemma-3-27b")
+    with pytest.raises(om.NotServable, match="HAI-DEF"):
+        om.serve_command("medgemma-27b-text", allow_gated=True)
+
+
+class _Client:
+    def __init__(self):
+        from types import SimpleNamespace as NS
+
+        self.sent = []
+        reply = NS(choices=[NS(finish_reason="stop", message=NS(content='{"ok": true}', refusal=None))],
+                   usage=NS(prompt_tokens=100, completion_tokens=20, prompt_tokens_details=None,
+                            completion_tokens_details=None))
+        self.chat = NS(completions=NS(create=lambda **kw: (self.sent.append(kw), reply)[1]))
+
+
+def test_api_llm_routes_qwen_through_openrouter_without_storing_a_key():
+    from strokecopilot.nlp.reasoner import providers
+
+    client = _Client()
+    llm = om.api_llm("qwen3.5-27b", client=client)
+    assert llm("system", "user", {"type": "object"}) == {"ok": True}
+    sent = client.sent[0]
+    assert sent["model"] == "qwen/qwen3.5-27b" and sent["temperature"] == 0.0 and sent["max_tokens"] == 20000
+    assert sent["response_format"]["type"] == "json_schema"
+    assert sent["extra_body"]["provider"] == {"require_parameters": True, "quantizations": ["bf16"],
+                                              "data_collection": "deny"}
+    d = llm.describe()
+    assert d["provider"] == "openrouter" and d["base_url"] == om.OPENROUTER_URL and d["billing"] == "per token (API)"
+    assert "key" not in str(d).lower().replace("key_name", "")
+    assert providers.cost_usd(llm.model, llm.usage) == pytest.approx((100 * 0.195 + 20 * 1.56) / 1e6)
+
+
+def test_keyscan_watches_the_openrouter_key():
+    from strokecopilot.compute import keyscan
+
+    assert "OPENROUTER_API_KEY" in keyscan.ENV_KEYS

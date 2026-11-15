@@ -14,6 +14,7 @@ A refusal is raised instead, and the caller records it.
 
 import json
 import os
+import threading
 import time
 from urllib.parse import urlparse
 
@@ -30,6 +31,8 @@ PRICES = {
     "claude-opus-5-5": {"input": 4.0, "output": 20.0, "cache_read": 0.20},
     "claude-sonnet-5-5": {"input": 2.0, "output": 10.0, "cache_read": 0.10},
     "claude-haiku-5-5": {"input": 0.10, "output": 0.50, "cache_read": 0.01},
+    # OpenRouter list price for Qwen3.5-27B on 15 Nov 2026 (DEC-24 amended); the provider it routes to may differ.
+    "qwen/qwen3.5-27b": {"input": 0.195, "output": 1.56, "cache_read": 0.195},
 }
 
 
@@ -223,7 +226,8 @@ class VLLMJSON:
     """
 
     def __init__(self, model, base_url="http://localhost:8000/v1", key_name=None, max_tokens=VLLM_MAX_TOKENS,
-                 temperature=0.0, quantization=None, merge_system=False, extra_body=None, client=None):
+                 temperature=0.0, quantization=None, merge_system=False, extra_body=None, client=None,
+                 provider="vllm", billing="gpu-time (pod), not token-priced"):
         if client is None:
             import openai
 
@@ -232,14 +236,16 @@ class VLLMJSON:
         self.client = client
         self.model, self.base_url, self.max_tokens, self.temperature = model, base_url, max_tokens, temperature
         self.quantization, self.merge_system, self.extra_body = quantization, merge_system, extra_body
+        self.provider, self.billing = provider, billing  # an OpenAI-compatible API (open_models.api_llm) says so
         self.usage = {"requests": 0, "input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0,
                       "cache_creation_input_tokens": 0, "reasoning_tokens": 0, "seconds": 0.0}
+        self._lock = threading.Lock()  # batched.gather may call from several threads (workers > 1)
 
     def describe(self):
-        return {"provider": "vllm", "model": self.model, "base_url": recorded_url(self.base_url),
+        return {"provider": self.provider, "model": self.model, "base_url": recorded_url(self.base_url),
                 "temperature": self.temperature, "max_tokens": self.max_tokens, "quantization": self.quantization,
                 "merge_system": self.merge_system, "extra_body": self.extra_body,
-                "billing": "gpu-time (pod), not token-priced"}
+                "billing": self.billing}
 
     def messages(self, system, user):
         if self.merge_system:
@@ -259,17 +265,18 @@ class VLLMJSON:
         if self.extra_body:
             request["extra_body"] = self.extra_body
         response = self.client.chat.completions.create(**request)
-        self.usage["requests"] += 1
-        self.usage["seconds"] += time.perf_counter() - started
         usage = getattr(response, "usage", None)
-        if usage is not None:
-            prompt = getattr(usage, "prompt_tokens", 0) or 0
-            cached = getattr(getattr(usage, "prompt_tokens_details", None), "cached_tokens", 0) or 0
-            self.usage["input_tokens"] += prompt - cached
-            self.usage["cache_read_input_tokens"] += cached
-            self.usage["output_tokens"] += getattr(usage, "completion_tokens", 0) or 0
-            details = getattr(usage, "completion_tokens_details", None)
-            self.usage["reasoning_tokens"] += getattr(details, "reasoning_tokens", 0) or 0
+        with self._lock:
+            self.usage["requests"] += 1
+            self.usage["seconds"] += time.perf_counter() - started
+            if usage is not None:
+                prompt = getattr(usage, "prompt_tokens", 0) or 0
+                cached = getattr(getattr(usage, "prompt_tokens_details", None), "cached_tokens", 0) or 0
+                self.usage["input_tokens"] += prompt - cached
+                self.usage["cache_read_input_tokens"] += cached
+                self.usage["output_tokens"] += getattr(usage, "completion_tokens", 0) or 0
+                details = getattr(usage, "completion_tokens_details", None)
+                self.usage["reasoning_tokens"] += getattr(details, "reasoning_tokens", 0) or 0
         choice = response.choices[0]
         message = choice.message
         if getattr(message, "refusal", None):
@@ -295,6 +302,8 @@ def recorded_url(base_url):
         host = parsed.hostname
     except ValueError:
         return "remote"
+    if parsed.scheme == "https" and host == "openrouter.ai":
+        return base_url  # a public API address, not a pod's (DEC-24 amended)
     return base_url if parsed.scheme == "http" and host in ("localhost", "127.0.0.1") else "remote"
 
 

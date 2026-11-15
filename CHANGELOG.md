@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 2026-11-15 — Claude Code session (Phase 3: PRs #5–#9 reviewed, fixed and merged; DEC-27 confidence; DEC-28 Vision B threshold; C7 contract build; DEC-24 hosting amended)
+## 2026-11-15 — Claude Code session (Phase 3: PRs #5–#9 reviewed, fixed and merged; DEC-27 confidence; DEC-28 Vision B threshold; C7 contract build; DEC-24 hosting amended; C8 code prep)
 - **Five teammate PRs reviewed, fixed on their branches and squash-merged** (one review agent per PR, findings re-checked by hand; the review entries for each PR are below):
   - #7 `0920766`, #9 `e17999b`, #6 `3305288`, #8 `6b10cd0`, #5 `3847cf6`.
   - Each branch was updated from main before its merge, with the CHANGELOG entries combined; `main` passes all tests after each one.
@@ -55,7 +55,31 @@
     - Parsa's reading of the HAI-DEF terms §3.2.
   - **Fallback:** Baichuan-M2-32B and Qwen2.5-32B-Instruct replace the Gemma pair.
   - **Code still to do (C8 prep):** concurrent requests for direct llms, the 8-bit and OpenRouter entries in `open_models.py`, and one test request per model.
-- `pytest`: 694 passed. **Spend:** no GPU, no API.
+- **C8 prep (code only; nothing run, no spend):**
+  - **Concurrent requests:** `pipeline/batched.gather(..., workers=N)` sends N direct requests at once with a thread pool, so vLLM can batch them on the GPU and an API answers in parallel. `run_batched(..., reasoner_workers=N)` passes it on, and the config records it.
+    - Answers are still saved one line each as they finish, so a crash loses at most the requests in flight.
+    - A server error still stops the run, and requests not yet started are cancelled.
+    - `VLLMJSON` updates its usage counters under a lock.
+  - **`nlp/reasoner/open_models.py`, for the amended DEC-24:**
+    - Gemma 3 27B and MedGemma 27B text are served from their BF16 weights with vLLM's online 8-bit (`--quantization fp8`). Their serve commands are identical apart from the model. The gated and HAI-DEF refusals stay off by default.
+    - New `API_ROUTES` and `api_llm()` route Qwen3.5-27B through OpenRouter:
+      - the same JSON-schema request as the pod models;
+      - temperature 0 and `max_tokens` 20000;
+      - provider routing that requires every parameter to be honoured, 16-bit weights, and no data collection;
+      - the key read from `OPENROUTER_API_KEY` at call time, never stored.
+  - **`providers.py`:**
+    - `VLLMJSON` takes `provider` and `billing`, so an API run is not labelled GPU-billed.
+    - The OpenRouter URL may be recorded; a pod's address still may not.
+    - The Qwen3.5-27B list price is added to `PRICES` (an estimate; providers vary).
+  - **`compute/keyscan.py`:** watches `OPENROUTER_API_KEY`.
+  - **Tests:** 5 added (concurrency, a server error mid-run, the identical Gemma pair at 8-bit, the OpenRouter route, keyscan).
+  - **Still before the runs:**
+    - Parsa's OpenRouter key, the Hugging Face token decision and the HAI-DEF reading;
+    - one test request per model;
+    - wiring the 48 GB pod job into `compute/jobs.py`;
+    - whether Qwen thinks, a run-plan choice;
+    - the measured cost estimate for Parsa's go.
+- `pytest`: 699 passed. **Spend:** no GPU, no API.
 - **Notion sync:**
   - Decisions: DEC-27, DEC-28; DEC-24 amended (hosting).
   - Tasks: the Vision B operating-point task set to Done; contract/build.py set to Done; a note on Hana's real-inputs task.

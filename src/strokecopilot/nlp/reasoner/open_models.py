@@ -1,4 +1,12 @@
-"""The open reasoner models of DEC-24 and how vLLM serves each on the rented 24 GB card (DEC-21).
+"""The open reasoner models of DEC-24 and how each is served (DEC-21; hosting amended in DEC-24, 15 Nov 2026).
+
+Hosting under the amendment:
+- Qwen3.5-27B runs through the OpenRouter API at full precision: API_ROUTES and api_llm(). Its pod entry in MODELS
+  stays unverified (no official 4-bit checkpoint fits 24 GB).
+- Gemma 3 27B and MedGemma 27B text run together on one rented 48 GB GPU, both from their BF16 weights with vLLM's
+  online 8-bit quantization (`--quantization fp8`), so the medical-training pair is served identically. Fit and speed
+  are unmeasured until the one-request GPU dummy.
+- The fallback pair (Baichuan-M2-32B, Qwen2.5-32B-Instruct) keeps its official 4-bit checkpoints.
 
 MODELS holds Qwen3.5-27B, MedGemma 27B text and Gemma 3 27B, and the fallback pair Baichuan-M2-32B and Qwen2.5-32B.
 Every Hugging Face id here was checked against its model card on 15 Nov 2026. A field that could not be checked is
@@ -58,18 +66,22 @@ MODELS = {
               "recommends a context of 128k or more to keep thinking quality.",
         sources=("https://huggingface.co/Qwen/Qwen3.5-27B", "https://huggingface.co/Qwen/Qwen3.5-27B-GPTQ-Int4")),
     "medgemma-27b-text": OpenModel(
-        name="medgemma-27b-text", hf_id="google/medgemma-27b-text-it", checkpoint=None, quantization=None,
-        max_model_len=16384, gated=True, merge_system=False, thinks_by_default=None, thinking_off=None,
-        reasoning_parser=None, needs_terms_clearance=True, verify=("checkpoint", "quantization"),
-        notes="Gated behind the Health AI Developer Foundations terms. No official 4-bit checkpoint on the card. The "
-              "card's examples pass a system message. Whether it thinks by default is not stated on the card.",
+        name="medgemma-27b-text", hf_id="google/medgemma-27b-text-it", checkpoint="google/medgemma-27b-text-it",
+        quantization="fp8", max_model_len=16384, gated=True, merge_system=False, thinks_by_default=None,
+        thinking_off=None, reasoning_parser=None, needs_terms_clearance=True,
+        notes="Gated behind the Health AI Developer Foundations terms. No official 4-bit checkpoint on the card, so it "
+              "is served from the BF16 weights with vLLM's online FP8 on a 48 GB GPU, like Gemma 3 27B (DEC-24 "
+              "amended); about 27 GB of weights, fit unmeasured. The card's examples pass a system message. Whether it "
+              "thinks by default is not stated on the card.",
         sources=("https://huggingface.co/google/medgemma-27b-text-it",)),
     "gemma-3-27b": OpenModel(
-        name="gemma-3-27b", hf_id="google/gemma-3-27b-it", checkpoint=None, quantization=None, max_model_len=16384,
-        gated=True, merge_system=False, thinks_by_default=False, thinking_off=None, reasoning_parser=None,
-        verify=("checkpoint", "quantization"),
-        notes="Gated (Gemma terms). google/gemma-3-27b-it-qat-q4_0-unquantized is gated and holds BF16 weights trained "
-              "for Q4_0, not a checkpoint vLLM loads at 4-bit as is. The card's examples pass a system message.",
+        name="gemma-3-27b", hf_id="google/gemma-3-27b-it", checkpoint="google/gemma-3-27b-it", quantization="fp8",
+        max_model_len=16384, gated=True, merge_system=False, thinks_by_default=False, thinking_off=None,
+        reasoning_parser=None,
+        notes="Gated (Gemma terms). Served from the BF16 weights with vLLM's online FP8 on a 48 GB GPU, the same setting "
+              "as MedGemma (DEC-24 amended); about 27 GB of weights, fit unmeasured. "
+              "google/gemma-3-27b-it-qat-q4_0-unquantized holds BF16 weights trained for Q4_0, not a checkpoint vLLM "
+              "loads at 4-bit as is. The card's examples pass a system message.",
         sources=("https://huggingface.co/google/gemma-3-27b-it",
                  "https://huggingface.co/google/gemma-3-27b-it-qat-q4_0-unquantized")),
     "baichuan-m2-32b": OpenModel(
@@ -99,7 +111,8 @@ def serve_command(model, port=8000, allow_gated=False, allow_medgemma=False, str
                   kv_cache_dtype=None):
     """argv for `vllm serve` on the pod, reachable only on 127.0.0.1 (an SSH tunnel). `model` is a MODELS key or entry.
 
-    No --quantization: vLLM reads the method from the checkpoint's quantization_config and picks its fast kernel."""
+    A pre-quantized checkpoint needs no --quantization (vLLM reads its quantization_config); an entry served from
+    16-bit weights with quantization "fp8" gets --quantization fp8 (vLLM's online 8-bit, DEC-24 amended)."""
     entry = MODELS[model] if isinstance(model, str) else model
     missing = entry.unverified()
     if missing:
@@ -112,8 +125,55 @@ def serve_command(model, port=8000, allow_gated=False, allow_medgemma=False, str
     argv = ["vllm", "serve", entry.checkpoint, "--served-model-name", entry.name,
             "--max-model-len", str(entry.max_model_len), "--host", "127.0.0.1", "--port", str(int(port)),
             "--structured-outputs-config.backend", structured_output_backend]
+    if entry.quantization == "fp8":
+        argv += ["--quantization", "fp8"]
     if entry.reasoning_parser:
         argv += ["--reasoning-parser", entry.reasoning_parser]
     if kv_cache_dtype:
         argv += ["--kv-cache-dtype", kv_cache_dtype]
     return argv
+
+
+# ---------------------------------------------------------------------------- Models served through an API
+
+OPENROUTER_URL = "https://openrouter.ai/api/v1"
+
+
+@dataclass(frozen=True)
+class ApiRoute:
+    name: str  # the comparison's name for the model (as in MODELS)
+    provider: str
+    base_url: str
+    model_id: str  # the id the API expects
+    key_name: str  # read with providers.secret(): an environment variable on the Mac, never in the repo
+    max_tokens: int
+    extra_body: dict
+    notes: str = ""
+    sources: tuple = field(default=(), compare=False)
+
+
+API_ROUTES = {
+    "qwen3.5-27b": ApiRoute(
+        name="qwen3.5-27b", provider="openrouter", base_url=OPENROUTER_URL, model_id="qwen/qwen3.5-27b",
+        key_name="OPENROUTER_API_KEY", max_tokens=20000,
+        # OpenRouter provider routing: only providers that honour every request parameter (response_format with the
+        # json_schema, temperature), serve 16-bit weights, and do not keep prompts for training.
+        extra_body={"provider": {"require_parameters": True, "quantizations": ["bf16"], "data_collection": "deny"}},
+        notes="DEC-24 amended (15 Nov 2026): full precision through OpenRouter instead of a 4-bit build on the pod. "
+              "List price about $0.20 in / $1.56 out per million tokens (15 Nov 2026; providers vary). The model "
+              "thinks by default; whether to turn that off is a run-plan choice. max_tokens matches the Claude "
+              "reasoner's 20000, since the API context (262k) is not the limit a pod's is.",
+        sources=("https://openrouter.ai/qwen/qwen3.5-27b", "https://openrouter.ai/qwen/qwen3.5-27b/providers")),
+}
+
+
+def api_llm(name, client=None, **overrides):
+    """A VLLMJSON-style llm for a model in API_ROUTES: the same call signature and JSON schema enforcement as the pod
+    models, through the API's OpenAI-compatible endpoint. The key is read from route.key_name at call time (never
+    passed in, never stored); `client` is for tests."""
+    from strokecopilot.nlp.reasoner.providers import VLLMJSON
+
+    route = API_ROUTES[name]
+    settings = {"base_url": route.base_url, "key_name": route.key_name, "max_tokens": route.max_tokens,
+                "extra_body": route.extra_body, "provider": route.provider, "billing": "per token (API)", **overrides}
+    return VLLMJSON(route.model_id, client=client, **settings)

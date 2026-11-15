@@ -9,12 +9,17 @@
 
 Costs: a batched llm carries PRICE_FACTOR 0.5, which run_cases applies to the estimate.
 
-Resume: a directly called reasoner (an open model on a pod) answers one request at a time, for hours. Each answer is
-appended to out_dir/reasoner_answers.jsonl as it arrives, and a rerun into the same out_dir asks only for the rest. A
-batch llm is unchanged: its results arrive together.
+Resume: a directly called reasoner (an open model on a pod or an API) answers request by request, for hours. Each
+answer is appended to out_dir/reasoner_answers.jsonl as it arrives, and a rerun into the same out_dir asks only for
+the rest. A batch llm is unchanged: its results arrive together.
+
+Concurrency (C8 prep): `workers` sends that many direct requests at once (a thread pool), so vLLM can batch them on
+the GPU and an API answers in parallel; at 1 the requests go one at a time, as before. Answers are written by the
+calling thread as each finishes, so a crash loses at most the requests in flight.
 """
 
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from strokecopilot.nlp.reasoner import prompt as rp
@@ -76,11 +81,23 @@ def load_answers(path, model):
     return out
 
 
-def gather(requests, llm, log=print, answers_path=None):
-    """{key: result} for {key: (system, user, schema)}: one batch if the llm has run(), else one call per request.
+def _answer(llm, req):
+    try:
+        return {"reply": llm(*req)}
+    except RefusalError as e:
+        return {"error": str(e), "refusal": True}
+    except (RuntimeError, json.JSONDecodeError) as e:
+        return {"error": str(e), "refusal": False}
+
+
+def gather(requests, llm, log=print, answers_path=None, workers=1):
+    """{key: result} for {key: (system, user, schema)}: one batch if the llm has run(), else one call per request,
+    up to `workers` at a time.
 
     With answers_path, a directly called llm's answers are appended there one line each as they arrive, and keys
-    already saved are not asked again, so a crashed run resumes. A batch llm ignores answers_path."""
+    already saved are not asked again, so a crashed run resumes. A batch llm ignores answers_path and workers. An
+    error the llm does not turn into a result (the server unreachable, a 4xx) stops the run, as before; requests not
+    yet started are cancelled."""
     if not requests:
         return {}
     if hasattr(llm, "run"):
@@ -93,19 +110,27 @@ def gather(requests, llm, log=print, answers_path=None):
     sink = open(answers_path, "a") if answers_path else None
     if sink and sink.tell() and not Path(answers_path).read_text().endswith("\n"):
         sink.write("\n")  # end a line cut off by a crash, so the next answer starts on its own line
+    def save(key):
+        if sink:
+            sink.write(json.dumps({"key": key, "model": model, "result": out[key]}) + "\n")
+            sink.flush()
+
+    todo = [(key, req) for key, req in requests.items() if key not in out]
     try:
-        for key, req in requests.items():
-            if key in out:
-                continue
+        if workers <= 1:
+            for key, req in todo:
+                out[key] = _answer(llm, req)
+                save(key)
+        else:
+            pool = ThreadPoolExecutor(max_workers=workers)
             try:
-                out[key] = {"reply": llm(*req)}
-            except RefusalError as e:
-                out[key] = {"error": str(e), "refusal": True}
-            except (RuntimeError, json.JSONDecodeError) as e:
-                out[key] = {"error": str(e), "refusal": False}
-            if sink:
-                sink.write(json.dumps({"key": key, "model": model, "result": out[key]}) + "\n")
-                sink.flush()
+                futures = {pool.submit(_answer, llm, req): key for key, req in todo}
+                for future in as_completed(futures):
+                    key = futures[future]
+                    out[key] = future.result()
+                    save(key)
+            finally:
+                pool.shutdown(wait=True, cancel_futures=True)
     finally:
         if sink:
             sink.close()
@@ -113,8 +138,9 @@ def gather(requests, llm, log=print, answers_path=None):
 
 
 def run_batched(cases, reasoner, extractor, judge, retriever, out_dir, log=print, source=None, version=rp.REASONER_PROMPT,
-                extra_config=None, **run_kwargs):
-    """The two passes, then run_cases. `reasoner` and `extractor` may be ClaudeBatch (batched) or any llm (direct)."""
+                extra_config=None, reasoner_workers=1, **run_kwargs):
+    """The two passes, then run_cases. `reasoner` and `extractor` may be ClaudeBatch (batched) or any llm (direct);
+    reasoner_workers is how many direct reasoner requests go at once (gather's workers)."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     system = rp.system_prompt(version)
@@ -125,7 +151,8 @@ def run_batched(cases, reasoner, extractor, judge, retriever, out_dir, log=print
     resumed = 0
     if not hasattr(reasoner, "run"):
         resumed = len(set(requests) & set(load_answers(answers_path, getattr(reasoner, "model", "unknown"))))
-    reasoner_answers = Prefilled(gather(requests, reasoner, log, answers_path=answers_path), reasoner)
+    reasoner_answers = Prefilled(gather(requests, reasoner, log, answers_path=answers_path, workers=reasoner_workers),
+                                 reasoner)
     log(f"Reasoner: {sum('reply' in r for r in reasoner_answers.results.values())} of {len(requests)} answered.")
 
     cache = vr.JsonCache(out / "extraction_cache.json")
@@ -145,6 +172,7 @@ def run_batched(cases, reasoner, extractor, judge, retriever, out_dir, log=print
     log(f"Extraction: {len(ex_requests)} requested; the cache now holds {len(cache)}.")
     extractor_answers = Prefilled({k: {"reply": v} for k, v in cache.data.items()}, extractor)
     config = {"batched": {"reasoner": hasattr(reasoner, "run"), "extractor": hasattr(extractor, "run"),
+                          "reasoner_workers": reasoner_workers,
                           "batch_ids": [*getattr(reasoner, "batch_ids", []), *getattr(extractor, "batch_ids", [])]},
               **(extra_config or {})}
     if resumed:
