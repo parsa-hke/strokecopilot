@@ -216,3 +216,39 @@ def test_prepared_slabs_run_through_the_real_model_path():
     images, _ = ic.prepare(_head(shape=(48, 48, 10)))
     result = ic.score(images, lambda x: infer.slice_probs(net, x, torch.device("cpu"), batch_size=4), CALIBRATOR)
     assert 0 <= result["confidence"] <= 1 and len(result["top_slabs"]) == 2
+
+
+# --- field of view (PR #3 review, item 3) -----------------------------------------------------------
+
+
+def test_variant_spec_reads_numbers_none_and_dicts():
+    assert ic.variant_spec(5.0) == (5.0, None) and ic.variant_spec(None) == (None, None)
+    assert ic.variant_spec({"target_mm": 5.0, "fov_mm": 250.0}) == (5.0, 250.0)
+    with pytest.raises(ValueError):
+        ic.variant_spec({"target_mm": 5.0, "fov": 250.0})
+
+
+def test_matching_the_field_of_view_shrinks_a_small_field_head_in_the_image():
+    img = _head(shape=(64, 64, 20), zooms=(2.0, 2.0, 2.0))  # 128 mm field of view
+    plain, _ = ic.prepare(img, 5.0, jpeg_quality=None)
+    matched, info = ic.prepare(img, 5.0, jpeg_quality=None, fov_mm=256.0)  # padded with air to twice the field
+    brain = lambda images: (images[..., 0] > 100).mean()  # noqa: E731  share of pixels in the brain window's bright range
+    assert info["fov_mm"] == 128.0 and plain.shape == matched.shape
+    assert brain(matched) == pytest.approx(brain(plain) / 4, rel=0.15)  # half the width and height
+
+
+def test_run_check_with_fov_variants_pairs_the_two_readings():
+    table, metrics = ic.run_check(CASES[:3], _loader(), _fake_predict, CALIBRATOR, variants=ic.FOV_VARIANTS)
+    assert set(metrics["variants"]) == {"slab_5mm", "slab_5mm_fov250"} and "slab_5mm_fov250" in metrics["agreement"]
+    assert metrics["variant_settings"]["slab_5mm_fov250"] == {"target_mm": 5.0, "fov_mm": ic.RSNA_FOV_MM}
+    assert metrics["variant_settings"]["slab_5mm"] == {"target_mm": 5.0, "fov_mm": None} and metrics["target_slice_mm"] == 5.0
+    assert {"slab_5mm_confidence", "slab_5mm_fov250_confidence"} <= set(table.columns)
+    same, _ = ic.run_check(CASES[:3], _loader(), _fake_predict, CALIBRATOR)
+    assert np.allclose(table.set_index("case")["slab_5mm_confidence"], same.set_index("case")["slab_5mm_confidence"])  # EXP-16 reading unchanged
+    assert ic.ids_in(json.dumps(metrics), CASES) == 0
+
+
+def test_top_scans_figure_uses_the_variants_it_is_given(tmp_path):
+    table, _ = ic.run_check(CASES[:3], _loader(), _fake_predict, CALIBRATOR, variants=ic.FOV_VARIANTS, primary="slab_5mm_fov250")
+    ic.top_scans_figure(table, _loader(), n=2, primary="slab_5mm_fov250", out_png=str(tmp_path / "top.png"), variants=ic.FOV_VARIANTS)
+    assert (tmp_path / "top.png").stat().st_size > 0

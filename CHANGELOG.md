@@ -1,5 +1,183 @@
 # CHANGELOG
 
+## 2026-11-16, Claude Code session (Lorna, Vision A confidence: EXP-31 results, v2 chosen, Task 2 done)
+- **EXP-31 at `217bc59`** (numbers from Lorna's Colab run; full tables in `metrics.json` on Drive):
+  - **All three versions pass the done check.**
+  - **Missing-data share:** median 11.5% over the measurement area, against 32.2% over all plain-CT tissue (EXP-30).
+  - **Penumbra:** median 0.885, lowest 0.596, 94 of 129 under 0.9.
+  - **Signals alone (weight / Spearman with volume error):**
+
+    | Signal | Weight / Spearman |
+    |---|---|
+    | cut-off distance | −0.911 / −0.324 |
+    | predicted size | 0.703 / 0.353 |
+    | disagreement | −0.437 / −0.08 |
+    | no-data | 0.015 / 0.074 |
+    | Tmax > 6 s volume | 0.17 / 0.11 |
+
+  - **Versions:**
+
+    | Version | Wrong side, low / high | 10 mL errors, low / high | Under-calls in high band | Spearman |
+    |---|---|---|---|---|
+    | v1 | 24 / 7 | 33 / 17 | 7 of 34 | −0.33 |
+    | v2 | 26 / 7 | 32 / 16 | 7 of 34 | −0.287 |
+    | v3 | 26 / 7 | 31 / 17 | 7 of 34 | −0.267 |
+
+- **Lorna chose v2.**
+  - Her reasons: it puts the most cut-off errors in the low band, and distance to a cut-off is the clearest clinical reason for doubt; v3 adds nothing.
+  - Recorded honestly: the choice was made after seeing all three, v1 and v2 differ by 2 cases, and v1 ranks the overall volume error slightly better.
+- **`confidence.py`:**
+  - `CHOSEN_VERSION = "v2"`, and `FEATURES` (the default for fitting) is v2's signals.
+  - `load_default_mapping(run_dir)` loads `mapping_v2.json` and refuses a file with other signals.
+  - `confidence_core` scores one case from it, and v2 needs no Tmax > 6 s volume.
+  - The saved mapping is EXP-31's on Drive. It is not copied into the repo.
+- **`docs/CONFIDENCE_VISION_A.md` filled in:**
+  - status done;
+  - the before/after missing-data share;
+  - the signals-alone table;
+  - the three versions side by side;
+  - penumbra;
+  - the version chosen and why.
+
+  Its limits:
+  - all 7 high-band cut-off errors are under-calls in every version, so complete misses like Miss 1 still get high confidence;
+  - the no-data signal adds little;
+  - penumbra is a data-quality score only;
+  - the choice was made on the same cases.
+- **Plan §7, "Confidence estimates", is ticked** and reworded to the method used: v2's signals, a cross-fitted logistic map, penumbra as data quality, and no fold-ensemble disagreement or MC dropout.
+- **Tests:** 25 in `test_confidence.py`. The new one covers the v2 default, single-case scoring from `mapping_v2.json`, and refusing a mapping file with the wrong version.
+- **Notion sync:**
+  - Experiments → EXP-30: Done (first run at `aac4cb0`, before the fix; results above in the 2026-11-16 slab-fix entry).
+  - Experiments → EXP-31: Done, Git commit `217bc59`, with the results above and "v2 chosen".
+  - Tasks → Vision A confidence (Task 2): Done. Link `docs/CONFIDENCE_VISION_A.md`.
+
+## 2026-11-16, Claude Code session (Lorna, Vision A confidence: slab fix, checks, three versions)
+- **First run, EXP-30 at `aac4cb0` (v1, numbers from Lorna):**
+  - **The done check passed:** wrong side of a cut-off, low band against high, 24 against 7; errors of 10 mL or more, 33 against 17; Spearman −0.345.
+  - **Final weights:** at-risk no-data 0.239, log predicted core 0.667, log disagreement −0.212.
+  - **Penumbra:** median 0.678, all 129 cases under 0.9.
+  - **Brain no-data share:** median 0.322, range 0.172 to 0.700.
+- **Two problems, and what was done:**
+  - **The no-data share was inflated** by the plain CT covering the whole head (scalp included) while the perfusion scan covers a slab. `confidence.measurement_area` now counts missing data only in plain-CT tissue inside the perfusion region (`perfusion_region`): the slices from the first to the last with perfusion values, and in each the maps' area with holes filled. A covered slice with no values takes the slab's outline, so a missing slice still counts. This applies to the at-risk signal and to confidence.penumbra. The old whole-tissue share is kept as `tissue_no_data_share` for a before/after `slab_check`.
+  - **Two signals pointed against the design:** a bigger core gave lower confidence, and more disagreement gave higher confidence. The likely reasons, written in `docs/CONFIDENCE_VISION_A.md`: small predictions rarely cross a cut-off, errors grow with size, and disagreement overlaps with size.
+- **Checks added:**
+  - `signals_alone` gives each signal's weight when fitted alone, and its Spearman correlation with the volume error.
+  - `add_targets` marks `undercall` (smaller than true and on the wrong side of a cut-off), and the band table counts under-calls per band.
+- **Two candidate signals (Lorna's decision, with Parsa's go-ahead):**
+  - `log_cutoff_distance`: |log(1 + nnU-Net mL) − log(1 + nearest cut-off)|, nearest on the log scale;
+  - `log_tmax6_ml`: log(1 + mL of reliable Tmax > 6 s).
+- **Three versions:**
+  - v1: the 3 approved signals;
+  - v2: v1 plus the cut-off distance;
+  - v3: v2 plus the Tmax > 6 s volume.
+
+  `compare_versions` cross-fits every version on the same cases and reports each band table, done check (now with under-calls in the high band) and final mapping. All versions are kept. `fit_mapping`, `cross_fitted_confidence` and `confidence_core` take any version's signals.
+- **Notebook 14:** slab check (section 5), signals alone (6), the three versions side by side with band tables and final weights (7), `mapping_v1/v2/v3.json` and penumbra (8), save (9).
+  - **The notebook stops if the run folder's `config.json` is from the first run,** because that file predates the changes. The rerun is EXP-31 (Lorna's new Notion row), set in a follow-up commit; its folder is `runs/EXP-31_visionA_confidence`.
+- **`docs/CONFIDENCE_VISION_A.md`** now has:
+  - the measurement area and the five signals;
+  - the three versions;
+  - the first run and its two problems;
+  - empty tables for the slab check, signals alone, the three versions, and the version chosen.
+- **Tests:** `tests/test_confidence.py`, 24 tests (from 15). New ones cover:
+  - the slab and footprint fix (scalp and uncovered slices not counted; an enclosed gap and a missing slice inside the slab still counted);
+  - the Tmax > 6 s volume and the cut-off distance;
+  - under-calls;
+  - every version's leak check and single-case scoring;
+  - the signals-alone check, the side-by-side versions and the slab check.
+- pytest on Windows: 513 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
+- **Notion sync:**
+  - Experiments → EXP-30: record the first run's results, and that the method changed after it.
+  - Experiments → EXP-31 added by Lorna for the rerun (Running); fill in the commit and results after the run.
+  - Tasks → Vision A confidence: In progress.
+
+## 2026-11-15 — Parsa's review of PR #7 (Lorna's Vision A error-analysis follow-ups, EXP-27)
+- **Notebook 13:** `REPO_REF` is `main`, for reruns after merge. The per-fold table shows `no_infarct`. Still output-free.
+- **Code, cases with no final infarct (0 mL):** `error_analysis.has_no_infarct`, `is_miss` (Dice 0 on a case with a final infarct) and `miss_kind` (the `miss` column, now with "no infarct"). These cases score Dice 0 whenever anything is marked, but miss nothing. They are now counted apart (`no_infarct`) and left out of the Dice-0 miss counts, the miss rate by size, both sides of the miss comparisons, the onset groups, `group_summary`'s `dice0`, `miss_profile` and the figure picks. They stay in the over-call and under-call counts. The follow-up `config.json` definitions say so. 5 new tests (84 in `test_error_analysis.py`). No fold-0 (EXP-15) number changes: fold 0 has no such case.
+- **Write-up** (`docs/ERROR_ANALYSIS_VISION_A.md`):
+  1. Artery groups: "does not seem to change how often the AI misses" (3/13 ICA, 12/45 MCA) now says no difference was seen, but the groups are too small to rule one out.
+  2. "Missed by both" explained: Dice < 0.05 for both methods, a looser line than Dice 0, so it is larger than the Dice-0 misses (restated in 4).
+  3. Added: 10 of 129 predictions are empty, all of them misses; how many misses have under 1 mL predicted (restated in 4).
+  4. 2 of the 39 have no final infarct (0 mL; the AI marked 0.35 and 3.9 mL, both fold 2). With the code change above, **every five-fold count that involves misses is restated**, recomputed at review from EXP-27's `per_case.csv` with the new rule, not by a notebook rerun (`metrics.json` on Drive still has the old counts): 37 misses of 127 cases with a final infarct; 32 of 82 under 21 mL against 5 of 45; fold 2 has 5 misses, not 7; 24 of the 37 have under 1 mL predicted; missed by both 50 and AI alone under 0.05 in 53; MCA 11 Dice 0, "no occlusion found" 1, front 17. Visible share, no-data, onset, over-call and under-call counts are unchanged. The write-up's section intro and Limits say this.
+  5. The intro's "this draft" is now "this write-up". Figure legends unchanged.
+  6. After "no significance test was run": the size and visible-share gaps are large at 129 cases, but size and visibility go together, and the split by size (7) cannot fully separate them. No p-values added.
+  7. Added the visible share split by size: under 21 mL, median 35% for misses (31 with data) against 53% (50); at 21 mL and over, 22% (5) against 69% (40). The gap shows in both groups, but size still varies inside each, so it hints, not proves.
+- **EXP-27 config exception accepted:** the rerun at `0cd342c` wrote `per_case.csv` and `metrics.json` into the folder whose `config.json` is from `f493883`. It is documented in the write-up's Limits, and `metrics.json` records both commits.
+- **CHANGELOG:** Lorna's 7 working entries are folded into one (2026-11-14 below). The stale "artery numbers need a rerun" line is dropped; the rerun happened.
+- **Lorna's own entry below** keeps the counts as her run gave them (39 Dice 0); the restated counts are in this entry and the write-up.
+- **Back to Lorna:** only rerun notebook 13 after merge, to refresh `metrics.json` and the figures with the new rule.
+- `pytest` (Mac): 594 passed.
+- **Notion sync:** none from this review.
+
+## 2026-11-15 — Parsa's review of PR #9
+- **Development cases now read their cross-fitted confidence.** `mapping_v2.json` was fitted on all 129 development cases, so scoring one of them with it is in-sample (AUC 0.757 against 0.722 cross-fitted). New `development_confidence(per_case_csv, version="v2")` reads `confidence_core_v2` and `confidence_penumbra` from EXP-31's `per_case.csv` as {case: {"core", "penumbra"}}. It refuses a missing column, a repeated case, a value that is missing or outside 0 to 1, and held-out cases (`splits.check_ids`).
+- **One call for held-out cases:** `case_confidence(case, mapping, nnunet_ml, threshold_ml)` returns {"core", "penumbra"}, so `contract/build.py` does not stitch `case_signals` and `confidence_core` itself. The module text and docstrings say `mapping_v2` is for held-out (Phase 4) cases only.
+- **A NaN core volume now raises `ValueError`** instead of silently becoming 0 mL (`max(0.0, nan)` is 0.0). A NaN Tmax > 6 s volume counts as missing, like `None`.
+- **`docs/CONFIDENCE_VISION_A.md`:**
+  - the slab-check range after the fix, 6.1% to 40.4% (from EXP-31's `metrics.json`);
+  - v2's final weights: cut-off distance −1.188, missing data 0.248, core size −0.249, disagreement −0.017;
+  - the per-signal story corrected to match them: inside v2 a bigger core gives slightly higher confidence, and missing data carries a real weight;
+  - a "Which values build.py uses" note.
+- **Notebook 14:** confidence.penumbra described as the share of the measurement area, not of the brain; the save step now also records the two checks below in `metrics.json`.
+- **Cut-off distance alone against the versions** (`baseline_check`, run at review on EXP-31's `per_case.csv`): AUC for the wrong side of any cut-off, distance alone 0.755, v2 0.722, v3 0.703, v1 0.695, penumbra 0.538. v2 minus the distance alone −0.033, paired bootstrap 95% interval −0.066 to −0.002 (seed 0, 5000 resamples). v2 was chosen after seeing the results, and the simpler signal does at least as well.
+- **Complete misses** (`complete_miss_check`): 25 cases predicted under 0.5 mL, 5 on the wrong side of a cut-off, median v2 confidence 0.90. A cross-fitted flag (under 1 mL and a large Tmax > 6 s volume) marks 5 cases and catches 1 of the 5 wrong-side ones, so it does not work. Written up as options; `confidence_core` and the default method are unchanged.
+- **"What confidence.core means"** added to the write-up for the reasoner: roughly the chance the volume is on the right side of every cut-off; not steady in volume (0 mL 0.91, 21 mL 0.36, 100 mL 0.53 at average inputs).
+- **Remaining, for Parsa (a DEC):** the method choice (cut-off distance alone or v2) and how complete misses are handled. Nothing goes back to Lorna.
+- **Tests:** 593 passed.
+- **Notion sync:** none from the review.
+
+## 2026-11-15, Claude Code session (Lorna, Vision A Task 2: confidence, built on fake data)
+- **Branch `lorna/confidence` from `main` at `dfc832f`.** Design approved by Parsa (15 Nov 2026). Choices agreed with Lorna:
+  - the main error measure is the wrong side of at least one cut-off; a volume error of 10 mL or more is the second;
+  - the no-data signal counts the Tmax > 6 s area plus a 10 mm margin;
+  - log(1 + mL) is used for the volumes;
+  - the cases are split into three equal bands.
+- **`vision/perfusion/confidence.py`:**
+  - **Signals from the scan, never the infarct:**
+    - `at_risk_no_data_share`: no or unreliable Tmax in the Tmax > 6 s area plus 10 mm, inside plain-CT tissue; the whole brain if there is no such area;
+    - `brain_no_data_share`.
+  - **Volume signals:** `add_volume_signals` gives `log_pred_ml` and `log_disagreement`.
+  - **Targets:** `add_targets` gives `large_error` and `error_10ml`.
+  - **The mapping:** `fit_mapping` is a logistic regression on standardised signals, with ridge 1.0 and missing values filled with the training mean, written with scipy so no new dependency is needed. `predict_confidence` gives confidence.core = 1 − P(large error).
+  - **Cross-fitting:** `cross_fitted_confidence` fits on 4 folds and scores the 5th.
+  - **For inference:** `confidence_core` scores one case from a saved mapping.
+  - **Bands and the check:** `bands` gives three equal bands, `band_table` the per-band errors and crossings, and `done_check` whether low beats high, plus the Spearman correlation.
+  - **Penumbra:** `penumbra_confidence` = 1 − the brain's no-data share. It is a data-quality score only.
+  - **Run record:** `write_config` refuses a placeholder experiment ID. `build_metrics` refuses case IDs.
+- **`notebooks/14_visionA_confidence.ipynb`** (CPU). Install and mount are copied from notebook 12. It:
+  1. writes `config.json`;
+  2. reads EXP-27's `per_case.csv` and checks it against the split;
+  3. measures the scan signals from the slim tar (Tmax, CBF and NCCT only);
+  4. computes the cross-fitted confidence and the band table and check;
+  5. fits the final mapping (`mapping.json`) and summarises confidence.penumbra;
+  6. saves `per_case.csv` (Drive only, held-out check first), then `metrics.json`, last.
+
+  `EXPERIMENT` is `EXP-30`, Lorna's Notion row, set in a follow-up commit; the run folder is `runs/EXP-30_visionA_confidence`. Reading EXP-27's table means this branch does not need the unmerged follow-ups code.
+- **`docs/CONFIDENCE_VISION_A.md`:** the method in plain English, with empty results tables for after the run.
+- `schemas/vision_output.json` and `contract/build.py` are unchanged.
+- **Tests:** `tests/test_confidence.py`, 15 tests on fake data. They include:
+  - a leak check: flipping a case's own label leaves its own score unchanged;
+  - an end-to-end metrics test.
+- pytest on Windows: 504 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
+- Plan §7 "Confidence estimates" is not ticked yet: no results. The item's wording ("fold ensemble disagreement or MC dropout") will be updated to the approved method when it is ticked.
+- **Notion sync:** Experiments → EXP-30 added by Lorna (Running); fill in the commit and results after the run. Tasks → Vision A confidence: In progress.
+
+## 2026-11-15 — Parsa's review of PR #6 (Vision B ISLES'24 follow-ups: EXP-28 RSNA geometry, EXP-29 field-of-view rerun)
+- **Merged `origin/main` into the branch** (a merge commit; Mohamed's history kept). The branch was built on the pre-squash PR #3 branch, 8 commits behind main, with 6 conflicts, each resolved by taking main's version and adding the branch's new work:
+  - `isles_check.py`: main's, so `wilson` comes from `vision.haemorrhage.stats` (PR #2), plus `RSNA_FOV_MM`, `FOV_VARIANTS`, `variant_spec` and the field-of-view plumbing. `tests/test_isles_check.py`: main's plus the four field-of-view tests.
+  - `README.md`: main's `22_visionB_operating_point` row kept, the `23_visionB_rsna_geometry` row added after it. `STROKE_COPILOT_PLAN.md`: main's §7 ticks (A1, B4/DEC-26, B5/DEC-25), DEC-25/DEC-26 rows and EXP-17 note kept; the `rsna_geometry.py` and notebook 23 layout lines and the EXP-28/29 text added.
+  - `CHANGELOG.md`: main's entries unchanged; the 14 Nov entry placed above the 13 Nov ones. Heading lists checked against both sides: nothing lost or duplicated.
+  - Notebook 21: main's notebook was identical to the branch's base, so the branch's version holds both main's cleanups and the follow-up. It keeps section 8's save cell, which main lacks: the PR #3 review (`173b6ca`) dropped its code by mistake, so a rerun on main saved nothing. Output-free and valid nbformat; the restored cell and notebook 23's cells were given cell IDs.
+- **Corrections:**
+  - `REPO_REF = 'main'` in notebooks 21 and 23.
+  - 14 Nov entry: the stale "dry-run only, not run on the real data / not run on Colab, every number unmeasured" lines removed (both runs happened: `0172bce`, `fea2c15`). RSNA's "13,201 scans at 250 mm" is after rounding to 10 mm.
+  - ISLES'24's field of view was given as "near 210 mm" from the spacing in `docs/DATA.md`. Measured (EXP-29's `per_case.csv`): median 229.0 mm (p25 215.6, p75 250.2); 95 of 129 under 250 mm, 1 at 250, and 33 over, so matching to 250 mm crops about a quarter of the scans rather than padding them. The crop is about the image centre; whether any head was cut is unverified. Notebook 21's "heads look larger" now says this instead of claiming it for every scan.
+  - EXP-29 at EXP-17's proposed 0.175, counted from `per_case.csv` (counts only): 68 of 129 unmatched (52.7%, Wilson 95% CI 44.1–61.1%) against 64 of 129 matched (49.6%, 41.1–58.1%); 54 under both, 14 only unmatched, 10 only matched; exact McNemar p ≈ 0.54. At 0.278 re-checked: 45 against 42, 34 under both, flips 11 and 8, p ≈ 0.65. Added to the 14 Nov entry and the plan's Vision B line.
+  - Item 1, top-scan review, partly recorded from Mohamed's Drive sheet (read at review, not in `per_case.csv`; counts only): the 8 highest-scoring scans at 5 mm are calcification 3, hyperdense vessel 2, artefact 2, nothing obvious 1, none read as a bleed. All 8 score 0.66–0.99, above both thresholds, so they do not separate 0.175 from 0.278.
+- **Still open, needs the images:** the top-scan review by cause for the scans between 0.175 and 0.278 (the part that bears on the threshold choice), with the result moved into `per_case.csv`'s `review` column or this CHANGELOG rather than a separate sheet; and a look at the 33 cropped scans for a cut head.
+- pytest: 565 passed.
+- **Notion sync:** none from the review (the 14 Nov entry's list stands, with item 1 now partly done).
+
 ## 2026-11-15 — Parsa's review of PR #8 (Hana's vLLM adapter, DEC-24)
 - **Fixes to `providers.VLLMJSON`:**
   1. Default `max_tokens` 8000 (`VLLM_MAX_TOKENS`), not the Claude default 16000: vLLM rejects a request whose prompt plus `max_tokens` exceeds `--max-model-len`, and the system prompt is about 6k–7k tokens on the Qwen and Gemma tokenizers. Server errors still stop the run loudly.
@@ -18,6 +196,53 @@
 - **Remaining:** Parsa's decisions (HF token on the pod for gated models; HAI-DEF terms for MedGemma; thinking on or off per model; a 4-bit Qwen3.5-27B that fits 24 GB; Qwen2.5-32B base vs instruct), then a one-request GPU dummy per model (does weights plus a 16k context fit 24 GB, and does vLLM's structured-output backend accept every keyword in `prompt.api_schema()`), then wiring `serve_command` into a pod job.
 - pytest: 578 passed (567 before the review).
 - **Notion sync:** none from the review.
+
+## 2026-11-14 — Lorna (Vision A error-analysis follow-ups, EXP-27; 7 working sessions folded into one entry at review)
+- **Branch `lorna/error-analysis-followups`**, from `main` at `dfc832f`: the four follow-ups from Parsa's PR #1 review (all five folds, artery groups and onset, AI outlines on the pictures), in one notebook and one Colab run.
+- **Code, `error_analysis`:**
+  - `five_fold_table` joins the five nnU-Net folds (EXP-14, EXP-18 to 21) with EXP-1 (`within_tmax6`). It stops, with counts only, on a repeated fold or case, a fold mismatch or a wrong total.
+  - `is_overcall` / `is_undercall`: the AI's volume is larger / smaller than the true volume and on the wrong side of at least one cut-off (21, 31, 51, 70 mL), at any Dice. `five_fold_counts` gives the misses, the miss rate under and over 21 mL, over- and under-calls, and the visible and no-data comparisons, overall and per fold.
+  - `exp25_check` compares with Parsa's EXP-25 numbers (`EXP25_REFERENCE`, from the CHANGELOG); `compare_with_per_case` does a case-by-case check.
+  - `artery_group` / `add_artery_groups`: the nearest artery within 5 mm (`volumes.DISTANCE_LIMIT_MM`), else "too far", "no occlusion found" or "unknown". `onset_summary` gives onset to scan, misses against the rest.
+  - **Bug found by Lorna, fixed in `0cd342c`:** `artery_group` first used only the reason "ok", so every artery except ICA and basilar fell into "unknown". It now uses "ok", "too_far", "ambiguous" and any "nearest_*" reason.
+  - `case_figure(..., prediction=...)` draws the AI's outline in cyan next to the red infarct, with a legend; `load_prediction` and `find_mask_dir` read the EXP-22 masks. `write_followup_config` and `followup_metrics` refuse placeholder IDs and case IDs.
+  - **Tests:** 79 in `test_error_analysis.py`, including the notebook's steps end to end on fake tables and the artery reasons through `case_features()`.
+- **Notebook 13** (`notebooks/13_visionA_error_analysis_followups.ipynb`, CPU) checks the inputs, writes `config.json`, builds the five-fold table, runs `case_features` on the 129 development cases, prints the counts, artery groups and onset, runs the EXP-25 check, draws the fold-0 pictures with the EXP-22 outlines, and saves `per_case.csv` (Drive only) and `metrics.json`. Counts only, never case IDs.
+- **EXP-27** (`runs/EXP-27_visionA_error_followups/`): `config.json` written at `f493883`, results from the rerun at `0cd342c` after the artery fix, into the same folder. `metrics.json` records both commits. Accepted by Parsa as a documented exception. All numbers except the artery groups were the same in both runs.
+- **Key results (129 cases):** 39 Dice 0, 34 of 84 under 21 mL against 5 of 45 at 21 mL and over. 9 over-calls (1 of them Dice 0, Miss 8) against 34 under-calls (5 Dice 0). Median visible share 35% for misses against 62%. At least 5% with no data: 13 of 39 misses against 14 of 90. Onset known for 59, no clear difference. Artery groups within 5 mm: MCA 45 / 12 Dice 0, ICA 13 / 3, too far 61 / 17; ACA, posterior and no occlusion are too small to conclude. EXP-25 check: 0 of 51 numbers differ.
+- **Fold-0 pictures:** Miss 8's AI outline sits in a different, deeper place (an over-call); Miss 1 and 2 have none; Miss 4 has marks only on 7 other slices. Lorna confirmed the Miss 1, 2 and 8 readings.
+- **Plan §7** "Error analysis" is ticked; the write-up is `docs/ERROR_ANALYSIS_VISION_A.md`.
+- **Open points:** the EXP-25 case-by-case check was skipped (EXP-25 has no per-case csv); the TopCoW label numbering is unconfirmed; no significance tests on the five-fold groups.
+- pytest on Windows: 521 passed, 5 skipped, 9 failed, the same 9 as before (8 Windows-only, 1 missing `cv2`).
+- **Notion sync:**
+  - Experiments → EXP-27: Done; Git commit `0cd342c` (first run `f493883`, which wrote `config.json`); add the results above.
+  - Experiments → EXP-15: point to EXP-27 for the five-fold follow-ups.
+  - Tasks → Vision A error analysis (Task 1): Done; link the write-up.
+
+## 2026-11-14 — Claude Code session (Vision B: RSNA slice spacing and field of view, PR #3 review items 2 and 3)
+- **Scope:** Parsa's PR #3 review, open items 2 (RSNA's real slice thickness) and 3 (the ISLES'24 rerun with the field of view matched). The runs are Mohamed's. Branch `mohamed/isles-followup`, from `mohamed/isles-check`.
+- **`data/rsna_geometry.py`** (tested): from the shard index only, no images, per RSNA training scan:
+  - the gap between neighbouring slice centres (`z_mm`, ImagePositionPatient z): the slice interval, not the slice thickness, which RSNA's files do not carry (plan §5.2). Uneven spacing, repeated positions and missing z are counted;
+  - field of view = 512 × `pixel_spacing_mm`. The image size is not in the index, so RSNA's documented 512 is assumed;
+  - the distribution across scans, the share within 0.25 mm of the documented 5 mm, and the most common values.
+- **`notebooks/23_visionB_rsna_geometry.ipynb`** (Kaggle, CPU): reads the four index files, rebuilds the split (checked against EXP-6's fingerprint when its `metrics.json` is attached), keeps training rows only, refuses to run if `ALLOW_RSNA_TEST` is set, and saves `config.json` and `metrics.json` after an ID check.
+- **EXP-28 (Mohamed, Kaggle CPU, `0172bce`):** 17,398 RSNA training scans; split matches EXP-6.
+  - Slice spacing (gap between slice centres): median 5.037 mm, p5 5.0, p95 5.473, range 1.946–6.928 mm; 11,475 scans (66.0%) within 0.25 mm of the documented 5 mm. Most common (rounded to 0.25 mm): 5 mm 9,410 scans, 5.25 mm 3,602, 5.5 mm 3,150, 2.75 mm 347, 2.5 mm 198. So RSNA is mostly 5–5.5 mm, with about 3% near 2.5 mm. A table step of 5.25–5.5 mm is what a 5 mm interval gives with a 18–25° gantry tilt (5 / cos θ); that is a possible reading, not checked, since tilt is not in the index. 3,579 scans (20.6%) have uneven spacing (largest gap over 1.1 times the smallest) and 116 a repeated position. Head extent median 162.8 mm (p5 138.7, p95 190.0). The 5 mm slab target stands.
+  - Field of view (512 × pixel spacing): median 250.0 mm, p5–p95 216.0–253.3 mm, range 150–500 mm; rounded to 10 mm, 13,201 scans (75.9%) are at 250 mm, then 220 (1,236), 230 (1,029) and 240 (663). Pixel spacing median 0.4883 mm, constant within every scan. ISLES'24's measured field of view (EXP-29's `per_case.csv`, corrected at review) is median 229.0 mm (p25 215.6, p75 250.2): 95 of 129 scans are under 250 mm, where heads fill more of the image than in RSNA and matching pads with air, but 33 are over 250 mm, so matching to 250 mm crops about a quarter of the scans rather than padding them. Whether any head was cut is unverified.
+- **Item 3, code:** `isles_check.py` variants can now carry a field of view (`variant_spec`; a number is a slab thickness, a dict may add `fov_mm`). `FOV_VARIANTS` scores 5 mm slabs as in EXP-16 and 5 mm slabs cropped or padded with air to `RSNA_FOV_MM` = 250 mm (EXP-28's median), so the change in positive calls is paired scan by scan. `VARIANTS` and EXP-16's behaviour are unchanged (tested).
+- **Notebook 21:** section 8's save cell restored (it had lost its code, so a rerun saved nothing). `VARIANT_SET` picks `'fov'` (the follow-up) or `'standard'` (EXP-16); the run folder is `<EXP>_visionB_isles_fov` for the follow-up. Section 5 prints whether the unchanged reading reproduces EXP-16's 45 calls. `REPO_REF` is `main` (set at review).
+- **EXP-29 (Mohamed, Colab T4, `fea2c15`):** notebook 21 with `VARIANT_SET = 'fov'`, 129 of 129 development scans, none failed, 8.0 min.
+  - 5 mm slabs as in EXP-16: 45 of 129 called positive at the provisional 0.278 (34.9%, 95% CI 27.2–43.4%). **EXP-16 reproduced exactly.**
+  - 5 mm slabs with the field of view matched to RSNA's 250 mm: 42 of 129 (32.6%, 95% CI 25.1–41.0%).
+  - Paired: 34 positive under both, 11 only as in EXP-16, 8 only when matched. Exact McNemar test on the 19 discordant scans, two-sided p = 0.65.
+  - At EXP-17's proposed 0.175 (counted at review from `per_case.csv`): 68 of 129 as in EXP-16 (52.7%, 95% CI 44.1–61.1%) against 64 of 129 matched (49.6%, 41.1–58.1%); 54 positive under both, 14 only as in EXP-16, 10 only when matched; exact McNemar p ≈ 0.54.
+  - **Reading:** matching the field of view barely changes the rate (3 fewer, not significant), so the mismatch does not explain the ~35%. It does move 19 of 129 calls (14.7%) in one direction or the other, so many ISLES'24 scores sit close to the threshold and depend on image scale. The same holds at 0.175 (4 fewer, 24 moved).
+- **Item 1, top-scan review (partial; read from Mohamed's Drive sheet at review, not in `per_case.csv`):** the 8 highest-scoring scans on 5 mm slabs, by eye: calcification 3, hyperdense vessel 2, artefact 2, nothing obvious 1; none read as a bleed. All 8 have 5 mm confidence 0.66–0.99, above both 0.175 and 0.278, so they do not separate the two thresholds. The scans between 0.175 and 0.278 were not reviewed.
+- pytest: 491 passed (8 new: 4 geometry, 4 field of view; `test_real_repo_is_clean` needs a git checkout and was run separately).
+- **Notion sync** (not done; for Mohamed):
+  - Experiments → EXP-28: median slice spacing 5.037 mm (66.0% within 0.25 mm of 5 mm), median field of view 250.0 mm (p5–p95 216.0–253.3), commit `0172bce`, Done.
+  - Experiments → EXP-29: 42/129 (32.6%) with the field of view matched, against 45/129 as in EXP-16 (reproduced); paired flips 11 and 8, p = 0.65; commit `fea2c15`, Done.
+  - Tasks → Vision B "Domain shift check": items 2 and 3 done; item 1 (top-scan review) partly done: top 8 by cause recorded, the scans between 0.175 and 0.278 still open.
 
 ## 2026-11-14 — Hana (NLP A: providers.py adapter for the open models, DEC-24)
 - **`providers.VLLMJSON`** (new): one adapter for every open model in DEC-24 (Qwen3.5-27B, MedGemma 27B text, Gemma 3 27B, and the Baichuan-M2-32B / Qwen2.5-32B fallback), served by vLLM's OpenAI-compatible server on the rented 4090 (DEC-21). Only `model` and `base_url` change between models.
