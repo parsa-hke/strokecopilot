@@ -22,7 +22,7 @@
 
   `compare_versions` cross-fits every version on the same cases and reports each band table, done check (now with under-calls in the high band) and final mapping. All versions are kept. `fit_mapping`, `cross_fitted_confidence` and `confidence_core` take any version's signals.
 - **Notebook 14:** slab check (section 5), signals alone (6), the three versions side by side with band tables and final weights (7), `mapping_v1/v2/v3.json` and penumbra (8), save (9).
-  - **The notebook stops if the run folder's `config.json` is from the first run.** That file predates the changes, so the run needs a new Experiments number, or the old file moved aside. `EXPERIMENT` is still `EXP-30` until Lorna decides.
+  - **The notebook stops if the run folder's `config.json` is from the first run,** because that file predates the changes. The rerun is EXP-31 (Lorna's new Notion row), set in a follow-up commit; its folder is `runs/EXP-31_visionA_confidence`.
 - **`docs/CONFIDENCE_VISION_A.md`** now has:
   - the measurement area and the five signals;
   - the three versions;
@@ -37,7 +37,7 @@
 - pytest on Windows: 513 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
 - **Notion sync:**
   - Experiments → EXP-30: record the first run's results, and that the method changed after it.
-  - A new Experiments row for the rerun, if Lorna chooses one.
+  - Experiments → EXP-31 added by Lorna for the rerun (Running); fill in the commit and results after the run.
   - Tasks → Vision A confidence: In progress.
 
 ## 2026-11-15, Claude Code session (Lorna, Vision A Task 2: confidence, built on fake data)

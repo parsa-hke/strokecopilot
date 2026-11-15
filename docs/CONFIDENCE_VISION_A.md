@@ -2,7 +2,7 @@
 
 Lorna, Vision A. Task 2 of `docs/team/lorna_vision_a.md`. Design approved by Parsa, 15 Nov 2026; Parsa then left the final design to Lorna.
 
-**Status:** a first run (EXP-30 at `aac4cb0`) is recorded below. It showed two problems, so the method was changed: missing data is now counted only where the perfusion scan looks, and two new signals were added. Three versions are now fitted side by side. Their results are empty until the next Colab run (notebook 14). Lorna then picks a version and writes down why.
+**Status:** a first run (EXP-30 at `aac4cb0`) is recorded below. It showed two problems, so the method was changed: missing data is now counted only where the perfusion scan looks, and two new signals were added. Three versions are now fitted side by side. Their results are empty until the next Colab run (notebook 14, EXP-31). Lorna then picks a version and writes down why.
 
 ## What this is for
 
@@ -68,7 +68,7 @@ This run used v1 and counted missing data over all plain-CT tissue. It is kept h
 
 *To fill in after the next Colab run.*
 
-**Run:** EXP-?, notebook `notebooks/14_visionA_confidence.ipynb`, commit `?`. Inputs: EXP-27's `per_case.csv` and the slim tarball. Outputs on Drive in `runs/EXP-?_visionA_confidence/`.
+**Run:** EXP-31, notebook `notebooks/14_visionA_confidence.ipynb`, commit `?`. Inputs: EXP-27's `per_case.csv` and the slim tarball. Outputs on Drive in `runs/EXP-31_visionA_confidence/`.
 
 **Slab check** (share of tissue with no Tmax data):
 
