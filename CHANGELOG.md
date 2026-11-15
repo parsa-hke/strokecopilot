@@ -1,18 +1,21 @@
 # CHANGELOG
 
 ## 2026-11-15 — Parsa's review of PR #7 (Lorna's Vision A error-analysis follow-ups, EXP-27)
-- **Notebook 13:** `REPO_REF` is `main`, for reruns after merge. Still output-free.
+- **Notebook 13:** `REPO_REF` is `main`, for reruns after merge. The per-fold table shows `no_infarct`. Still output-free.
+- **Code, cases with no final infarct (0 mL):** `error_analysis.has_no_infarct`, `is_miss` (Dice 0 on a case with a final infarct) and `miss_kind` (the `miss` column, now with "no infarct"). These cases score Dice 0 whenever anything is marked, but miss nothing. They are now counted apart (`no_infarct`) and left out of the Dice-0 miss counts, the miss rate by size, both sides of the miss comparisons, the onset groups, `group_summary`'s `dice0`, `miss_profile` and the figure picks. They stay in the over-call and under-call counts. The follow-up `config.json` definitions say so. 5 new tests (84 in `test_error_analysis.py`). No fold-0 (EXP-15) number changes: fold 0 has no such case.
 - **Write-up** (`docs/ERROR_ANALYSIS_VISION_A.md`):
   1. Artery groups: "does not seem to change how often the AI misses" (3/13 ICA, 12/45 MCA) now says no difference was seen, but the groups are too small to rule one out.
-  2. "Missed by both" explained: Dice < 0.05 for both methods (52 cases), a looser line than the 39 Dice-0 misses; the AI alone is under 0.05 in 55.
-  3. Added: 10 of 129 predictions are empty, all of them misses; 25 of the 39 misses have under 1 mL predicted.
-  4. Note where the five-fold misses are given: 2 of the 39 have no final infarct (0 mL; the AI marked 0.35 and 3.9 mL, both fold 2). They score Dice 0 but miss nothing, so 37 are real misses and the small-infarct count is 32 of 82.
+  2. "Missed by both" explained: Dice < 0.05 for both methods, a looser line than Dice 0, so it is larger than the Dice-0 misses (restated in 4).
+  3. Added: 10 of 129 predictions are empty, all of them misses; how many misses have under 1 mL predicted (restated in 4).
+  4. 2 of the 39 have no final infarct (0 mL; the AI marked 0.35 and 3.9 mL, both fold 2). With the code change above, **every five-fold count that involves misses is restated**, recomputed at review from EXP-27's `per_case.csv` with the new rule, not by a notebook rerun (`metrics.json` on Drive still has the old counts): 37 misses of 127 cases with a final infarct; 32 of 82 under 21 mL against 5 of 45; fold 2 has 5 misses, not 7; 24 of the 37 have under 1 mL predicted; missed by both 50 and AI alone under 0.05 in 53; MCA 11 Dice 0, "no occlusion found" 1, front 17. Visible share, no-data, onset, over-call and under-call counts are unchanged. The write-up's section intro and Limits say this.
   5. The intro's "this draft" is now "this write-up". Figure legends unchanged.
-  6. After "no significance test was run": the size and visible-share gaps are large at 129 cases, but size and visibility go together, so they cannot be separated here. No p-values added.
+  6. After "no significance test was run": the size and visible-share gaps are large at 129 cases, but size and visibility go together, and the split by size (7) cannot fully separate them. No p-values added.
+  7. Added the visible share split by size: under 21 mL, median 35% for misses (31 with data) against 53% (50); at 21 mL and over, 22% (5) against 69% (40). The gap shows in both groups, but size still varies inside each, so it hints, not proves.
 - **EXP-27 config exception accepted:** the rerun at `0cd342c` wrote `per_case.csv` and `metrics.json` into the folder whose `config.json` is from `f493883`. It is documented in the write-up's Limits, and `metrics.json` records both commits.
 - **CHANGELOG:** Lorna's 7 working entries are folded into one (2026-11-14 below). The stale "artery numbers need a rerun" line is dropped; the rerun happened.
-- **Back to Lorna:** handle the 2 no-infarct cases in code and restate every count; optionally, the visible shares split by size group.
-- `pytest` (Mac): 589 passed.
+- **Lorna's own entry below** keeps the counts as her run gave them (39 Dice 0); the restated counts are in this entry and the write-up.
+- **Back to Lorna:** only rerun notebook 13 after merge, to refresh `metrics.json` and the figures with the new rule.
+- `pytest` (Mac): 594 passed.
 - **Notion sync:** none from this review.
 
 ## 2026-11-14 — Lorna (Vision A error-analysis follow-ups, EXP-27; 7 working sessions folded into one entry at review)

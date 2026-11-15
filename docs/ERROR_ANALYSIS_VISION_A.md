@@ -25,7 +25,7 @@ Most of this write-up covers fold 0 only (26 cases). The section "Five-fold foll
 - **Tmax:** how late blood arrives at each spot in the brain on the first scan. Over 6 seconds (Tmax > 6 s) is a sign that the tissue is at risk.
 - **No perfusion data:** spots where the perfusion scan has no value (Tmax −30 in the files). Spots with any Tmax below 0 are treated as unreliable (plan §8.1).
 - **Fold 0:** our cases are split into five groups (folds). The AI was trained on four of them and tested on fold 0, which it had not seen. Fold 0 has 26 cases.
-- **Miss:** a case where the AI's Dice is 0, meaning its outline does not touch the infarct at all.
+- **Miss:** a case where the AI's Dice is 0, meaning its outline does not touch the infarct at all. A case with no final infarct (0 mL) is not a miss, even if it scores Dice 0.
 
 ## The question
 
@@ -140,77 +140,92 @@ Two new terms:
 - **Over-call:** the AI's volume is larger than the true volume and lands on the wrong side of at least one cut-off (21, 31, 51 or 70 mL), at any Dice.
 - **Under-call:** the mirror: the AI's volume is smaller than the true volume and lands on the wrong side of at least one cut-off, at any Dice.
 
+**Recomputed at review.** Parsa's review of PR #7 (15 Nov 2026) found 2 cases with no final infarct (true volume 0 mL). They score Dice 0, but nothing was missed, so they no longer count as misses. The counts in this section were recomputed at the review from EXP-27's `per_case.csv`, with this new rule (`error_analysis.is_miss`). This was not a notebook rerun: EXP-27's `metrics.json` on Drive still has the old counts (39 Dice 0) until notebook 13 is rerun. Counts that do not involve misses did not change.
+
 ### Misses over all five folds
 
 | | Cases | Dice 0 |
 |---|---|---|
-| All cases | 129 | 39 |
-| Under 21 mL | 84 | 34 |
+| With a final infarct | 127 | 37 |
+| Under 21 mL | 82 | 32 |
 | 21 mL and over | 45 | 5 |
+| No final infarct (0 mL), not misses | 2 | |
 
-- **The fold-0 pattern holds.** The AI scores Dice 0 on 39 of 129 cases. Small infarcts are missed far more often: 34 of 84 under 21 mL, against 5 of 45 at 21 mL or more. In fold 0 alone it was 7 of 17 against 2 of 9.
-- **Most misses are empty or nearly empty.** The AI marked nothing at all in 10 of the 129 cases, and all 10 are misses. In 25 of the 39 misses, it marked under 1 mL.
-- **Note: 2 of the 39 are not missed infarcts.** In 2 cases, both in fold 2, there is no final infarct: the true volume is 0 mL. The AI marked 0.35 and 3.9 mL. With no infarct to overlap, the code scores them Dice 0 and counts them as misses, but nothing was missed. So 37 of the 39 are real misses, and the small-infarct count becomes 32 of 82. The tables in this section still count all 39. Handling these 2 cases in the code, and restating the counts, is left as a follow-up.
+- **The fold-0 pattern holds.** The AI scores Dice 0 on 37 of the 127 cases with a final infarct. Small infarcts are missed far more often: 32 of 82 under 21 mL, against 5 of 45 at 21 mL or more. In fold 0 alone it was 7 of 17 against 2 of 9.
+- **No final infarct.** In 2 cases, both in fold 2, the follow-up scan shows no infarct. The AI marked 0.35 and 3.9 mL, which scores Dice 0, but there was nothing to miss, so they are counted apart.
+- **Most misses are empty or nearly empty.** The AI marked nothing at all in 10 of the 129 cases, and all 10 are misses. In 24 of the 37 misses, it marked under 1 mL.
 
 ### Over-calls and under-calls
 
-- **Under-calls are much more common than over-calls:** 34 under-calls (5 of them Dice 0) against 9 over-calls (1 of them Dice 0). When the AI lands on the wrong side of a cut-off, it is mostly because it predicted too little.
+- **Under-calls are much more common than over-calls:** 34 under-calls (5 of them Dice 0) against 9 over-calls (1 of them Dice 0). When the AI lands on the wrong side of a cut-off, it is mostly because it predicted too little. The 2 cases with no final infarct are neither.
 - **Miss 8's pattern is rare.** Only 1 case in 129 is both an over-call and Dice 0, and it is Miss 8 in fold 0.
 
 **Per fold:**
 
-| Fold | Cases | Dice 0 | Over-calls | Over-calls, Dice 0 | Under-calls | Under-calls, Dice 0 |
-|---|---|---|---|---|---|---|
-| 0 | 26 | 9 | 2 | 1 | 5 | 2 |
-| 1 | 26 | 9 | 1 | 0 | 5 | 0 |
-| 2 | 26 | 7 | 1 | 0 | 10 | 1 |
-| 3 | 26 | 5 | 4 | 0 | 5 | 1 |
-| 4 | 25 | 9 | 1 | 0 | 9 | 1 |
-| **All** | **129** | **39** | **9** | **1** | **34** | **5** |
+| Fold | Cases | Dice 0 | No final infarct | Over-calls | Over-calls, Dice 0 | Under-calls | Under-calls, Dice 0 |
+|---|---|---|---|---|---|---|---|
+| 0 | 26 | 9 | 0 | 2 | 1 | 5 | 2 |
+| 1 | 26 | 9 | 0 | 1 | 0 | 5 | 0 |
+| 2 | 26 | 5 | 2 | 1 | 0 | 10 | 1 |
+| 3 | 26 | 5 | 0 | 4 | 0 | 5 | 1 |
+| 4 | 25 | 9 | 0 | 1 | 0 | 9 | 1 |
+| **All** | **129** | **37** | **2** | **9** | **1** | **34** | **5** |
 
 ### What the first scan showed
 
+The 2 cases with no final infarct are in neither column.
+
 | | Misses (Dice 0) | Other cases |
 |---|---|---|
-| Cases | 39 | 90 |
+| Cases | 37 | 90 |
 | With reliable data for the visible share | 36 | 90 |
 | Median share of infarct visible (Tmax > 6 s) | 35% | 62% |
 | Under 25% visible | 16 | 14 |
 | At least 5% of the infarct with no perfusion data | 13 | 14 |
 
-- **Misses showed less of the infarct as at risk.** The median visible share is 35% for misses against 62% for the other cases. 16 of the 36 misses with reliable data are under 25% visible, against 14 of 90 other cases. This is a clearer gap than in fold 0, but no significance test was run. At 129 cases, the gaps between small and large infarcts and in the visible share are both large, but small infarcts also tend to show less, so size and visibility go together and cannot be separated here.
-- **Missing perfusion data is more common in misses:** 13 of 39 misses have at least 5% of the infarct with no data, against 14 of 90 other cases.
+- **Misses showed less of the infarct as at risk.** The median visible share is 35% for misses against 62% for the other cases. 16 of the 36 misses with reliable data are under 25% visible, against 14 of 90 other cases. This is a clearer gap than in fold 0, but no significance test was run. At 129 cases, the gaps between small and large infarcts and in the visible share are both large, but small infarcts also tend to show less, so size and visibility go together. The split by size below helps, but it cannot fully separate them.
+- **Missing perfusion data is more common in misses:** 13 of 37 misses have at least 5% of the infarct with no data, against 14 of 90 other cases.
+
+**Visible share split by size** (median; cases with reliable data in brackets):
+
+| | Misses (Dice 0) | Other cases |
+|---|---|---|
+| Under 21 mL | 35% (31 of 32) | 53% (50 of 50) |
+| 21 mL and over | 22% (5 of 5) | 69% (40 of 40) |
+
+- **The gap shows in both size groups.** Under 21 mL, 13 of 31 misses are under 25% visible, against 10 of 50 other cases. At 21 mL and over, it is 3 of 5 against 4 of 40, but that group has only 5 misses.
+- Size still varies a lot inside each group, and no test was run. So this hints that visibility matters apart from size, but does not prove it.
 
 ### Onset to scan
 
-Onset to scan time is known for 59 of the 129 cases. The median is 122 minutes for misses (18 cases) and 133 minutes for the rest (41 cases). There is no clear difference.
+Onset to scan time is known for 59 of the 129 cases. The median is 122 minutes for misses (18 cases) and 133 minutes for the rest (41 cases). There is no clear difference. Neither case with no final infarct has an onset time.
 
 ### Artery groups
 
 Each case is grouped by the artery its blockage sits next to, left and right counted together, but only when the blockage is within 5 mm of that artery's label. Blockages farther away are "too far". These counts come from the rerun at `0cd342c`, after a bug fix: the first run put every artery except ICA and basilar under "unknown".
 
-"Missed by both" means both methods scored under 0.05, as before; "missed by the AI only" means only the AI did. This is a looser line than Dice 0, so "Missed by both" (52) is larger than the 39 Dice-0 misses. The AI alone scored under 0.05 in 55 cases: 52 missed by both, plus 3 missed by the AI only.
+"Missed by both" means both methods scored under 0.05, as before; "missed by the AI only" means only the AI did. This is a looser line than Dice 0, so "Missed by both" (50) is larger than the 37 Dice-0 misses. The AI alone scored under 0.05 in 53 cases with a final infarct: 50 missed by both, plus 3 missed by the AI only. The 2 cases with no final infarct are in none of these columns.
 
-| Artery group | Cases | Dice 0 | Missed by the AI only | Missed by both |
-|---|---|---|---|---|
-| MCA | 45 | 12 | 2 | 17 |
-| ICA | 13 | 3 | 0 | 5 |
-| ACA | 4 | 3 | 0 | 3 |
-| PCA | 3 | 1 | 0 | 1 |
-| Basilar | 1 | 1 | 0 | 1 |
-| No occlusion found | 2 | 2 | 0 | 2 |
-| Too far (over 5 mm) | 61 | 17 | 1 | 23 |
-| **All** | **129** | **39** | **3** | **52** |
+| Artery group | Cases | No final infarct | Dice 0 | Missed by the AI only | Missed by both |
+|---|---|---|---|---|---|
+| MCA | 45 | 1 | 11 | 2 | 16 |
+| ICA | 13 | 0 | 3 | 0 | 5 |
+| ACA | 4 | 0 | 3 | 0 | 3 |
+| PCA | 3 | 0 | 1 | 0 | 1 |
+| Basilar | 1 | 0 | 1 | 0 | 1 |
+| No occlusion found | 2 | 1 | 1 | 0 | 1 |
+| Too far (over 5 mm) | 61 | 0 | 17 | 1 | 23 |
+| **All** | **129** | **2** | **37** | **3** | **50** |
 
-| Front or back of the brain | Cases | Dice 0 |
-|---|---|---|
-| Front (anterior: ACA, ICA, MCA) | 62 | 18 |
-| Back (posterior: PCA, basilar) | 4 | 2 |
-| No occlusion found | 2 | 2 |
-| Too far (over 5 mm) | 61 | 17 |
+| Front or back of the brain | Cases | No final infarct | Dice 0 |
+|---|---|---|---|
+| Front (anterior: ACA, ICA, MCA) | 62 | 1 | 17 |
+| Back (posterior: PCA, basilar) | 4 | 0 | 2 |
+| No occlusion found | 2 | 1 | 1 |
+| Too far (over 5 mm) | 61 | 0 | 17 |
 
-- **In the large groups, the miss rate is about the same as overall.** The AI scores Dice 0 on 12 of 45 MCA cases, 3 of 13 ICA cases and 17 of 61 "too far" cases: about 1 in 4 to 3 in 10, against 39 of 129 overall. No difference between the arteries was seen, but these groups are too small to rule one out.
-- **The small groups are too small to conclude.** ACA (4 cases), the back of the brain (4 cases) and "no occlusion found" (2 cases) are mostly misses, but a handful of cases cannot show a pattern. So this data cannot say whether the AI does worse in the back of the brain.
+- **In the large groups, the miss rate is about the same as overall.** The AI scores Dice 0 on 11 of the 44 MCA cases with a final infarct, 3 of 13 ICA cases and 17 of 61 "too far" cases: about 1 in 4 to 3 in 10, against 37 of 127 overall. No difference between the arteries was seen, but these groups are too small to rule one out.
+- **The small groups are too small to conclude.** ACA (4 cases, 3 missed), the back of the brain (4 cases, 2 missed) and "no occlusion found" (2 cases: 1 missed, 1 with no final infarct) cannot show a pattern. So this data cannot say whether the AI does worse in the back of the brain.
 - Almost half the blockages (61 of 129) sit more than 5 mm from any artery label, so their artery is uncertain.
 - Over all five folds, 3 cases are missed by the AI alone (under 0.05 while the threshold baseline scored 0.05 or more). In fold 0 there were none.
 
@@ -305,3 +320,4 @@ The ideas below are untested. Where EXP-27 has already checked something, the re
   - The first run was at `f493883`. It was rerun at `0cd342c` after the artery-group fix.
   - The run folder kept the `config.json` written at `f493883`, because it is written once, before the first run. `per_case.csv` and `metrics.json` are from `0cd342c`, and `metrics.json` records both commits.
   - All numbers other than the artery groups were the same in both runs.
+- **Five-fold miss counts recomputed at review, not rerun.** The EXP-27 counts that involve misses were recomputed from its `per_case.csv` at Parsa's review of PR #7, with the rule that a case with no final infarct is not a miss. EXP-27's `metrics.json` and the notebook's printout still show the old counts (39 Dice 0) until notebook 13 is rerun.
