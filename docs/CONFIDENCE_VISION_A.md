@@ -143,3 +143,7 @@ So v2's advantage is small, and Phase 4's held-out cases are its real test.
 - **The version was chosen on the same cases it was scored on.** Picking the best of three flatters the winner a little, and v1 and v2 differ by 2 cases. The real test comes in Phase 4, on the held-out cases.
 - **Simple signals.** They catch doubtful volumes, but not every reason the AI can be wrong, for example tissue that dies after the scan.
 - **The measurement area is approximate.** The holes in the perfusion maps' area are filled slice by slice, so a gap that reaches the edge of the brain on a slice is not counted as missing.
+
+## Future work
+
+- **nnU-Net's per-voxel probabilities.** Before nnU-Net draws its outline, it gives every voxel a probability of being infarct. Those probabilities, before thresholding, could flag near-misses like Miss 1, where the AI may have been unsure but still marked nothing. Getting them needs GPU inference, so this is left for later.
