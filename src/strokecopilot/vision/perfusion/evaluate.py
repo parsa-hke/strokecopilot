@@ -82,3 +82,68 @@ def summarise(rows, metrics=("dice", "dice_reliable", "abs_error_ml", "error_ml"
         "pooled_percentiles": {m: _percentiles([row[m] for row in rows]) for m in metrics},
         "threshold_crossings": crossings,
     }
+
+
+def load_per_case(path, variant=None):
+    """Rows of a per_case.csv (nnU-Net run or threshold baseline), with numbers and booleans parsed. `variant` keeps
+    only that baseline variant (the baseline file holds one row per case per variant)."""
+    import csv
+
+    def parse(key, value):
+        if value in ("", "None", "nan"):
+            return None
+        if key.startswith("crosses_"):
+            return value in ("True", "true", "1", "1.0")
+        try:
+            return float(value)
+        except ValueError:
+            return value
+
+    with open(path, newline="") as f:
+        rows = [{k: parse(k, v) for k, v in row.items()} for row in csv.DictReader(f)]
+    if variant is not None:
+        rows = [row for row in rows if row.get("variant") == variant]
+    for row in rows:
+        row["fold"] = int(row["fold"])
+    return rows
+
+
+def paired_comparison(model_rows, baseline_rows, n_boot=5000, seed=0):
+    """Model against baseline on the same cases (B5, plan §8.1). For Dice and absolute volume error: both means, the
+    mean paired difference (model − baseline) with a bootstrap 95% CI over cases, how many cases each wins, and a
+    Wilcoxon signed-rank p. For each decision cut-off: cases only the model puts on the wrong side, only the baseline,
+    both, and an exact McNemar p on the discordant ones. Cases are matched by `case`; Dice skips cases where either is
+    None. Returns no case IDs."""
+    from scipy import stats
+
+    base = {row["case"]: row for row in baseline_rows}
+    pairs = [(row, base[row["case"]]) for row in model_rows if row["case"] in base]
+    rng = np.random.default_rng(seed)
+    out = {"cases": len(pairs), "metrics": {}, "crossings": {}}
+    for metric, higher_better in (("dice", True), ("abs_error_ml", False)):
+        m = np.array([a[metric] for a, b in pairs if a[metric] is not None and b[metric] is not None], dtype=float)
+        b = np.array([b[metric] for a, b in pairs if a[metric] is not None and b[metric] is not None], dtype=float)
+        diff = m - b
+        boot = diff[rng.integers(0, len(diff), size=(n_boot, len(diff)))].mean(axis=1)
+        nonzero = diff[diff != 0]
+        out["metrics"][metric] = {
+            "n": int(len(diff)), "model_mean": float(m.mean()), "baseline_mean": float(b.mean()),
+            "model_median": float(np.median(m)), "baseline_median": float(np.median(b)),
+            "mean_difference": float(diff.mean()),
+            "ci95": [float(np.percentile(boot, 2.5)), float(np.percentile(boot, 97.5))],
+            "model_better": int(np.sum(diff > 0) if higher_better else np.sum(diff < 0)),
+            "baseline_better": int(np.sum(diff < 0) if higher_better else np.sum(diff > 0)),
+            "ties": int(np.sum(diff == 0)),
+            "wilcoxon_p": float(stats.wilcoxon(nonzero).pvalue) if len(nonzero) > 0 else None,
+        }
+    for cutoff in DECISION_CUTOFFS_ML:
+        key = f"crosses_{cutoff:g}"
+        only_model = sum(a[key] and not b[key] for a, b in pairs)
+        only_base = sum(b[key] and not a[key] for a, b in pairs)
+        discordant = only_model + only_base
+        out["crossings"][f"{cutoff:g}"] = {
+            "model": sum(a[key] for a, _ in pairs), "baseline": sum(b[key] for _, b in pairs),
+            "only_model": only_model, "only_baseline": only_base, "both": sum(a[key] and b[key] for a, b in pairs),
+            "mcnemar_p": float(stats.binomtest(only_model, discordant, 0.5).pvalue) if discordant else None,
+        }
+    return out

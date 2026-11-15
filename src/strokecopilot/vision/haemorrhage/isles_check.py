@@ -28,6 +28,7 @@ import pandas as pd
 
 from strokecopilot.data import rsna, splits
 from strokecopilot.data.prep_rsna import IMAGE_SIZE, JPEG_QUALITY
+from strokecopilot.vision.haemorrhage.stats import wilson  # noqa: F401  (kept as ic.wilson)
 from strokecopilot.vision.haemorrhage import infer
 
 # RSNA's dataset description gives axial 5 mm slices, with one site resampled to 5 mm (plan §5.2). The
@@ -196,16 +197,6 @@ def score(images, predict, calibrator):
     top = np.argsort(-probs, kind="stable")[: max(TOP_SLABS, calibrator.k or 1)]
     return {"raw_score": raw, "confidence": confidence, "present": bool(confidence >= calibrator.threshold),
             "max_slab_prob": float(probs.max()), "top_slabs": [int(i) for i in top]}
-
-
-def wilson(count, n, z=Z95):
-    """Wilson score interval for a proportion. (None, None) when n is 0."""
-    if n == 0:
-        return None, None
-    p = count / n
-    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
-    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
-    return max(0.0, centre - half), min(1.0, centre + half)
 
 
 def _percentiles(values, points=PERCENTILES):
