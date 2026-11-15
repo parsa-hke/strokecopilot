@@ -96,9 +96,14 @@ These are recorded in the Notion Decisions log. Do not change them without a new
 | DEC-16 | Vision B uses all labelled RSNA data, with no subset | Decided |
 | DEC-17 | Vision B preprocesses once to 320 px JPEG tar shards on Kaggle, then trains there, as an exception to DEC-3; only checkpoints and metrics move to Drive | Decided |
 | DEC-21 | Vision A training (nnU-Net on ISLES'24) and, later, Phase 4 open-model inference if an API cannot serve the model, run on a GPU pod rented per job, as an amendment to DEC-3. Provider: Vast.ai, on-demand, one RTX 4090, from verified hosts with reliability ≥ 0.98, ≥ 16 CPU cores, ≥ 32 GB RAM, ≥ 100 GB disk, ≥ 200 Mbps download and a driver for CUDA 12.8, preferring hosts in the US or EU. Amended 5 Nov 2026: the first draft also required datacenter hosts, but no datacenter 4090 was offered under 0.50 USD/h (cheapest 0.72 USD/h), while verified non-datacenter hosts started near 0.40 USD/h. Fallback: RunPod Community Cloud RTX 4090, if no Vast offer passes at under 0.50 USD/h. Budget: 8–15 USD of GPU rental for the whole project, with no persistent volume; every run ends by destroying its pod, and a watchdog on the pod enforces an hour limit per run. No A100: EXP-4 ran this plan (3d_fullres, patch 96 × 128 × 112, batch 4) on a 24 GB L4. Vision A trains 300 epochs per fold, all five folds, fold 0 first. Kaggle keeps RSNA (DEC-17); Drive stays the store; Colab stays for the demo and the thin notebooks (§4.6) | Decided — Parsa, 5 Nov 2026; host filter relaxed by Parsa, 5 Nov 2026 |
-| DEC-20 | The verifier's judge is `claude-haiku-5-5` (effort medium, `judge_v2`) with τ = 0.6; the claim extractor is `claude-sonnet-5-5` (effort medium). Chosen by the EXP-11 bake-off: both judges reach the seeded-error bar with the same recall, Haiku with fewer false flags (0.010 vs 0.019) at about a twentieth of the cost per call | Decided — Parsa, 4 Nov 2026 |
+| DEC-20 | The verifier's judge is `claude-haiku-5-5` (effort medium, `judge_v2`; prompt `judge_v3` since DEC-23) with τ = 0.6; the claim extractor is `claude-sonnet-5-5` (effort medium). Chosen by the EXP-11 bake-off: both judges reach the seeded-error bar with the same recall, Haiku with fewer false flags (0.010 vs 0.019) at about a twentieth of the cost per call | Decided — Parsa, 4 Nov 2026 |
 | DEC-19 | The reasoner gets the whole rulebook in its prompt, not retrieved passages. Retrieval stays only for the verifier's candidate passages (`BAAI/bge-base-en-v1.5`). Experiment arm 1 becomes with vs without the rulebook. Reason: EXP-7 found top-k retrieval missed 6 of 15 key fixture rules, because embeddings cannot tell apart rule rows that differ only in numbers. The rulebook is about 4,600 tokens, so sending it whole is cheap | Decided — Parsa, 4 Nov 2026 |
 | DEC-18 | The corpus is a rulebook in our own words, one passage per criterion, each pointing to its source, section, recommendation and page. It keeps the numeric criteria as facts and copies no wording. The reasoner and judge see only our text; the PDFs stay on Drive for checking. Reason: AHA allows no reproduction without permission, and NEJM reserves text and data mining and AI use (`docs/DATA_USE.md`). The sources in DEC-2 are unchanged | Decided — Parsa, 4 Nov 2026 |
+| DEC-22 | The RSNA split is by patient, 80/10/10 train/validation/test, ranked by a SHA-256 hash of seed 20261103 and patient ID and cut separately for patients with and without a bleed, so validation and test keep the natural bleed rate (EXP-6: 0.4058 and 0.4119 against 0.4085). It is rebuilt in each Kaggle session and never saved. The test split stays closed (`ALLOW_RSNA_TEST`) until the final Vision B model is chosen | Decided — Parsa, 12 Nov 2026 |
+| DEC-23 | The judge prompt is `judge_v3`, amending DEC-20 (model, effort and τ unchanged). It adds how to judge a requirement that is not needed, criteria that are not met, conditional or counterfactual claims, and a reason for a decision. EXP-23: the EXP-11 seeded-error bar is unchanged (min recall 0.80, false flags 0.010), and EXP-12 drops from 23 to 19 flags of 350 against `judge_v2`, with every reasoner error of the earlier reading still flagged. Its examples come from EXP-12, so that gain is in-sample | Decided — Parsa, 12 Nov 2026 |
+| DEC-24 | The reasoner models compared (§8.4) are Claude Sonnet 5.5 (frontier API), Qwen3.5-27B (open mid-size), MedGemma 27B text (small medical) and Gemma 3 27B, MedGemma's base, so medical training is compared in a pair. Open models run on a rented RTX 4090 at 4-bit with vLLM and constrained JSON (DEC-21). MedGemma needs Parsa's reading of the HAI-DEF terms §3.2 first; if they rule it out, Baichuan-M2-32B and its base Qwen2.5-32B replace the pair. No non-Claude frontier model: three of the four are non-Claude, judge bias is reported as verifier-vs-human agreement per model, and GPT-6.1 Sol fits the API budget only if the contingency goes unused. The claim extractor becomes Claude Haiku 5.5 if EXP-24 shows it keeps the seeded-error bar; otherwise Sonnet stays and the matrix shrinks, because four models with the Sonnet extractor cost about 150 USD against about 96 USD left. Shortlist by Hana (Notion, 9 Nov 2026) Amended 12 Nov 2026 after EXP-24 (Haiku failed the uncited-rule bar, recall 0.30, and missed 3 of the 9 EXP-12 reasoner errors): the extractor stays Claude Sonnet 5.5, and the extractor and the Sonnet reasoner run through the Message Batches API (half price, same model). The matrix shrinks: per model, the 5 fixtures with and without the rulebook, 150 scenarios with the rulebook and 75 without, 20 real development cases with predicted vision, ground-truth vision and no rulebook; the 20-case triple repeat for Sonnet only. Estimated about $65 for the main runs and about $85 for the project's API with 20% contingency | Decided — Parsa, 12 Nov 2026 |
+| DEC-25 | The core that feeds the contract (`core_ml`) is the nnU-Net prediction, not the rCBF < 30% threshold. For each development case it is the validation prediction of the fold model that did not train on it, so no case is scored by a model that saw it; how the five fold models are combined for held-out cases is left to Phase 4. EXP-25 (all 5 folds, 129 development cases, paired): Dice 0.215 ± 0.046 against the within-Tmax > 6 s threshold's 0.111 ± 0.031 (paired +0.104, 95% CI +0.078 to +0.133); abs volume error 23.5 against 25.2 mL (paired −1.6 mL, CI −4.5 to +1.3, p 0.35), and wrong side of 21/31/51/70 mL in 30/28/20/17 against 35/29/23/17 cases, none significant. So nnU-Net is no worse on any contract measure and clearly better at locating the infarct, but its volume is not measurably better: the report says so, and keeps the threshold as the comparison. Both under-call lesions of 21 mL or more by a wide margin (abs error about 53 mL); that is the open weakness for B4 and calibration. The penumbra stays Tmax > 6 s (§8.1) | Decided — Parsa, 13 Nov 2026 |
+| DEC-26 | Vision A is two-stage: `core_ml` is the nnU-Net final-infarct prediction used as the core proxy (DEC-25), and `penumbra_ml` is the Tmax > 6 s rule (DEC-7). No core or penumbra heads, because ISLES'24 labels only the final infarct, and no volume calibration. EXP-26 (129 development cases, cross-fitted by fold): the nnU-Net core never exceeds the Tmax > 6 s volume, so no clipping is needed. Large infarcts are under-called (≥ 70 mL: median reference 118 mL, nnU-Net 35 mL, threshold 25 mL, Tmax > 6 s 188 mL; in 7 of 22 the final infarct exceeds the whole Tmax > 6 s region), and not from missing Tmax (median 92% reliable). Of 12 cross-fitted corrections, linear ones made things worse (abs error +2.4 to +2.6 mL; 54–61 cases on the wrong side of 21 mL against 30) and the best robust one gained 0.6 mL with a CI crossing zero; averaging nnU-Net and threshold volumes did best on 31 mL but was chosen after the fact from 16 variants and is not adopted. Scaling the core toward final infarct would also make `core_ml` a predicted final infarct, against trial cut-offs defined on acute core. The gap is reported as a limit (final infarct ≠ acute core, reperfused cohort) and is input to `confidence.core`. A cross-fitted lower probability threshold stays an optional later test | Decided — Parsa, 13 Nov 2026 |
 
 ---
 
@@ -132,7 +137,9 @@ strokecopilot/
 │   │       ├── model.py           # 2D classifier with pretrained backbone
 │   │       ├── train.py
 │   │       ├── aggregate.py       # slice → scan, calibration
-│   │       └── infer.py
+│   │       ├── infer.py
+│   │       ├── isles_check.py     # Phase 3: false-positive check on ISLES'24 native NCCT
+│   │       └── operating_point.py # Phase 3: cross-fitted threshold on validation patients
 │   ├── contract/
 │   │   ├── schema.py              # pydantic model of vision_output.json
 │   │   ├── build.py               # assemble vision_output from A + B predictions
@@ -178,7 +185,8 @@ strokecopilot/
 ├── prompts/
 │   ├── reasoner_v1.md
 │   ├── claim_extractor_v1.md
-│   └── judge_v2.md                # LLM judge for rule claims (§8.4); v1 kept for the record
+│   ├── judge_v2.md                # LLM judge for rule claims (§8.4), DEC-20; v1 kept for the record
+│   └── judge_v3.md                # the judge prompt since DEC-23 (12 Nov 2026)
 ├── notebooks/
 │   ├── 00_download_isles24.ipynb  # Phase 0: resumable download to raw/ + md5 (self-contained)
 │   ├── 00_template.ipynb          # install, mount, copy tarball, load one case
@@ -194,6 +202,8 @@ strokecopilot/
 │   ├── 10_visionA_nnunet.ipynb
 │   ├── 11_visionA_thresholds.ipynb
 │   ├── 20_visionB_train.ipynb     # runs on Kaggle: RSNA split, slice classifier, scan calibration
+│   ├── 21_visionB_isles_check.ipynb # Colab: Vision B on ISLES'24 native NCCT (presumed no bleed)
+│   ├── 22_visionB_operating_point.ipynb # Kaggle: cross-fitted operating point on the RSNA validation split
 │   ├── 30_nlpA_corpus.ipynb
 │   ├── 31_nlpA_reasoner.ipynb
 │   ├── 40_nlpB_verifier.ipynb
@@ -501,21 +511,21 @@ Goal: each component made good; real vision outputs replace fixtures; the multi-
 Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the long GPU runs, the paid model runs, `contract/build.py`, the verifier fixes and the decisions. Lorna: Vision A error analysis and confidence. Mohamed: Vision B operating point and ISLES'24 check. Hana: model shortlist, prompt v2, providers, real inputs. Benny: error taxonomy, comparison notebook, labelling kit. Lorna and Mohamed are the blind labellers.
 
 **Vision A**
-- [ ] All 5 folds for nnU-Net; mean ± std Dice; compare against threshold baseline
-- [ ] Core/penumbra heads or a two-stage approach (predict final infarct = core proxy; penumbra from Tmax) — decide and record
-- [ ] Decide which core feeds the contract: rCBF < 30% threshold or learned model, compared on volume error and decision-threshold crossings (§8.1)
+- [x] All 5 folds for nnU-Net; mean ± std Dice; compare against threshold baseline — done 13 Nov 2026 as EXP-14, EXP-18..21 and the summary EXP-25: Dice 0.215 ± 0.046 over 5 folds against the threshold's 0.111 ± 0.031 (paired +0.104, 95% CI +0.078 to +0.133); abs volume error 23.5 ± 3.9 mL against 25.2 ± 5.0 mL (paired −1.6 mL, CI −4.5 to +1.3, not a clear difference); wrong side of 21/31/51/70 mL in 30/28/20/17 of 129 against 35/29/23/17. Fold costs measured from the Vast credit, about $8.8 for folds 1–4 with failed attempts
+- [x] Core/penumbra heads or a two-stage approach (predict final infarct = core proxy; penumbra from Tmax) — decide and record — DEC-26, 13 Nov 2026: two-stage (nnU-Net core proxy, Tmax > 6 s penumbra), no heads and no volume calibration; EXP-26
+- [x] Decide which core feeds the contract: rCBF < 30% threshold or learned model, compared on volume error and decision-threshold crossings (§8.1) — DEC-25, 13 Nov 2026: nnU-Net (each development case from the fold model that did not train on it). On EXP-25 it is no worse on volume error or crossings and clearly better on Dice; its volume is not measurably better, which the report states
 - [ ] Confidence estimates (`confidence.core/penumbra`) from fold ensemble disagreement or MC dropout
 - [ ] Error analysis: where does the model fail (small lesions, posterior circulation, artefacts)?
 - [ ] `contract/build.py` produces valid `vision_output.json` for every non-held-out case; validate all
 
 **Vision B**
-- [ ] Tune aggregation and threshold for high sensitivity at acceptable specificity (false "no bleed" is the worst failure in the system — state the operating point and why)
-- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate
+- [ ] Tune aggregation and threshold for high sensitivity at acceptable specificity (false "no bleed" is the worst failure in the system — state the operating point and why) — EXP-17 (Mohamed, Kaggle, `ff522bd`): EXP-6's top-2 aggregation kept; threshold cross-fitted on validation patient halves (20 seeds). Proposed 0.175 (96% target): sensitivity 0.961 (95% CI 0.946–0.972), specificity 0.878 (0.859–0.895); on ISLES'24 it would flag 68 of 129 presumed bleed-free scans (52.7%). Parsa's threshold decision pending
+- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate — EXP-16 (Mohamed, 8 Nov 2026, `23e2f92`): at the provisional 0.278, 45 of 129 development scans called positive (34.9%, 95% CI 27.2–43.4%) on 5 mm slabs, 61 of 129 on native thin slices; review of the top scans and a check of RSNA's slice thickness on Kaggle still open
 - [ ] Optional: per-subtype outputs if time allows
 
 **NLP A**
 - [ ] Switch reasoner inputs from fixtures to real `vision_output.json` + generated notes
-- [ ] Prompt v2 informed by Phase 2 verifier findings (what did the model get wrong?)
+- [ ] Prompt v2 informed by Phase 2 verifier findings (what did the model get wrong?) — `prompts/reasoner_v2.md` written 9 Nov 2026 (Hana, from the EXP-12 labels); paid v1/v2 comparison pending (Parsa)
 - [ ] `providers.py`: at least three models — one frontier API model, one open mid-size model (e.g. Llama-class via HF or API), one small medical model. Exact list → Decisions row
 - [ ] Run all three on all fixtures, the synthetic scenarios and a sample of real cases, with and without the rulebook; outputs to `runs/`
 
@@ -644,7 +654,7 @@ Providers: thin wrappers with identical signatures for each model; temperature 0
 
 **Verifier validity.** Plant known fabrications of each sub-type in otherwise clean rationales (`seeded_errors.py`) and report recall per sub-type, plus the false-flag rate on clean rationales. This gives ground truth without depending on the size of the human sample.
 
-**Models compared.** Minimum three: one frontier API model, one open mid-size model, one small medical model. Same prompt version, same rulebook, same inputs, temperature 0 where allowed (§8.3). Exact list → Decisions row.
+**Models compared.** Minimum three: one frontier API model, one open mid-size model, one small medical model. Chosen in DEC-24: Claude Sonnet 5.5, Qwen3.5-27B, MedGemma 27B text, and Gemma 3 27B as MedGemma's base. Same prompt version, same rulebook, same inputs, temperature 0 where allowed (§8.3). Exact list → Decisions row.
 
 **Experimental arms.** (1) With vs without the rulebook (DEC-19; planned as with vs without retrieval in DEC-11): does grounding reduce hallucination? (2) Ground-truth vs predicted vision values: how much do vision errors change decisions and claims? Arm 1 runs on synthetic scenarios and sampled training cases; arm 2 runs on real cases, with held-out cases only in Phase 4.
 

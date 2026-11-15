@@ -121,21 +121,22 @@ def convert(slim_root, cases, raw_root, folds=None, log_every=20):
     return dataset
 
 
-def splits_final(folds=None):
-    """Our five folds in nnU-Net's format: a list of {"train": [...], "val": [...]}, fold k at index k."""
+def splits_final(folds=None, val_limit=None):
+    """Our five folds in nnU-Net's format: a list of {"train": [...], "val": [...]}, fold k at index k.
+    `val_limit` keeps only the first n validation cases of each fold, for a dummy validation run."""
     folds = folds or splits.load_folds()
     out = []
     for k in sorted(folds["folds"], key=int):
         train, val = splits.train_val_ids(k, folds)
-        out.append({"train": train, "val": val})
+        out.append({"train": train, "val": val[:val_limit] if val_limit else val})
     return out
 
 
-def write_splits(preprocessed_root, folds=None):
+def write_splits(preprocessed_root, folds=None, val_limit=None):
     path = os.path.join(preprocessed_root, DATASET_NAME, "splits_final.json")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
-        json.dump(splits_final(folds), f, indent=1)
+        json.dump(splits_final(folds, val_limit), f, indent=1)
     return path
 
 
@@ -202,6 +203,25 @@ def fold_dir(results_root, fold):
 def train_command(fold, resume):
     command = ["nnUNetv2_train", str(DATASET_ID), CONFIGURATION, str(fold), "-tr", TRAINER]
     return command + (["--c"] if resume else [])
+
+
+def validate_command(fold, device="cuda"):
+    """nnU-Net's own validation of a finished fold: loads fold_k/checkpoint_final.pth and writes fold_k/validation/,
+    the same masks a training run writes at its end."""
+    return ["nnUNetv2_train", str(DATASET_ID), CONFIGURATION, str(fold), "-tr", TRAINER, "--val", "-device", device]
+
+
+def checkpoint_plan(checkpoint):
+    """(3d_fullres plan, fold) a checkpoint was trained with, from the init arguments nnU-Net saves in it."""
+    import torch
+
+    init = torch.load(checkpoint, map_location="cpu", weights_only=False)["init_args"]
+    return init["plans"]["configurations"][init["configuration"]], int(init["fold"])
+
+
+def same_plan(a, b):
+    """Plans compared after a JSON round trip, so tuples and lists compare equal."""
+    return json.loads(json.dumps(a)) == json.loads(json.dumps(b))
 
 
 _PERCENT = re.compile(r"(\d+)%\|")

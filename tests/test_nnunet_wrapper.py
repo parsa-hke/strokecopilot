@@ -143,3 +143,24 @@ def test_run_streaming_thins_progress_bars(capsys):
     assert nw.run_streaming([_sys.executable, "-c", script], dict(os.environ)) == 0
     lines = capsys.readouterr().out.splitlines()
     assert len(lines) == 12 and lines[-2].startswith("Extracting: 100%") and lines[-1] == "done"
+
+
+def test_splits_val_limit_and_validate_command(tmp_path):
+    folds = {"heldout": FOLDS["heldout"], "folds": {k: list(v) * 3 for k, v in FOLDS["folds"].items()}}
+    out = nw.splits_final(folds, val_limit=2)
+    assert all(len(f["val"]) == 2 for f in out)
+    assert nw.splits_final(folds)[0]["val"] == folds["folds"]["0"]
+    cmd = nw.validate_command(0, "cpu")
+    assert cmd[:6] == ["nnUNetv2_train", str(nw.DATASET_ID), nw.CONFIGURATION, "0", "-tr", nw.TRAINER]
+    assert "--val" in cmd and cmd[-2:] == ["-device", "cpu"] and "--c" not in cmd
+
+
+def test_checkpoint_plan_and_same_plan(tmp_path):
+    torch = pytest.importorskip("torch")
+    plan = {"patch_size": (96, 128, 112), "batch_size": 4, "spacing": [1.5, 1.5, 1.5]}
+    ckpt = tmp_path / "checkpoint_final.pth"
+    torch.save({"network_weights": {}, "init_args": {"plans": {"configurations": {"3d_fullres": plan}},
+                                                     "configuration": "3d_fullres", "fold": 0, "dataset_json": {}}}, ckpt)
+    got, fold = nw.checkpoint_plan(str(ckpt))
+    assert fold == 0 and nw.same_plan(got, {**plan, "patch_size": [96, 128, 112]})
+    assert not nw.same_plan(got, {**plan, "batch_size": 2})
