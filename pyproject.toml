@@ -19,7 +19,7 @@ rsna = ["numpy", "pandas", "pydicom>=2.3", "opencv-python-headless"]
 isles = ["numpy", "pandas", "openpyxl", "nibabel", "scipy", "matplotlib"]
 corpus = ["pypdf"]  # only for the local copy check
 retrieval = ["numpy", "sentence-transformers"]
-llm = ["anthropic>=2.4"]
+llm = ["anthropic>=2.4", "openai>=1.40"]  # openai: the client for vLLM's OpenAI-compatible server (VLLMJSON)
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/strokecopilot"]

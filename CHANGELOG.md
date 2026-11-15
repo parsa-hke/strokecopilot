@@ -178,6 +178,25 @@
 - pytest: 565 passed.
 - **Notion sync:** none from the review (the 14 Nov entry's list stands, with item 1 now partly done).
 
+## 2026-11-15 — Parsa's review of PR #8 (Hana's vLLM adapter, DEC-24)
+- **Fixes to `providers.VLLMJSON`:**
+  1. Default `max_tokens` 8000 (`VLLM_MAX_TOKENS`), not the Claude default 16000: vLLM rejects a request whose prompt plus `max_tokens` exceeds `--max-model-len`, and the system prompt is about 6k–7k tokens on the Qwen and Gemma tokenizers. Server errors still stop the run loudly.
+  2. openai client: `timeout=1800`, `max_retries=1` (was the defaults, 600 s and 2 retries).
+  3. A cut-off answer (`finish_reason` length) or unparseable JSON keeps the first 500 characters of the reply in the error, plus the length and first 200 characters of the thinking when vLLM splits it out (`reasoning_content` or `reasoning`).
+  4. Cost: `describe()` records `"billing": "gpu-time (pod), not token-priced"`. Notebook 31 prints a None cost as "cost not token-priced (GPU time)" instead of crashing on `:.2f`; notebook 50 still sums `v or 0` but now names the GPU-billed roles, so None never reads as free.
+  5. `compute/keyscan.ENV_KEYS` adds `VLLM_API_KEY` (VLLMJSON's conventional `key_name`, `providers.VLLM_KEY_NAME`), `OPENAI_API_KEY` and `HUGGING_FACE_HUB_TOKEN` (`HF_TOKEN` was there), so `scripts/pod`'s refusal covers them.
+  6. `describe()` keeps `base_url` only for `http://localhost` or `http://127.0.0.1`, else records `"remote"`: a pod's public IP and port never land in a run's `config.json`.
+  7. `tests/test_providers.py` uses `monkeypatch.syspath_prepend` instead of leaving `tests/` on `sys.path`; the module docstring names the open-model key lookup.
+  8. Plan §7: the `providers.py` line is unticked until the first GPU call.
+- **Done in the review instead of going back to Hana (no GPU, no policy decision):**
+  - `pipeline/batched.gather(..., answers_path=)`: a directly called reasoner's answers go to `out_dir/reasoner_answers.jsonl` as they arrive, and a rerun into the same `out_dir` asks only for the rest (a line cut off by a crash is skipped; another model's answers stop the run). Batch llms unchanged; `config.json` records `resumed_reasoner_answers`. A direct Claude reasoner rerun into the same `out_dir` now reuses its answers too.
+  - `nlp/reasoner/open_models.py`: the DEC-24 models and the fallback pair (HF id, 4-bit checkpoint, `max_model_len` 16384, gated, `merge_system`, thinking default and switch, reasoning parser), every id checked against its model card on 15 Nov 2026. Unchecked fields are None and listed in `verify`. Only Baichuan-M2-32B (official GPTQ-Int4) and Qwen2.5-32B-Instruct (official AWQ) are complete. Qwen3.5-27B has no 4-bit checkpoint that fits 24 GB: the official GPTQ-Int4 is about 30 GB. Gemma 3 and MedGemma have no official vLLM-ready 4-bit checkpoint. DEC-24 says "Qwen2.5-32B"; the table uses the instruct model (to confirm).
+  - `open_models.serve_command()`: the `vllm serve` argv (checkpoint, served-model-name, max-model-len, `--host 127.0.0.1`, port, `--structured-outputs-config.backend xgrammar`, reasoning parser, optional fp8 KV cache). It refuses unverified entries, gated models without `allow_gated` and MedGemma without `allow_medgemma`. Not wired into `compute/jobs.py` or `pod.py`.
+  - How the pipeline reaches vLLM: over an SSH tunnel from the Mac to the pod's 127.0.0.1, so every API key stays on the Mac (the current DEC-21 rule). Gated models (Gemma 3, MedGemma) wait on Parsa's decision about an HF token on the pod.
+- **Remaining:** Parsa's decisions (HF token on the pod for gated models; HAI-DEF terms for MedGemma; thinking on or off per model; a 4-bit Qwen3.5-27B that fits 24 GB; Qwen2.5-32B base vs instruct), then a one-request GPU dummy per model (does weights plus a 16k context fit 24 GB, and does vLLM's structured-output backend accept every keyword in `prompt.api_schema()`), then wiring `serve_command` into a pod job.
+- pytest: 578 passed (567 before the review).
+- **Notion sync:** none from the review.
+
 ## 2026-11-14 — Lorna (Vision A error-analysis follow-ups, EXP-27; 7 working sessions folded into one entry at review)
 - **Branch `lorna/error-analysis-followups`**, from `main` at `dfc832f`: the four follow-ups from Parsa's PR #1 review (all five folds, artery groups and onset, AI outlines on the pictures), in one notebook and one Colab run.
 - **Code, `error_analysis`:**
@@ -224,6 +243,25 @@
   - Experiments → EXP-28: median slice spacing 5.037 mm (66.0% within 0.25 mm of 5 mm), median field of view 250.0 mm (p5–p95 216.0–253.3), commit `0172bce`, Done.
   - Experiments → EXP-29: 42/129 (32.6%) with the field of view matched, against 45/129 as in EXP-16 (reproduced); paired flips 11 and 8, p = 0.65; commit `fea2c15`, Done.
   - Tasks → Vision B "Domain shift check": items 2 and 3 done; item 1 (top-scan review) partly done: top 8 by cause recorded, the scans between 0.175 and 0.278 still open.
+
+## 2026-11-14 — Hana (NLP A: providers.py adapter for the open models, DEC-24)
+- **`providers.VLLMJSON`** (new): one adapter for every open model in DEC-24 (Qwen3.5-27B, MedGemma 27B text, Gemma 3 27B, and the Baichuan-M2-32B / Qwen2.5-32B fallback), served by vLLM's OpenAI-compatible server on the rented 4090 (DEC-21). Only `model` and `base_url` change between models.
+  - Same call signature and attributes as `ClaudeJSON` (`llm(system, user, schema) -> dict`, `.model`, `.usage`, `describe()`), so `run.py`, `end_to_end.py` and `batched.py` use it unchanged. No `run()` method, so `batched.gather` calls it one request at a time.
+  - Temperature 0 by default. The schema goes in `response_format` as `json_schema`, which vLLM enforces by constrained decoding; every model gets the same `prompt.api_schema()`.
+  - Usage keys match `ClaudeJSON` (cached prompt tokens split into `cache_read_input_tokens`), plus `reasoning_tokens`. `cost_usd()` returns None: GPU cost comes from the pod's billing, not tokens.
+  - Errors the pipeline already records: refusal → `RefusalError`; `finish_reason` length, empty content, or JSON that does not parse → `RuntimeError` (the last keeps the start of the raw reply). Server errors (unreachable, 4xx) are not caught, as in `ClaudeJSON`, so a broken server stops the run loudly.
+  - `extra_body` passes vLLM-only options and is recorded in `describe()`, e.g. `{"chat_template_kwargs": {"enable_thinking": False}}` to turn Qwen3.5's thinking off. `merge_system` puts the system prompt in the user message for a chat template without a system role. `quantization` is recorded only.
+  - Key: none for a local server; otherwise `key_name`, read through `secret()`.
+- **`providers.secret(name)`** (new): Colab Secrets, then Kaggle Secrets, then the environment, skipping a source that is missing or empty. `api_key()` now calls `secret("ANTHROPIC_API_KEY")`, with the same behaviour.
+- **`pyproject.toml`:** `openai>=1.40` added to the optional `llm` extra (imported only when `VLLMJSON` builds its own client).
+- **`tests/test_providers.py`:** 10 new tests with a stub client and fake keys, no network: secrets order and fall-through; request shape (model, temperature 0, messages, `response_format`); usage over two calls; `extra_body`; `merge_system`; each failure raises what the pipeline catches; `batched.gather` calls it directly; a fixture runs through `reasoner.run.recommend` and `run_fixtures` and writes a normal run folder; the client is built with no key or a key from `secret()`.
+- **For Parsa (the first real call, not done here):**
+  - Context: the reasoner's system prompt is about 10.6k tokens (EXP-8) and its answers about 3.1k–3.4k (EXP-8, EXP-9). `--max-model-len` must hold the prompt plus `max_tokens`: about 19k with `max_tokens=8000`, about 31k with the 20,000 used for Claude, which may not fit a 27B model at 4-bit on 24 GB.
+  - Not checked against a real server: that vLLM's structured-output backend accepts every keyword in `prompt.api_schema()` (`anyOf`, `const`, `enum`). A one-request dummy, like EXP-8 for Claude, would show it before a full run.
+  - Model IDs, quantised checkpoints, the thinking setting for Qwen3.5 and the MedGemma terms (HAI-DEF §3.2) are yours to set at the paid-run step.
+- pytest: on Windows (Python 3.14), the NLP tests (`test_providers`, `test_reasoner`, `test_reasoner_v2`, `test_batched`, `test_end_to_end`, `test_verifier_run`, `test_claims`, `test_trace`, `test_verifier_phase3_fixes`, `test_contract`): 193 passed. The full suite stops at collection on this laptop because `nibabel` (vision) is not installed; not related to this change.
+- **Notion sync:**
+  - pending: Tasks → "providers.py adapters for the chosen models": In review once the PR is open, with a link to it and a note that the first real call on the 4090 is Parsa's.
 
 ## 2026-11-13 — Parsa's review of PR #1 (Lorna's Vision A error analysis, EXP-15)
 - **Write-up corrected** (`docs/ERROR_ANALYSIS_VISION_A.md`), every number re-checked against EXP-15's `per_case.csv` on Drive (counts and anonymous labels only):

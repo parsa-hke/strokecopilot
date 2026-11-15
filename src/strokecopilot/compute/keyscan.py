@@ -10,7 +10,11 @@ import re
 import subprocess
 from pathlib import Path
 
-ENV_KEYS = ("VAST_API_KEY", "RUNPOD_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN", "HF_TOKEN", "KAGGLE_KEY")
+# Every key name the code may read through providers.secret() or a platform client. VLLM_API_KEY is VLLMJSON's
+# conventional key_name; OPENAI_API_KEY is what the openai client falls back to; HUGGING_FACE_HUB_TOKEN is HF_TOKEN's
+# older name.
+ENV_KEYS = ("VAST_API_KEY", "RUNPOD_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN",
+            "KAGGLE_KEY", "VLLM_API_KEY", "OPENAI_API_KEY")
 PATTERNS = {
     "Anthropic key": re.compile(r"sk-ant-[A-Za-z0-9_\-]{20,}"),
     "GitHub token": re.compile(r"\b(?:ghp|gho|ghs|ghu)_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}"),

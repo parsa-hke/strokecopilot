@@ -1,11 +1,12 @@
-"""Thin, identically-shaped LLM wrappers (plan §8.3). Phase 2 has Claude only.
+"""Thin, identically-shaped LLM wrappers (plan §8.3): Claude (direct and batched) and open models served by vLLM.
 
 Every wrapper is a callable `llm(system, user, schema) -> dict`: one request whose reply is JSON
 matching `schema`. The verifier (claim extractor and judge) and, later, the reasoner use this
 shape, so tests pass a plain function instead.
 
-The key comes from Colab or Kaggle Secrets, or the ANTHROPIC_API_KEY environment variable, never
-from code. Current Claude models reject `temperature` (docs/HALLUCINATION_METRIC.md §6), so none is
+Keys come from Colab or Kaggle Secrets, or the environment, never from code (secret()): ANTHROPIC_API_KEY for
+Claude; for an open model on a vLLM server, none for a local server, else the secret named by VLLMJSON's key_name
+(VLLM_API_KEY by convention, the variable `vllm serve` reads). compute/keyscan.ENV_KEYS lists every such name. Current Claude models reject `temperature` (docs/HALLUCINATION_METRIC.md §6), so none is
 sent. Server-side refusal fallbacks are left off on purpose: a fallback would swap the judge or
 extractor model mid-run, and the verifier must record exactly which model produced each verdict.
 A refusal is raised instead, and the caller records it.
@@ -14,8 +15,13 @@ A refusal is raised instead, and the caller records it.
 import json
 import os
 import time
+from urllib.parse import urlparse
 
 DEFAULT_MAX_TOKENS = 16000
+# VLLMJSON's default: vLLM rejects a request whose prompt plus max_tokens exceeds the server's --max-model-len.
+VLLM_MAX_TOKENS = 8000
+VLLM_KEY_NAME = "VLLM_API_KEY"  # the conventional key_name for a vLLM server started with an API key
+VLLM_TIMEOUT_S = 1800  # one long reasoner answer at 4-bit on one card can take minutes; the openai default is 600 s
 
 # USD per million tokens (input, output) on the Claude API, prompts up to 100K tokens. Cache reads: Opus 5.5 $0.20,
 # Sonnet 5.5 $0.10 (0.05x input; it was $0.20 here until 12 Nov 2026, which overstated logged Sonnet costs, as Hana
@@ -41,21 +47,33 @@ class RefusalError(RuntimeError):
     """The model declined the request (stop_reason "refusal")."""
 
 
-def api_key():
-    """ANTHROPIC_API_KEY from Colab Secrets, Kaggle Secrets or the environment."""
+def secret(name):
+    """The secret `name` from Colab Secrets, then Kaggle Secrets, then the environment; None if none has it.
+
+    Keys never live in code. A source that is missing, not granted or empty is skipped, so the same notebook works on
+    Colab, Kaggle or a laptop. The value is returned, never logged."""
     try:
         from google.colab import userdata
 
-        return userdata.get("ANTHROPIC_API_KEY")
+        value = userdata.get(name)
+        if value:
+            return value
     except Exception:
         pass
     try:
         from kaggle_secrets import UserSecretsClient
 
-        return UserSecretsClient().get_secret("ANTHROPIC_API_KEY")
+        value = UserSecretsClient().get_secret(name)
+        if value:
+            return value
     except Exception:
         pass
-    return os.environ.get("ANTHROPIC_API_KEY")
+    return os.environ.get(name)
+
+
+def api_key():
+    """ANTHROPIC_API_KEY from Colab Secrets, Kaggle Secrets or the environment."""
+    return secret("ANTHROPIC_API_KEY")
 
 
 class ClaudeJSON:
@@ -166,3 +184,123 @@ class ClaudeBatch:
             out[key] = {"error": "no batch result", "refusal": False}
         log(f"Batch {batch.id} ended: {sum('reply' in v for v in out.values())} of {len(requests)} succeeded.")
         return out
+
+
+class VLLMJSON:
+    """Structured-output call to an open model served by vLLM's OpenAI-compatible server (DEC-24, DEC-21).
+
+    One class serves every open model in the comparison (Qwen3.5-27B, MedGemma 27B text, Gemma 3 27B, and the fallback
+    pair): only `model` and `base_url` change. It has the same call signature and attributes as ClaudeJSON, so
+    run.py, end_to_end.py and batched.py use it unchanged. It has no run() method on purpose: batched.gather treats any
+    llm with run() as a batch, and vLLM answers one request at a time.
+
+    - Temperature 0 by default (vLLM accepts it, unlike current Claude models).
+    - The schema goes in response_format as json_schema, which vLLM enforces with constrained decoding, so every model
+      gets the same schema (prompt.api_schema()) and the comparison stays fair.
+    - Only the final answer is parsed. If vLLM runs a reasoning parser, the model's thinking arrives separately and is
+      counted (usage["reasoning_tokens"]), not parsed.
+    - Usage keys match ClaudeJSON: input_tokens excludes cached prompt tokens, which go in cache_read_input_tokens.
+    - cost_usd() returns None for these models: GPU time is billed per hour by the pod, not per token, and the pod's
+      own log records it (compute/pod.py). describe() says so ("billing"), so a None cost never reads as free.
+    - A local vLLM server needs no key. For a server that does, pass key_name (VLLM_KEY_NAME by convention) and the
+      key comes from secret().
+    - describe() records base_url only for a server on localhost or 127.0.0.1 (an SSH tunnel); any other address is
+      recorded as "remote", so a pod's public IP and port never land in a run's config.json.
+    - The client waits up to VLLM_TIMEOUT_S per request and retries once, not the openai defaults (600 s, 2 retries).
+    - merge_system puts the system prompt at the top of the user message, for a chat template without a system role.
+    - extra_body passes vLLM-only request options and is recorded in describe(). For example, Qwen3.5 thinks before
+      answering by default; extra_body={"chat_template_kwargs": {"enable_thinking": False}} turns that off.
+    - Context: vLLM rejects a request whose prompt plus max_tokens exceeds the server's --max-model-len. The reasoner's
+      system prompt is about 10.6k tokens on Claude's tokenizer (EXP-8) and about 6k to 7k on the Qwen and Gemma
+      tokenizers; answers ran about 3.1k to 3.4k (EXP-8, EXP-9). So the default is VLLM_MAX_TOKENS (8000): prompt plus
+      answer budget stays near 15k, which a 16k context holds on a 24 GB card at 4-bit. A thinking model spends its
+      reasoning from the same budget. The 20000 used for Claude (run.REASONER_MAX_TOKENS) would need about 27k.
+    - Errors from the server itself (unreachable, or a 4xx such as a request over --max-model-len or a schema it
+      rejects) are not caught here, as in ClaudeJSON: a run stops loudly instead of recording every case as a format
+      failure.
+    - A cut-off answer (finish_reason "length") or one that does not parse raises with the start of the reply and, if
+      the server split out the model's thinking, its length and start, so calls/ shows where the budget went.
+    """
+
+    def __init__(self, model, base_url="http://localhost:8000/v1", key_name=None, max_tokens=VLLM_MAX_TOKENS,
+                 temperature=0.0, quantization=None, merge_system=False, extra_body=None, client=None):
+        if client is None:
+            import openai
+
+            key = secret(key_name) if key_name else None
+            client = openai.OpenAI(base_url=base_url, api_key=key or "EMPTY", timeout=VLLM_TIMEOUT_S, max_retries=1)
+        self.client = client
+        self.model, self.base_url, self.max_tokens, self.temperature = model, base_url, max_tokens, temperature
+        self.quantization, self.merge_system, self.extra_body = quantization, merge_system, extra_body
+        self.usage = {"requests": 0, "input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0,
+                      "cache_creation_input_tokens": 0, "reasoning_tokens": 0, "seconds": 0.0}
+
+    def describe(self):
+        return {"provider": "vllm", "model": self.model, "base_url": recorded_url(self.base_url),
+                "temperature": self.temperature, "max_tokens": self.max_tokens, "quantization": self.quantization,
+                "merge_system": self.merge_system, "extra_body": self.extra_body,
+                "billing": "gpu-time (pod), not token-priced"}
+
+    def messages(self, system, user):
+        if self.merge_system:
+            return [{"role": "user", "content": f"{system}\n\n{user}"}]
+        return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+    def __call__(self, system, user, schema):
+        started = time.perf_counter()
+        request = {
+            "model": self.model,
+            "messages": self.messages(system, user),
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "response_format": {"type": "json_schema",
+                                "json_schema": {"name": "response", "schema": schema, "strict": True}},
+        }
+        if self.extra_body:
+            request["extra_body"] = self.extra_body
+        response = self.client.chat.completions.create(**request)
+        self.usage["requests"] += 1
+        self.usage["seconds"] += time.perf_counter() - started
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            prompt = getattr(usage, "prompt_tokens", 0) or 0
+            cached = getattr(getattr(usage, "prompt_tokens_details", None), "cached_tokens", 0) or 0
+            self.usage["input_tokens"] += prompt - cached
+            self.usage["cache_read_input_tokens"] += cached
+            self.usage["output_tokens"] += getattr(usage, "completion_tokens", 0) or 0
+            details = getattr(usage, "completion_tokens_details", None)
+            self.usage["reasoning_tokens"] += getattr(details, "reasoning_tokens", 0) or 0
+        choice = response.choices[0]
+        message = choice.message
+        if getattr(message, "refusal", None):
+            raise RefusalError(f"{self.model} declined the request: {message.refusal}")
+        text = message.content or ""
+        thinking = _reasoning_note(message)
+        if choice.finish_reason == "length":
+            raise RuntimeError(f"{self.model} hit max_tokens ({self.max_tokens}) before finishing the JSON; "
+                               f"reply began {text[:500]!r}{thinking}")
+        if not text.strip():
+            raise RuntimeError(f"{self.model} returned no content (finish_reason {choice.finish_reason!r}){thinking}.")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            # A RuntimeError, so run.py records it as "no valid JSON" with the start of the raw reply kept in calls/.
+            raise RuntimeError(f"no valid JSON from {self.model}: {e}; reply began {text[:500]!r}{thinking}") from e
+
+
+def recorded_url(base_url):
+    """base_url as a run config may store it: unchanged on localhost or 127.0.0.1 (an SSH tunnel), else "remote"."""
+    try:
+        parsed = urlparse(base_url or "")
+        host = parsed.hostname
+    except ValueError:
+        return "remote"
+    return base_url if parsed.scheme == "http" and host in ("localhost", "127.0.0.1") else "remote"
+
+
+def _reasoning_note(message):
+    """'; thinking N chars, began ...' when vLLM's reasoning parser split the model's thinking out, else ''."""
+    reasoning = getattr(message, "reasoning_content", None) or getattr(message, "reasoning", None)
+    if not isinstance(reasoning, str) or not reasoning:
+        return ""
+    return f"; thinking {len(reasoning)} chars, began {reasoning[:200]!r}"
