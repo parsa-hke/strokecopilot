@@ -17,7 +17,7 @@ from pathlib import Path
 
 from strokecopilot.config import FIXTURES_DIR
 from strokecopilot.nlp.corpus import ingest
-from strokecopilot.nlp.notes.facts import fixture_note
+from strokecopilot.nlp.notes.facts import FactSheet, fixture_note
 from strokecopilot.nlp.reasoner import prompt as rp
 from strokecopilot.nlp.reasoner import run as rr
 from strokecopilot.nlp.reasoner.providers import RefusalError, cost_usd
@@ -34,8 +34,45 @@ def _usage(llm):
     return dict(getattr(llm, "usage", {}) or {})
 
 
-def load_cases(source="fixtures", ids=None):
-    """[{"id", "vision", "note", "facts", "expected"}]; expected maps each decision to True, False or None (either)."""
+def real_case(case_id, vision_dir, notes_dir):
+    """One real development case: its contract (predicted or ground-truth, whichever folder is given), its generated
+    triage note and fact sheet (artifacts/isles24_notes_v1). Expected decisions come from the rule checks on these
+    inputs (rules.decide), as for the scenarios: the reasoner is judged on the inputs it was given, so the two vision
+    arms can expect different decisions for the same patient, which is what the arm comparison measures."""
+    vision = json.loads((Path(vision_dir) / f"{case_id}.json").read_text())
+    if vision.get("case_id") != case_id:
+        raise ValueError("A contract's case_id does not match its file name.")
+    note = (Path(notes_dir) / f"{case_id}.txt").read_text()
+    facts = FactSheet.from_json(Path(notes_dir) / f"{case_id}.facts.json")
+    facts.check_against(note)
+    verdicts = rules.decide(rules.case_from(vision, facts))
+    return {"id": case_id, "vision": vision, "note": note, "facts": facts,
+            "expected": {d: WORD_TO_BOOL[v.value] for d, v in verdicts.items()}}
+
+
+def sample_real_ids(vision_dir, n=20, seed=20261115, folds=None):
+    """n development case IDs, the same number from each fold (DEC-24: 20 real cases), seeded, sorted. Refuses
+    held-out cases (splits.check_ids). The sample is the same for every model and both vision arms."""
+    import random
+
+    from strokecopilot.data.splits import check_ids, load_folds
+
+    ids = sorted(p.stem for p in Path(vision_dir).glob("*.json"))
+    check_ids(ids, folds)
+    folds = folds or load_folds()
+    by_fold = {k: sorted(set(v) & set(ids)) for k, v in folds["folds"].items()}
+    if n % len(by_fold):
+        raise ValueError(f"n={n} does not split evenly over {len(by_fold)} folds.")
+    rng = random.Random(seed)
+    return sorted(c for k in sorted(by_fold) for c in rng.sample(by_fold[k], n // len(by_fold)))
+
+
+def load_cases(source="fixtures", ids=None, vision_dir=None, notes_dir=None, folds=None):
+    """[{"id", "vision", "note", "facts", "expected"}]; expected maps each decision to True, False or None (either).
+
+    source "real": development cases from vision_dir (artifacts/vision_outputs_v1 for predicted vision,
+    artifacts/vision_outputs_gt_v1 for ground truth) and notes_dir (artifacts/isles24_notes_v1); `ids` is required
+    (sample_real_ids) and held-out cases are refused."""
     if source == "fixtures":
         expected = json.loads(rr.EXPECTED.read_text())["decisions"]
         out = []
@@ -46,6 +83,13 @@ def load_cases(source="fixtures", ids=None):
     elif source == "scenarios":
         out = [{"id": s.id, "vision": s.vision, "note": s.note, "facts": s.facts,
                 "expected": {d: WORD_TO_BOOL[v["value"]] for d, v in s.expected.items()}} for s in sc.generate()]
+    elif source == "real":
+        from strokecopilot.data.splits import check_ids
+
+        if not ids or vision_dir is None or notes_dir is None:
+            raise ValueError("Real cases need ids, vision_dir and notes_dir.")
+        check_ids(sorted(ids), folds)
+        out = [real_case(case_id, vision_dir, notes_dir) for case_id in sorted(ids)]
     else:
         raise ValueError(f"Unknown source {source!r}")
     return [c for c in out if ids is None or c["id"] in ids]

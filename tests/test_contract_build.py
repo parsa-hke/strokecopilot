@@ -90,3 +90,19 @@ def test_load_sources_refuses_mismatches_and_heldout(tmp_path, monkeypatch):
     table.to_csv(runs / build.HAEMORRHAGE_RUN / "per_case.csv", index=False)
     with pytest.raises(ValueError, match="failed"):
         build.load_sources(runs, folds=FOLDS, expected=10)
+
+
+def test_ground_truth_case_and_build(tmp_path, monkeypatch):
+    gt = build.build_ground_truth_case("sub-stroke9900", "gt", 101.04, 140.0, EVIDENCE)
+    assert gt["core_ml"] == 101.0 and gt["haemorrhage"] == {"present": False, "confidence": 0.0}
+    assert gt["confidence"] == {"core": 1.0, "penumbra": 1.0} and gt["warnings"] == [] and gt["occlusion_site"] == "ICA"
+    monkeypatch.delenv("ALLOW_HELDOUT", raising=False)
+    runs = _write_runs(tmp_path / "runs")
+    for k, name in build.NNUNET_RUNS.items():  # add reference volumes to the fake fold tables
+        table = pd.read_csv(runs / name / "per_case.csv")
+        table["ref_ml"] = 0.5 if k == 0 else 30.0
+        table.to_csv(runs / name / "per_case.csv", index=False)
+    summary = build.build_ground_truth_all(runs, tmp_path / "gt", "gt", folds=FOLDS, expected=10)
+    assert summary["cases"] == 10 and summary["haemorrhage_present"] == 0 and summary["warnings"] == {}
+    assert summary["null"]["mismatch_ratio"] == 2  # the two 0.5 mL references
+    assert len(list((tmp_path / "gt").glob("*.json"))) == 10

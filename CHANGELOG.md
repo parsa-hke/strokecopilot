@@ -1,5 +1,45 @@
 # CHANGELOG
 
+## 2026-11-16 — Claude Code session (Phase 3: teammates' open tasks done from the Mac — Hana's real inputs, Lorna's reruns, Mohamed's checks)
+- **Setup:** the slim tarball, checksum matched, was unpacked to `data/local/` (git-ignored). The 129 contracts and the notes were copied there too, because Google Drive stalled on one note file.
+- **Hana: real inputs.**
+  - `pipeline/end_to_end.py`:
+    - `load_cases("real", ids, vision_dir, notes_dir)` loads a development case's contract, note and fact sheet;
+    - the fact sheet is checked against the note;
+    - expected decisions come from the rule checks on the given inputs, as for the scenarios;
+    - held-out cases are refused.
+  - `sample_real_ids(vision_dir, n=20)` takes the same number per fold, seeded.
+  - `contract/build.py` gains ground-truth contracts (`build_ground_truth_all`, `--ground-truth`):
+    - the reference final infarct as `core_ml`;
+    - no bleed (`present` false, `confidence` 0.0);
+    - the same penumbra and site as the predicted contracts;
+    - confidence 1.0, and no warnings.
+  - **EXP-34** wrote them to Drive `artifacts/vision_outputs_gt_v1/`, 129 validated. 8 have a negative mismatch volume, where the final infarct exceeds the Tmax > 6 s area; the schema allows it.
+  - **Checked:** all 129 notes load and pass their fact check.
+  - **The 20-case sample, predicted vs ground truth:** thrombolysis expected "no" in 10 vs 0 cases (Vision B's false bleed flags). Thrombectomy expected "no" in 18 vs 17 (the occlusion site is mostly unknown).
+  - **Tests:** 2 added.
+- **Lorna: notebooks 13 and 14 re-run** at `6596e3b`. Her own cells ran on the Mac, with the Colab install and Drive mount skipped (a scratch runner). Her `config.json` files were kept, and the earlier outputs were saved in `before_rerun_2026-11-15/` in each folder.
+  - **EXP-27:** 37 Dice-0 misses under the merged no-infarct rule; 0 of 51 EXP-25 numbers differ.
+  - **EXP-31:** reproduces her per-case values exactly, and v2's weights. It adds the `distance` version, `baseline_check` and `complete_miss_check`. Its `mapping_distance.json` equals EXP-32's.
+  - Each `metrics.json` carries a `rerun_note`.
+- **Mohamed: the two open Vision B checks (EXP-35**, scripts in `runs/EXP-35_visionB_crop_and_review/`):
+  - **Crop:** on the 33 scans over 250 mm, no head or brain voxel falls outside the centred 250 mm square. Heads span about 18 × 15 cm, inside the window.
+  - **The 23 scans flagged at 0.175 but not at 0.278:** their top two slabs were read by Claude, not a radiologist and not Mohamed, at low resolution.
+    - skull-base slab 12;
+    - normal calcification 4;
+    - dense falx 3;
+    - dense vessels 1;
+    - nothing obvious 3.
+    - None was read as a bleed.
+
+    Labels only; the label key stays on Drive.
+- **Plan §7 ticked:** domain shift check, real inputs, error taxonomy (Benny's PR #5).
+- `pytest`: 701 passed. **Spend:** no GPU, no API.
+- **Notion sync:**
+  - Experiments: EXP-34, EXP-35.
+  - Tasks: Hana's real-inputs task, Mohamed's domain-shift task and Benny's error-taxonomy task set to Done.
+  - Notes added on Lorna's error-analysis and confidence tasks.
+
 ## 2026-11-15 — Claude Code session (Phase 3: PRs #5–#9 reviewed, fixed and merged; DEC-27 confidence; DEC-28 Vision B threshold; C7 contract build; DEC-24 hosting amended; C8 code prep)
 - **Five teammate PRs reviewed, fixed on their branches and squash-merged** (one review agent per PR, findings re-checked by hand; the review entries for each PR are below):
   - #7 `0920766`, #9 `e17999b`, #6 `3305288`, #8 `6b10cd0`, #5 `3847cf6`.

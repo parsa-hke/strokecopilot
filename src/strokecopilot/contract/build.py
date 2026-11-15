@@ -15,7 +15,17 @@ Where each field comes from (development folds only; held-out cases are refused)
 - aspects: null; no model produces it (DEC-9).
 - warnings: confidence.core_warnings (DEC-27: a core under 1 mL).
 
-Usage: python -m strokecopilot.contract.build <Drive runs folder> <output folder> [--model-version TEXT]
+Ground-truth contracts (the ground-truth arm of DEC-11; build_ground_truth_all): the same cases with what vision would
+report if it were right, so the ground-truth vs predicted arms isolate the effect of vision errors:
+- core_ml: the reference final infarct volume (`ref_ml`, from native_volumes.csv through the nnU-Net tables). It is
+  final infarct, not acute core (plan §8.1), the only label ISLES'24 has.
+- haemorrhage: {present: false, confidence: 0.0}. ISLES'24 has no bleed labels; these patients went on to
+  reperfusion therapy, so they are presumed bleed-free (as in EXP-16).
+- penumbra_ml, occlusion_site: the same as the predicted contracts (no penumbra label; the site already comes from
+  the reference occlusion mask).
+- confidence: {core: 1.0, penumbra: 1.0}; warnings: [] (nothing is estimated); aspects: null (DEC-9).
+
+Usage: python -m strokecopilot.contract.build <Drive runs folder> <output folder> [--model-version TEXT] [--ground-truth]
 Writes one <case>.json per case into the output folder (case IDs: Drive only) and prints counts only.
 """
 
@@ -135,6 +145,49 @@ def summarise(outputs):
     }
 
 
+def build_ground_truth_case(case_id, model_version, ref_ml, penumbra_ml, evidence):
+    """One validated ground-truth vision_output dict (see the module docstring)."""
+    site, _ = volumes.occlusion_site(evidence)
+    obj = {
+        "schema_version": SCHEMA_VERSION,
+        "case_id": case_id,
+        "model_version": model_version,
+        "haemorrhage": {"present": False, "confidence": 0.0},
+        **volumes.contract_volumes(ref_ml, penumbra_ml),
+        "occlusion_site": site,
+        "aspects": None,
+        "confidence": {"core": 1.0, "penumbra": 1.0},
+        "warnings": [],
+    }
+    validate_vision_output(obj)
+    return obj
+
+
+def load_reference_volumes(runs_dir):
+    """{case: ref_ml} from the nnU-Net fold tables (native reference volumes); refuses a case listed twice."""
+    refs = {}
+    for name in NNUNET_RUNS.values():
+        table = pd.read_csv(Path(runs_dir) / name / "per_case.csv")
+        for case, ref in zip(table["case"], table["ref_ml"]):
+            if case in refs:
+                raise ValueError("A case appears in two nnU-Net fold tables.")
+            refs[case] = float(ref)
+    return refs
+
+
+def build_ground_truth_all(runs_dir, out_dir, model_version, folds=None, expected=EXPECTED_CASES):
+    """Ground-truth contracts for every development case, validated and written like build_all; returns summarise()."""
+    sources = load_sources(runs_dir, folds, expected)
+    refs = load_reference_volumes(runs_dir)
+    outputs = {case: build_ground_truth_case(case, model_version, refs[case], s["penumbra_ml"], s["evidence"])
+               for case, s in sources.items()}
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    for case, obj in outputs.items():
+        (out / f"{case}.json").write_text(json.dumps(obj, indent=1) + "\n")
+    return summarise(outputs)
+
+
 def build_all(runs_dir, out_dir, model_version, folds=None, expected=EXPECTED_CASES):
     """Build, validate and write every development case; returns summarise(). Nothing is written unless all build."""
     sources = load_sources(runs_dir, folds, expected)
@@ -152,8 +205,10 @@ def main(argv=None):
     parser.add_argument("runs_dir")
     parser.add_argument("out_dir")
     parser.add_argument("--model-version", required=True)
+    parser.add_argument("--ground-truth", action="store_true", help="build the ground-truth contracts instead")
     args = parser.parse_args(argv)
-    print(json.dumps(build_all(args.runs_dir, args.out_dir, args.model_version), indent=1))
+    builder = build_ground_truth_all if args.ground_truth else build_all
+    print(json.dumps(builder(args.runs_dir, args.out_dir, args.model_version), indent=1))
 
 
 if __name__ == "__main__":

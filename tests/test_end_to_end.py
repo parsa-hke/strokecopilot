@@ -91,3 +91,36 @@ def test_scenarios_run_through_the_same_chain(tmp_path):
     assert config["source"] == "scenarios" and config["scenarios"]["n"] == 150
     again = e2e.rescore(tmp_path, retriever=retriever, log=lambda *_: None)
     assert again["source"] == "scenarios" and again["summary"]["cases"] == 4
+
+
+def test_real_cases_load_with_rule_expectations_and_refuse_heldout(tmp_path, monkeypatch):
+    import shutil
+    from pathlib import Path
+
+    from strokecopilot.data.splits import HeldoutError
+
+    monkeypatch.delenv("ALLOW_HELDOUT", raising=False)
+    stem = "fx02_thrombectomy_large_mismatch"
+    vision_dir, notes_dir = tmp_path / "vision", tmp_path / "notes"
+    vision_dir.mkdir(), notes_dir.mkdir()
+    folds = {"heldout": ["sub-stroke9990"], "folds": {str(k): [f"sub-stroke99{k}{j}" for j in range(4)] for k in range(5)}}
+    ids = [c for v in folds["folds"].values() for c in v] + ["sub-stroke9990"]
+    for case in ids:  # a fixture's contract and note under placeholder IDs
+        vision = json.loads((Path(e2e.FIXTURES_DIR) / f"{stem}.json").read_text())
+        vision["case_id"] = case
+        (vision_dir / f"{case}.json").write_text(json.dumps(vision))
+        for ext in (".txt", ".facts.json"):
+            shutil.copy(Path(e2e.FIXTURES_DIR) / "notes" / f"{stem}{ext}", notes_dir / f"{case}{ext}")
+    with pytest.raises(HeldoutError):
+        e2e.sample_real_ids(vision_dir, n=10, folds=folds)
+    (vision_dir / "sub-stroke9990.json").unlink()
+    sample = e2e.sample_real_ids(vision_dir, n=10, folds=folds)
+    assert len(sample) == 10 and sample == e2e.sample_real_ids(vision_dir, n=10, folds=folds)
+    assert all(sum(c in sample for c in v) == 2 for v in folds["folds"].values())
+    cases = e2e.load_cases("real", ids=sample, vision_dir=vision_dir, notes_dir=notes_dir, folds=folds)
+    fixture = next(c for c in e2e.load_cases("fixtures") if c["id"] == stem)
+    assert len(cases) == 10 and cases[0]["expected"] == fixture["expected"]
+    with pytest.raises(HeldoutError):
+        e2e.load_cases("real", ids=["sub-stroke9990"], vision_dir=vision_dir, notes_dir=notes_dir, folds=folds)
+    with pytest.raises(ValueError, match="need ids"):
+        e2e.load_cases("real", vision_dir=vision_dir, notes_dir=notes_dir)
