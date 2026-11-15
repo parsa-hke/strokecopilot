@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## 2026-11-15 — Claude Code session (Phase 3: PRs #5–#9 reviewed, fixed and merged; DEC-27 confidence)
+- **Five teammate PRs reviewed, fixed on their branches and squash-merged** (one review agent per PR, findings re-checked by hand; the review entries for each PR are below):
+  - #7 `0920766`, #9 `e17999b`, #6 `3305288`, #8 `6b10cd0`, #5 `3847cf6`.
+  - Each branch was updated from main before its merge, with the CHANGELOG entries combined; `main` passes all tests after each one.
+  - Still for the authors:
+    - Lorna reruns notebooks 13 and 14 so the Drive outputs match the merged code.
+    - Mohamed's two image checks: the scans between 0.175 and 0.278, and the 33 cropped scans.
+- **DEC-27 (Parsa): `confidence.core` is the cut-off distance alone.**
+  - **EXP-32** (free, on the Mac; `runs/EXP-32_visionA_confidence_dec27/run.py`, results on Drive) cross-fitted it by fold on EXP-31's 129 development cases.
+
+    | | AUC | Brier |
+    |---|---|---|
+    | Distance alone | 0.736 | 0.188 |
+    | v2 | 0.722 | 0.193 |
+    | No signal | 0.5 | 0.222 |
+
+    v2 minus distance: AUC −0.013 (95% interval −0.048 to +0.019). The two are equivalent, and distance needs one input, so it is chosen for simplicity.
+  - **Correction:** the 0.755 quoted at review was the raw, unfitted ranking.
+  - **Near-empty cores:** 30 cases are under 1 mL. They get median confidence 0.90, but only 25 are right. `core_warnings` adds the contract warning "Little or no core predicted: a missed infarct cannot be ruled out".
+  - **Code** (`vision/perfusion/confidence.py`):
+    - version `distance` is the default;
+    - `NEAR_EMPTY_CORE_ML` and `core_warnings` are added;
+    - the docstrings now say which file `build.py` reads: EXP-32's `per_case.csv` for development cases, `mapping_distance.json` for held-out cases.
+  - **Tests:** updated for the new default, and a test added for the warning.
+  - **Docs:** `docs/CONFIDENCE_VISION_A.md` gets a DEC-27 section, and Lorna's v2 sections stay for the record. Notebook 14's markdown names the fourth version.
+  - **Plan:** §2 row DEC-27 added; the §7 confidence note updated.
+- `pytest`: 690 passed. **Spend:** no GPU, no API.
+- **Notion sync:**
+  - Decisions: DEC-27.
+  - Experiments: EXP-32.
+  - Tasks: a note on Lorna's confidence task.
+
 ## 2026-11-16, Claude Code session (Lorna, Vision A confidence: EXP-31 results, v2 chosen, Task 2 done)
 - **EXP-31 at `217bc59`** (numbers from Lorna's Colab run; full tables in `metrics.json` on Drive):
   - **All three versions pass the done check.**

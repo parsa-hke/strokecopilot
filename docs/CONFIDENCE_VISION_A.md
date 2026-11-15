@@ -2,7 +2,24 @@
 
 Lorna, Vision A. Task 2 of `docs/team/lorna_vision_a.md`. Design approved by Parsa, 15 Nov 2026; Parsa then left the final design to Lorna.
 
-**Status: done.** A first run (EXP-30 at `aac4cb0`) showed two problems, so the method was changed: missing data is now counted only where the perfusion scan looks, and two new signals were added. The second run (EXP-31 at `217bc59`) fitted three versions side by side. All three pass the done check. **Lorna chose v2**; the reasons and the caveats are below.
+**Status: done.** A first run (EXP-30 at `aac4cb0`) showed two problems, so the method was changed: missing data is now counted only where the perfusion scan looks, and two new signals were added. The second run (EXP-31 at `217bc59`) fitted three versions side by side. All three pass the done check. Lorna chose v2. **Parsa's DEC-27 (15 Nov 2026) replaced it with the cut-off distance alone**, which does as well with one input (next section; EXP-32).
+
+## Decision: DEC-27 (Parsa, 15 Nov 2026)
+
+- **`confidence.core` is the cut-off distance alone** (version `distance`): the distance from nnU-Net's core volume to the nearest cut-off, turned into a confidence by the same small logistic map, cross-fitted by fold. It is the code's default (`CHOSEN_VERSION`).
+- **Why:** cross-fitted on the 129 development cases (EXP-32), it matches v2 with one input instead of four. v2 already put most of its weight on the distance (−1.19, against about ±0.25 or less for the others).
+
+  | | AUC, wrong side of any cut-off | Brier score (lower is better) | Wrong side, below 0.5 / 0.5–0.8 / 0.8 and over |
+  |---|---|---|---|
+  | Distance alone | 0.736 | 0.188 | 23 of 36 / 13 of 50 / 7 of 43 |
+  | v2 | 0.722 | 0.193 | 24 of 37 / 12 of 48 / 7 of 44 |
+  | No signal (always the base rate) | 0.5 | 0.222 | |
+
+  v2 minus distance: AUC −0.013 (95% interval −0.048 to +0.019), Brier +0.005 (−0.005 to +0.018), 5000 paired resamples, seed 0. **The two are equivalent; distance alone is chosen for simplicity, not accuracy.** It was chosen after seeing the results, as v2 was.
+- **A correction to the review's earlier number:** the 0.755 below is the raw distance ranking the cases with no fitting, so it is not a confidence the contract can carry. Fitted and cross-fitted the same way as v2, the distance alone scores 0.736.
+- **Near-empty predictions:** 30 cases have a core under 1 mL. They get a median confidence of 0.90, but 25 of the 30 (83%) are on the right side, and no tested signal finds the 5 that are not. So `build.py` adds the contract warning "Little or no core predicted: a missed infarct cannot be ruled out" whenever `core_ml` is under 1 mL (`core_warnings`). This is a stated limit.
+- **`confidence.penumbra` is unchanged:** Lorna's data-quality score.
+- **Values:** development cases use EXP-32's cross-fitted `confidence_core_distance`; held-out cases (Phase 4) use EXP-32's `mapping_distance.json`.
 
 ## What this is for
 
@@ -160,7 +177,7 @@ From EXP-31's `per_case.csv` with `complete_miss_check`:
 - **Other settings do no better:** under 0.5 mL, 9 flagged and 1 on the wrong side; under 2 mL, 10 flagged and 3 on the wrong side (of 7). Using missing data near the at-risk area instead: 10 flagged, 1 on the wrong side.
 - **Options for Parsa's decision:** leave confidence.core as it is and say in the contract notes that a near-empty prediction gets high confidence; cap confidence.core for near-empty predictions at a fixed value, accepting that 20 of the 25 are right; or wait for nnU-Net's per-voxel probabilities (Future work). None of these is applied: `confidence_core` and the default method are unchanged.
 
-### Version chosen: v2
+### Version chosen: v2 (Lorna's; replaced by DEC-27, see the top)
 
 **Lorna's choice**, with Parsa's go-ahead to decide the design. `confidence.py` uses v2 by default, and `mapping_v2.json` from EXP-31 is the mapping for scoring new cases.
 
@@ -177,17 +194,19 @@ From EXP-31's `per_case.csv` with `complete_miss_check`:
 
 So v2's advantage is small, and Phase 4's held-out cases are its real test.
 
-### Which values build.py uses
+### Which values build.py uses (updated for DEC-27)
 
-- **Development cases (the 129):** the cross-fitted `confidence_core_v2` and `confidence_penumbra` in EXP-31's `per_case.csv`, read with `development_confidence`. Each comes from a mapping that never saw the case.
-- **Held-out cases (Phase 4 only):** `mapping_v2.json`, loaded with `load_default_mapping` and applied with `case_confidence`.
-- **Why not `mapping_v2.json` for everything:** it was fitted on all 129 development cases, so scoring one of them with it is marking its own homework. It looks better than it is (AUC 0.757 against 0.722 cross-fitted).
+- **Development cases (the 129):** the cross-fitted `confidence_core_distance` in EXP-32's `per_case.csv`, and `confidence_penumbra` (copied from EXP-31), read with `development_confidence`. Each comes from a mapping that never saw the case.
+- **Held-out cases (Phase 4 only):** EXP-32's `mapping_distance.json`, loaded with `load_default_mapping` and applied with `case_confidence`.
+- **Every case:** `core_warnings(core_ml)` for the near-empty warning.
+- **Why not the final mapping for everything** (this was written for `mapping_v2.json` and holds for any final mapping): it was fitted on all 129 development cases, so scoring one of them with it is marking its own homework. It looks better than it is (AUC 0.757 against 0.722 cross-fitted).
 
 ## What confidence.core means
 
 For the reasoner: read `confidence.core` as roughly the chance that the core volume is on the right side of every cut-off (21, 31, 51 and 70 mL), that is, that the volume does not put the case in the wrong treatment bracket. It is not a measure of how many mL the volume is off by.
 
 - **It is roughly calibrated on the 129** (cross-fitted): mean confidence 0.665, against 0.667 of cases on the right side. By band: high 0.87 against 0.84 on the right side, middle 0.68 against 0.77, low 0.45 against 0.40.
+- **Under DEC-27 (distance alone, EXP-32's `mapping_distance.json`):** 0 mL gives 0.90, 1 mL 0.84, 5 mL 0.67, 10 mL 0.55, 21 to 70 mL about 0.41, 100 mL 0.48 and 200 mL 0.62. Missing data no longer moves it. The v2 numbers below are kept for the record.
 - **It does not rise or fall steadily with volume.** From `mapping_v2.json`, with average missing data near the at-risk area (11.9%) and nnU-Net and the threshold agreeing: 0 mL gives 0.91, 5 mL 0.66, 10 mL 0.52, 21 mL 0.36, 31 mL 0.38, 51 mL 0.40, 70 mL 0.41, 100 mL 0.53 and 150 mL 0.65. It dips near the cut-offs and rises away from them.
 - **Missing data moves it a lot:** at 21 mL, 0.53 with no missing data and 0.17 with 30% missing.
 - **So low confidence means "near a cut-off, or poor data", not "a big stroke".** And high confidence on a near-empty prediction does not rule out a complete miss (see above).

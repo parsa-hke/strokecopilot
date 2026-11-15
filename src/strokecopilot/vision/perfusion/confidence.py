@@ -1,22 +1,30 @@
 """Vision A confidence: `confidence.core` and `confidence.penumbra` for the contract (plan §6.1, §8.1; Task 2 of
 docs/team/lorna_vision_a.md). Design approved by Parsa, 15 Nov 2026; Lorna decides the final version (16 Nov 2026).
 
-confidence.core uses only signals that exist when a prediction is made, never the true infarct. Three versions
-are fitted and reported side by side (VERSIONS); Lorna chose v2 after EXP-31 (CHOSEN_VERSION), which is the default
-for fitting and for scoring one case (load_default_mapping, confidence_core):
+confidence.core uses only signals that exist when a prediction is made, never the true infarct. Four versions
+are fitted and reported side by side (VERSIONS). DEC-27 (Parsa, 15 Nov 2026) chose `distance` (CHOSEN_VERSION), the
+default for fitting and for scoring one case (load_default_mapping, confidence_core); Lorna had chosen v2 after
+EXP-31, and the two are equivalent cross-fitted (EXP-32):
 - v1, the approved three: missing Tmax data around the at-risk area; nnU-Net's predicted core as log(1 + mL);
   the gap between nnU-Net's and the threshold's core volumes on that log scale;
 - v2, v1 plus how close nnU-Net's volume is to the nearest decision cut-off (on the same log scale);
-- v3, v2 plus the size of the Tmax > 6 s area as log(1 + mL), aimed at a tiny core inside a large at-risk area.
+- v3, v2 plus the size of the Tmax > 6 s area as log(1 + mL), aimed at a tiny core inside a large at-risk area;
+- distance, the cut-off distance alone (DEC-27).
+confidence.core reads as the chance that the core volume is on the right side of every decision cut-off: about 0.9
+at 0 mL, about 0.4 to 0.45 from 15 to 70 mL, and higher again for very large cores. It is not a measure of how good
+the outline is.
 A small logistic regression turns the signals into the chance of a large error, and confidence.core is 1 minus that
 chance. It is cross-fitted by fold on the 129 development cases (fit on 4 folds, score the 5th), so no case is
 scored by a mapping that saw it. A final fit on all 129 is saved for inference. Held-out cases are never used.
 
 Which values the contract uses (contract/build.py):
-- development cases: the cross-fitted values in the confidence run's per_case.csv (EXP-31), read with
-  development_confidence. The final mapping (mapping_v2.json) was fitted on all 129 development cases, so applying
-  it to one of them is in-sample and flatters it (AUC 0.757 against 0.722 cross-fitted);
-- held-out cases (Phase 4 only): mapping_v2.json from load_default_mapping, applied with case_confidence.
+- development cases: the cross-fitted values in the confidence run's per_case.csv (EXP-32 for `distance`, EXP-31
+  for v1 to v3), read with development_confidence. The final mapping (mapping_distance.json) was fitted on all 129
+  development cases, so applying it to one of them is in-sample and flatters it;
+- held-out cases (Phase 4 only): mapping_distance.json from load_default_mapping, applied with case_confidence;
+- every case: core_warnings adds a warning when nnU-Net predicts almost no core (DEC-27). Those cases get high
+  confidence (median 0.90) but are right only 80% of the time (20 of 25 in EXP-31), and no tested signal finds the
+  wrong ones.
 
 A large error is a case that lands on the wrong side of at least one decision cut-off (21, 31, 51 or 70 mL); a
 volume error of 10 mL or more is reported too. The true infarct is used only to mark these, never as an input.
@@ -61,11 +69,13 @@ VERSIONS = {
     "v1": ("at_risk_no_data_share", "log_pred_ml", "log_disagreement"),
     "v2": ("at_risk_no_data_share", "log_pred_ml", "log_disagreement", "log_cutoff_distance"),
     "v3": ("at_risk_no_data_share", "log_pred_ml", "log_disagreement", "log_cutoff_distance", "log_tmax6_ml"),
+    "distance": ("log_cutoff_distance",),
 }
-# Lorna's choice after EXP-31 (16 Nov 2026): v2. It puts the most cut-off errors in the low band, and distance to a
-# cut-off is the clearest clinical reason for doubt; v3 added nothing. The choice was made after seeing all three,
-# and v1 and v2 differ by 2 cases (docs/CONFIDENCE_VISION_A.md).
-CHOSEN_VERSION = "v2"
+# DEC-27 (Parsa, 15 Nov 2026): distance to the nearest decision cut-off alone. Cross-fitted on EXP-31's 129 cases it
+# matches v2, Lorna's choice after EXP-31 (AUC 0.736 vs 0.722, difference -0.049 to +0.019; Brier 0.188 vs 0.193),
+# with one input instead of four: v2's weight was mostly on distance (-1.19; the others about +-0.25 or less). Chosen
+# for simplicity after seeing the results, as v2 was; EXP-32 holds the cross-fitted values and the final mapping.
+CHOSEN_VERSION = "distance"
 FEATURES = VERSIONS[CHOSEN_VERSION]
 ALL_SIGNALS = VERSIONS["v3"]
 # The chosen version's final mapping, as notebook 14 saves it in its run folder (EXP-31 on Drive).
@@ -325,7 +335,7 @@ def cross_fitted_confidence(table, features=FEATURES, l2=L2):
 
 def confidence_core(mapping, at_risk_share, nnunet_ml, threshold_ml, tmax6=None):
     """confidence.core for one case at inference, from a saved mapping and the case's inputs. Use the chosen
-    version's mapping (load_default_mapping, v2) unless comparing versions; v2 does not need `tmax6`.
+    version's mapping (load_default_mapping, `distance` under DEC-27) unless comparing versions; only v3 needs `tmax6`.
 
     For held-out (Phase 4) cases only. A development case was among the final mapping's training cases, so use its
     cross-fitted value instead (development_confidence)."""
@@ -336,13 +346,30 @@ def confidence_core(mapping, at_risk_share, nnunet_ml, threshold_ml, tmax6=None)
 def case_confidence(case, mapping, nnunet_ml, threshold_ml, margin_mm=MARGIN_MM):
     """The contract's confidence for one held-out (Phase 4) case: {"core": ..., "penumbra": ...}.
 
-    case: a loaded isles24.Case (tmax, cbf and ncct arrays). mapping: load_default_mapping (mapping_v2.json).
+    case: a loaded isles24.Case (tmax, cbf and ncct arrays). mapping: load_default_mapping (mapping_distance.json).
     nnunet_ml, threshold_ml: the case's core volumes from nnU-Net and the threshold method. Development cases use
     development_confidence instead, because the mapping was fitted on them.
     """
     signals = case_signals(case, margin_mm)
     core = confidence_core(mapping, signals["at_risk_no_data_share"], nnunet_ml, threshold_ml, signals["tmax6_ml"])
     return {"core": core, "penumbra": signals["confidence_penumbra"]}
+
+
+# DEC-27: below this predicted core (mL) the contract carries a warning; the reasoner must not read a near-empty
+# core with high confidence as "no infarct".
+NEAR_EMPTY_CORE_ML = 1.0
+NEAR_EMPTY_WARNING = "Little or no core predicted: a missed infarct cannot be ruled out"
+
+
+def core_warnings(core_ml):
+    """The contract warnings that confidence adds for one case (DEC-27): a list, empty unless nnU-Net's core is
+    under NEAR_EMPTY_CORE_ML. A missing core (None) adds nothing here; build.py reports that itself. NaN raises."""
+    if core_ml is None:
+        return []
+    value = float(core_ml)
+    if np.isnan(value) or value < 0:
+        raise ValueError("core_ml must be a volume of 0 mL or more.")
+    return [NEAR_EMPTY_WARNING] if value < NEAR_EMPTY_CORE_ML else []
 
 
 def development_confidence(per_case_csv, version=CHOSEN_VERSION, folds=None):
@@ -386,7 +413,7 @@ def load_mapping(path):
 
 
 def load_default_mapping(run_dir):
-    """The chosen version's final mapping (`mapping_v2.json`) from a confidence run folder, such as EXP-31's.
+    """The chosen version's final mapping (`mapping_distance.json`) from a confidence run folder, such as EXP-32's.
     Raises if the file holds a different version's signals."""
     mapping = load_mapping(Path(run_dir) / DEFAULT_MAPPING_FILE)
     if mapping["features"] != list(FEATURES):

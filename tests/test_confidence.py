@@ -181,8 +181,9 @@ def _fake_table(n_per_fold=20, seed=0):
 
 def test_fit_mapping_learns_the_direction():
     table = _fake_table()
-    mapping = conf.fit_mapping(table[list(conf.FEATURES)].to_numpy(), table["large_error"].to_numpy())
-    w = dict(zip(conf.FEATURES, mapping["weights"]))
+    v2 = conf.VERSIONS["v2"]
+    mapping = conf.fit_mapping(table[list(v2)].to_numpy(), table["large_error"].to_numpy(), features=v2)
+    w = dict(zip(v2, mapping["weights"]))
     assert w["log_disagreement"] > 0  # disputed predictions mean more risk in this fake data
     json.dumps(mapping)
 
@@ -195,26 +196,37 @@ def test_fit_mapping_handles_missing_and_refuses_bad_input():
     with pytest.raises(ValueError, match="one class"):
         conf.fit_mapping(X, [False, False, False, False], features=v1)
     with pytest.raises(ValueError, match="columns"):
-        conf.fit_mapping(X, [True, False, False, True])  # the default is v2, with 4 signals
+        conf.fit_mapping(X, [True, False, False, True])  # the default is `distance` (DEC-27), with 1 signal
 
 
-def test_v2_is_the_default(tmp_path):
-    assert conf.CHOSEN_VERSION == "v2" and conf.FEATURES == conf.VERSIONS["v2"]
-    assert conf.DEFAULT_MAPPING_FILE == "mapping_v2.json"
+def test_distance_is_the_default(tmp_path):
+    # DEC-27: the cut-off distance alone.
+    assert conf.CHOSEN_VERSION == "distance" and conf.FEATURES == ("log_cutoff_distance",)
+    assert conf.DEFAULT_MAPPING_FILE == "mapping_distance.json"
     table = _fake_table()
     scores, mappings = conf.cross_fitted_confidence(table)
-    assert mappings["0"]["features"] == list(conf.VERSIONS["v2"])
+    assert mappings["0"]["features"] == ["log_cutoff_distance"]
     mapping = conf.fit_mapping(table[list(conf.FEATURES)].to_numpy(), table["large_error"].to_numpy())
-    conf.save_mapping(tmp_path / "mapping_v2.json", mapping)
+    conf.save_mapping(tmp_path / "mapping_distance.json", mapping)
     loaded = conf.load_default_mapping(tmp_path)
-    row = table.iloc[5]  # v2 needs no Tmax > 6 s volume
+    row = table.iloc[5]  # needs only nnU-Net's volume; the other inputs are checked but not used
     single = conf.confidence_core(loaded, row["at_risk_no_data_share"], row["nnunet_pred_ml"], row["threshold_pred_ml"])
     assert single == pytest.approx(conf.predict_confidence(mapping, table[list(conf.FEATURES)].to_numpy())[5])
-    v3 = conf.fit_mapping(table[list(conf.VERSIONS["v3"])].to_numpy(), table["large_error"].to_numpy(),
-                          features=conf.VERSIONS["v3"])
-    conf.save_mapping(tmp_path / "mapping_v2.json", v3)  # the wrong version under the default name
-    with pytest.raises(ValueError, match="not v2"):
+    v2 = conf.fit_mapping(table[list(conf.VERSIONS["v2"])].to_numpy(), table["large_error"].to_numpy(),
+                          features=conf.VERSIONS["v2"])
+    conf.save_mapping(tmp_path / "mapping_distance.json", v2)  # the wrong version under the default name
+    with pytest.raises(ValueError, match="not distance"):
         conf.load_default_mapping(tmp_path)
+
+
+def test_core_warnings_flag_a_near_empty_core():
+    assert conf.core_warnings(0.0) == [conf.NEAR_EMPTY_WARNING]
+    assert conf.core_warnings(0.99) == [conf.NEAR_EMPTY_WARNING]
+    assert conf.core_warnings(1.0) == [] and conf.core_warnings(45.0) == []
+    assert conf.core_warnings(None) == []
+    for bad in (float("nan"), -1.0):
+        with pytest.raises(ValueError, match="0 mL or more"):
+            conf.core_warnings(bad)
 
 
 def test_cross_fitted_confidence_never_sees_its_own_case():
@@ -285,7 +297,7 @@ def test_signals_alone():
 def test_compare_versions_keeps_every_version():
     table = _fake_table()
     results, confidences = conf.compare_versions(table)
-    assert list(results) == ["v1", "v2", "v3"] and set(confidences) == {"v1", "v2", "v3"}
+    assert list(results) == ["v1", "v2", "v3", "distance"] and set(confidences) == {"v1", "v2", "v3", "distance"}
     for name, r in results.items():
         assert r["features"] == list(conf.VERSIONS[name])
         assert r["bands"]["all"]["cases"] == 100 and len(r["fold_mappings"]) == 5
@@ -314,10 +326,10 @@ def test_baseline_check_compares_with_the_cutoff_distance_alone():
     table["confidence_penumbra"] = 1 - table["at_risk_no_data_share"]
     _, confidences = conf.compare_versions(table)
     out = conf.baseline_check(table, confidences, n_boot=200)
-    assert set(out["auc_wrong_side"]) == {"v1", "v2", "v3", "cutoff_distance_alone", "penumbra"}
+    assert set(out["auc_wrong_side"]) == {"v1", "v2", "v3", "distance", "cutoff_distance_alone", "penumbra"}
     assert all(0.0 <= v <= 1.0 for v in out["auc_wrong_side"].values())
     d = out["difference"]
-    assert d["estimate"] == pytest.approx(out["auc_wrong_side"]["v2"] - out["auc_wrong_side"]["cutoff_distance_alone"],
+    assert d["estimate"] == pytest.approx(out["auc_wrong_side"][conf.CHOSEN_VERSION] - out["auc_wrong_side"]["cutoff_distance_alone"],
                                           abs=0.002)
     assert d["ci95"][0] <= d["estimate"] <= d["ci95"][1] and d["resamples"] == 200
     assert out == conf.baseline_check(table, confidences, n_boot=200)  # the seed fixes the interval
@@ -333,7 +345,7 @@ def test_complete_miss_check_is_cross_fitted():
                  [f"c{fold}c", fold, 80.0, 300.0, False, 0.5]]
     table = pd.DataFrame(rows, columns=["case", "fold", "nnunet_pred_ml", "tmax6_ml", "large_error",
                                         "confidence_core_v2"])
-    out = conf.complete_miss_check(table)
+    out = conf.complete_miss_check(table, confidence_col="confidence_core_v2")
     assert out["near_empty"] == {"below_ml": 0.5, "cases": 10, "wrong_side": 5, "confidence_median": 0.85}
     assert out["flag"]["candidates"] == 10 and out["flag"]["flagged"] == 5 and out["flag"]["flagged_wrong_side"] == 5
     assert set(out["flag"]["cutoff_by_fold"].values()) == {200.0}
@@ -359,7 +371,7 @@ def test_write_config_refuses_placeholders(tmp_path):
         with pytest.raises(ValueError, match="Notion row"):
             conf.write_config(tmp_path / "x", "abc1234", placeholder, {})
     config = conf.write_config(tmp_path / "EXP-99_visionA_confidence", "abc1234", "EXP-99", {"a": "b"})
-    assert config["experiment"] == "EXP-99" and set(config["versions"]) == {"v1", "v2", "v3"}
+    assert config["experiment"] == "EXP-99" and set(config["versions"]) == {"v1", "v2", "v3", "distance"}
     assert "nearest cut-off" in config["signals"]["log_cutoff_distance"]
     with pytest.raises(FileExistsError):
         conf.write_config(tmp_path / "EXP-99_visionA_confidence", "abc1234", "EXP-99", {})
@@ -375,10 +387,11 @@ def test_build_metrics_end_to_end_and_refuses_case_ids(tmp_path):
                                  conf.signals_alone(table), conf.slab_check(table))
     saved = json.loads(conf.write_metrics(tmp_path, metrics).read_text())
     assert saved["cases"] == 100 and saved["git_commit"] == "def" and saved["config_git_commit"] == "abc"
-    assert set(saved["versions"]) == {"v1", "v2", "v3"} and saved["undercall_cases"] == int(table["undercall"].sum())
+    assert set(saved["versions"]) == {"v1", "v2", "v3", "distance"} and saved["undercall_cases"] == int(table["undercall"].sum())
     assert "baseline_check" not in saved and "complete_miss_check" not in saved
     versions, confidences = conf.compare_versions(table)
     table["confidence_core_v2"] = confidences["v2"]
+    table[f"confidence_core_{conf.CHOSEN_VERSION}"] = confidences[conf.CHOSEN_VERSION]
     metrics = conf.build_metrics(table, {}, "def", versions, {}, {}, conf.baseline_check(table, confidences, n_boot=50),
                                  conf.complete_miss_check(table))
     assert metrics["baseline_check"]["difference"]["resamples"] == 50
@@ -425,7 +438,7 @@ FAKE_FOLDS = {"heldout": ["sub-stroke9990"], "folds": {"0": ["sub-stroke9998"], 
 
 def _per_case(tmp_path, rows):
     path = tmp_path / "per_case.csv"
-    pd.DataFrame(rows, columns=["case", "fold", "confidence_core_v1", "confidence_core_v2",
+    pd.DataFrame(rows, columns=["case", "fold", "confidence_core_v1", "confidence_core_distance",
                                 "confidence_penumbra"]).to_csv(path, index=False)
     return path
 
