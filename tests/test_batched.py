@@ -81,7 +81,7 @@ def test_two_pass_run_matches_a_direct_run(tmp_path):
     assert two["summary"]["claims"] == direct["summary"]["claims"]
     assert two["summary"]["hallucination_rate"] == direct["summary"]["hallucination_rate"]
     config = json.loads((tmp_path / "two" / "config.json").read_text())
-    assert config["batched"] == {"reasoner": False, "extractor": False, "reasoner_workers": 1, "batch_ids": []}
+    assert config["batched"] == {"reasoner": False, "extractor": False, "judge": False, "reasoner_workers": 1, "batch_ids": []}
 
 
 class FakeBatch:
@@ -241,3 +241,163 @@ def test_gather_stops_on_a_server_error_and_keeps_finished_answers(tmp_path):
         batched.gather(reqs, Slow(), log=lambda *_: None, answers_path=path, workers=2)
     saved = batched.load_answers(path, "slow-model")
     assert "kb" not in saved and all("reply" in r for r in saved.values())
+
+
+# ---------------------------------------------------------------------------- The batched judge and staged batches
+
+import hashlib  # noqa: E402
+
+from strokecopilot.nlp.verifier import run as vr  # noqa: E402
+from strokecopilot.nlp.verifier import trace as tr  # noqa: E402
+
+
+class PickyJudge(Fake):
+    """A judge whose verdict depends only on the request, so a live and a batched run must agree claim by claim. It
+    records every request it is sent."""
+
+    def __init__(self, seen):
+        super().__init__("judge")
+        self.seen = seen
+
+    def __call__(self, system, user, schema):
+        self.seen.append((system, user, json.dumps(schema, sort_keys=True)))
+        reply = super().__call__(system, user, schema)
+        for v in reply["verdicts"]:
+            mark = int(hashlib.sha256((v["id"] + user).encode()).hexdigest(), 16) % 4
+            v["verdict"], v["scope_fits"] = ("not_addressed" if mark == 0 else "supported"), mark != 1
+        return reply
+
+
+class Staged:
+    """A batch llm with submit() and collect(), like ClaudeBatch. `server` stands for Anthropic's side and outlives the
+    object, so a new object per call is a new laptop session."""
+
+    PRICE_FACTOR = 0.5
+
+    def __init__(self, inner, model, server):
+        self.inner, self.model, self.server, self.batch_ids = inner, model, server, []
+        self.usage = {"requests": 0, "input_tokens": 0, "output_tokens": 0}
+
+    def describe(self):
+        return {"model": self.model, "batch": True}
+
+    def submit(self, requests, log=print):
+        batch_id = f"b{len(self.server['batches']) + 1}"
+        self.server["batches"][batch_id] = dict(requests)
+        self.batch_ids.append(batch_id)
+        return batch_id
+
+    def collect(self, batch_id, keys, log=print, wait=True):
+        if batch_id not in self.server["ended"]:
+            if not wait:
+                return None
+            self.server["ended"].add(batch_id)
+        requests = self.server["batches"][batch_id]
+        self.usage["requests"] += len(requests)
+        self.usage["output_tokens"] += 1_000_000 * len(requests)
+        return {k: {"reply": self.inner(*req)} for k, req in requests.items()}
+
+    def run(self, requests, log=print):
+        return self.collect(self.submit(requests), list(requests))
+
+    def __call__(self, *a):
+        raise AssertionError("a batched llm is never called directly")
+
+
+def test_batched_judge_sends_the_live_requests_and_gives_the_live_result(tmp_path):
+    cases = e2e.load_cases("fixtures")
+    live_seen, batch_seen, server = [], [], {"batches": {}, "ended": set()}
+    live = e2e.run_cases(cases, Fake("reasoner"), Fake("extractor"), PickyJudge(live_seen), retriever, tmp_path / "live",
+                         log=lambda *_: None)
+    judge = Staged(PickyJudge(batch_seen), "claude-haiku-5-5", server)
+    two = batched.run_batched(cases, Fake("reasoner"), Fake("extractor"), judge, retriever, tmp_path / "batch",
+                              log=lambda *_: None, source="fixtures")
+    assert live_seen and sorted(batch_seen) == sorted(live_seen)  # byte for byte: system prompt, user message, schema
+    assert len(batch_seen) == len(set(batch_seen))  # nothing asked twice
+    assert two["summary"] == live["summary"]
+    for name in ("flagged.json",):
+        assert json.loads((tmp_path / "batch" / name).read_text()) == json.loads((tmp_path / "live" / name).read_text())
+    for case in cases:  # every claim's trace is the same
+        a = json.loads((tmp_path / "live" / "traces" / f"{case['id']}.json").read_text())
+        b = json.loads((tmp_path / "batch" / "traces" / f"{case['id']}.json").read_text())
+        assert a == b
+    assert json.loads((tmp_path / "batch" / "config.json").read_text())["batched"]["judge"] is True
+    assert two["judge_calls"] == live["judge_calls"]
+
+
+def test_collecting_judge_leaves_out_passages_already_on_their_way(tmp_path):
+    passages = {pid: {"id": pid, "text": f"text of {pid}"} for pid in ("p1", "p2", "p3")}
+    calls = [("the same claim", ["p1", "p2"]), ("the same claim", ["p2", "p3"]), ("another claim", ["p1"])]
+    live_seen = []
+    live = vr.CachedJudge(tr.Judge(PickyJudge(live_seen)), vr.JsonCache())
+    want = [live(text, [passages[p] for p in pids], {"x": 1}, True) for text, pids in calls]
+    assert [len(json.loads(user)["passages"]) for _, user, _ in live_seen] == [2, 1, 1]  # p2 is not sent again
+
+    results, source, cache, got = {}, PickyJudge([]), vr.JsonCache(), None
+    for round_no in range(3):
+        recorder = batched.Recording(results, source)
+        collecting = batched.CollectingJudge(tr.Judge(recorder), cache, tr.JUDGE_PROMPT)
+        got = []
+        for text, pids in calls:
+            try:
+                got.append(collecting(text, [passages[p] for p in pids], {"x": 1}, True))
+            except batched.Pending:
+                got.append(None)
+        if not recorder.wanted:
+            break
+        if round_no == 0:
+            assert sorted(user for _, user, _ in recorder.wanted.values()) == sorted(user for _, user, _ in live_seen)
+        results.update({key: {"reply": source(*req)} for key, req in recorder.wanted.items()})
+    assert got == want and round_no == 1  # one round of requests, then everything is answered
+
+
+def test_staged_run_survives_closed_sessions_without_submitting_twice(tmp_path):
+    cases = e2e.load_cases("fixtures")
+    seen, server = [], {"batches": {}, "ended": set()}
+
+    def session():  # new objects every time: a new laptop session
+        return batched.run_batched(
+            cases, Staged(Fake("reasoner"), "claude-sonnet-5-5", server), Staged(Fake("extractor"), "claude-sonnet-5-5", server),
+            Staged(PickyJudge(seen), "claude-haiku-5-5", server), retriever, tmp_path / "run", log=lambda *_: None,
+            source="fixtures", wait=False)
+
+    first = session()
+    assert first["waiting"] == "reasoner" and first["requests"] == 5 and len(server["batches"]) == 1
+    assert session()["waiting"] == "reasoner" and len(server["batches"]) == 1  # still running: nothing submitted again
+    stages = []
+    for _ in range(8):
+        server["ended"].update(server["batches"])
+        result = session()
+        if "waiting" not in result:
+            break
+        stages.append(result["waiting"])
+        assert session()["waiting"] == result["waiting"]  # asking again changes nothing
+    assert stages[0] == "extractor" and set(stages[1:]) == {"judge"} and "summary" in result
+    submitted = len(server["batches"])
+    assert submitted == 2 + len(stages) - 1  # one batch per stage and judge round
+
+    live_seen = []
+    live = e2e.run_cases(cases, Fake("reasoner"), Fake("extractor"), PickyJudge(live_seen), retriever, tmp_path / "live",
+                         log=lambda *_: None)
+    assert result["summary"] == live["summary"] and sorted(seen) == sorted(live_seen)
+    # Usage is added up over the sessions, so the cost covers the whole run at the batch price.
+    judged = len(live_seen)
+    assert result["usage"]["judge"]["requests"] == judged
+    assert result["cost_usd_estimate"]["judge"] == pytest.approx(
+        providers.cost_usd("claude-haiku-5-5", {"output_tokens": 1_000_000 * judged}) * 0.5)
+    assert result["cost_usd_estimate"]["reasoner"] == pytest.approx(
+        providers.cost_usd("claude-sonnet-5-5", {"output_tokens": 5_000_000}) * 0.5)
+    ledger = json.loads((tmp_path / "run" / batched.LEDGER_FILE).read_text())
+    assert all(entry["collected"] for entry in ledger["batches"].values()) and len(ledger["batches"]) == submitted
+    assert session()["summary"] == live["summary"] and len(server["batches"]) == submitted  # a rerun costs nothing
+
+
+def test_claude_batch_collects_in_a_later_session():
+    client = _client({"a": ("end_turn", '{"x": 1}')})
+    first = ClaudeBatch("claude-haiku-5-5", client=client, sleep=lambda s: None)
+    batch_id = first.submit({"a": ("s", "u", {"type": "object"})}, log=lambda *_: None)
+    assert first.collect(batch_id, ["a"], log=lambda *_: None, wait=False) is None  # still in progress: no waiting
+    later = ClaudeBatch("claude-haiku-5-5", client=client, sleep=lambda s: None)
+    assert later.collect(batch_id, ["a", "lost"], log=lambda *_: None, wait=False) == {
+        "a": {"reply": {"x": 1}}, "lost": {"error": "no batch result", "refusal": False}}
+    assert later.batch_ids == [batch_id] and later.usage["requests"] == 1

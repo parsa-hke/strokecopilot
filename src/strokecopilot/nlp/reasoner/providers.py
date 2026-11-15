@@ -146,23 +146,33 @@ class ClaudeBatch:
                 "messages": [{"role": "user", "content": user}],
                 "output_config": {"effort": self.effort, "format": {"type": "json_schema", "schema": schema}}}
 
-    def run(self, requests, log=print, timeout_h=24.0):
-        if not requests:
-            return {}
-        started = time.perf_counter()
+    def submit(self, requests, log=print):
+        """Create the batch and return its ID. Nothing waits here: the batch runs at Anthropic, so the laptop can close
+        and collect() can fetch the results in a later session (results are kept for 29 days)."""
         batch = self.client.messages.batches.create(
             requests=[{"custom_id": key, "params": self.params(*req)} for key, req in requests.items()])
         self.batch_ids.append(batch.id)
         log(f"Batch {batch.id}: {len(requests)} requests to {self.model}.")
+        return batch.id
+
+    def collect(self, batch_id, keys, log=print, wait=True, timeout_h=24.0):
+        """{key: result} for a submitted batch, or None if it has not ended and wait is False. With wait, polls every
+        poll_s seconds for up to timeout_h hours. `keys` are the custom IDs sent; one without a result is an error."""
+        started = time.perf_counter()
+        if batch_id not in self.batch_ids:
+            self.batch_ids.append(batch_id)  # submitted in an earlier session
         while True:
-            status = self.client.messages.batches.retrieve(batch.id)
+            status = self.client.messages.batches.retrieve(batch_id)
             if status.processing_status == "ended":
                 break
+            if not wait:
+                log(f"Batch {batch_id} is still {status.processing_status}.")
+                return None
             if time.perf_counter() - started > timeout_h * 3600:
-                raise RuntimeError(f"Batch {batch.id} still {status.processing_status} after {timeout_h} h.")
+                raise RuntimeError(f"Batch {batch_id} still {status.processing_status} after {timeout_h} h.")
             self.sleep(self.poll_s)
         out = {}
-        for item in self.client.messages.batches.results(batch.id):
+        for item in self.client.messages.batches.results(batch_id):
             result = item.result
             if result.type != "succeeded":
                 out[item.custom_id] = {"error": f"batch result {result.type}", "refusal": False}
@@ -182,11 +192,16 @@ class ClaudeBatch:
                 except json.JSONDecodeError as e:
                     out[item.custom_id] = {"error": f"no valid JSON: {e}", "refusal": False}
         self.usage["seconds"] += time.perf_counter() - started
-        missing = set(requests) - set(out)
-        for key in missing:
+        for key in set(keys) - set(out):
             out[key] = {"error": "no batch result", "refusal": False}
-        log(f"Batch {batch.id} ended: {sum('reply' in v for v in out.values())} of {len(requests)} succeeded.")
+        log(f"Batch {batch_id} ended: {sum('reply' in v for v in out.values())} of {len(keys)} succeeded.")
         return out
+
+    def run(self, requests, log=print, timeout_h=24.0):
+        """submit() then collect() in one blocking call."""
+        if not requests:
+            return {}
+        return self.collect(self.submit(requests, log), list(requests), log, True, timeout_h)
 
 
 class VLLMJSON:

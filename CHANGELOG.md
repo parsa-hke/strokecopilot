@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## 2026-11-16 — Claude Code session (C8 prep: batched judge, batches that survive a closed laptop, the run plan)
+- **DEC-24 amended (Parsa): the judge runs through the Batch API too.** Plan §2 row updated.
+- **`pipeline/batched.py`:**
+  - **Batched judge.** `collect_judge_requests` walks every claim as the live path does and records each judge request the live path would send next. A second round exists only where a request depends on an earlier one. `CollectingJudge` keeps the live rule that a passage already sent is not sent again.
+  - **Staged batches.** `run_batched(..., wait=False)` submits the batch that is due and returns `{"waiting": ...}`. The next call with the same folder fetches it and moves on.
+    - `batches.json` records each batch by role and request set, so none is submitted twice.
+    - `<role>_answers.jsonl` keeps every answer, so none is paid for twice.
+    - Usage is added up over sessions, so the cost estimate covers the whole run.
+  - A direct judge is still called live, and `wait=True` (the default) behaves as before.
+- **`providers.ClaudeBatch`:** `submit()` and `collect(wait=False)`; `run()` is the two together.
+- **`pipeline/paid_runs.py`:** the DEC-24 matrix as cells (model × arm), with the settings of earlier runs.
+  - `advance()` moves one cell a stage; `status()` reads the folders.
+  - Arms ready: fixtures, 150 scenarios, 20 real cases with predicted and with ground-truth vision, and Sonnet's two repeats.
+  - **The three without-rulebook arms are refused for now** (`NotReady`). What the reasoner is told and how its uncitable rule claims are scored is not defined anywhere, and the recommendation schema requires a source for every claim. Parsa's decision.
+- **Tests, 9 added:**
+  - the batched judge sends byte for byte the live requests (system prompt, user message, schema), and every trace, flag and summary matches a live run;
+  - the passage-on-its-way corner case;
+  - a run across closed sessions submits nothing twice and costs the same;
+  - `ClaudeBatch` collects in a later session;
+  - the run plan's cells, 150/75 scenarios and settings.
+- **Dry run with fake models on the real inputs** (no API, no cost): all 18 ready cells for the four models finished in 4 sittings: 820 cases, 42 batches, 4,116 judge requests. The no-rulebook arms would add 400 cases.
+- **Local setup:** the `openai` client (a declared dependency, used for OpenRouter and vLLM) was missing from the Mac's venv and is installed.
+- **Not done yet:**
+  - the 48 GB pod job (vLLM serve and the tunnel);
+  - the without-rulebook arm's definition;
+  - the v1 vs v2 prompt check;
+  - test requests.
+- `pytest`: 709 passed. **Spend:** none.
+- **Notion sync:** Decisions: DEC-24 amended (judge batching).
+
 ## 2026-11-16 — Claude Code session (Phase 3: teammates' open tasks done from the Mac — Hana's real inputs, Lorna's reruns, Mohamed's checks)
 - **Setup:** the slim tarball, checksum matched, was unpacked to `data/local/` (git-ignored). The 129 contracts and the notes were copied there too, because Google Drive stalled on one note file.
 - **Hana: real inputs.**
