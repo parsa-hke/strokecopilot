@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## 2026-11-15, Claude Code session (Lorna, Vision A Task 2: confidence, built on fake data)
+- **Branch `lorna/confidence` from `main` at `dfc832f`.** Design approved by Parsa (15 Nov 2026). Choices agreed with Lorna:
+  - the main error measure is the wrong side of at least one cut-off; a volume error of 10 mL or more is the second;
+  - the no-data signal counts the Tmax > 6 s area plus a 10 mm margin;
+  - log(1 + mL) is used for the volumes;
+  - the cases are split into three equal bands.
+- **`vision/perfusion/confidence.py`:**
+  - **Signals from the scan, never the infarct:**
+    - `at_risk_no_data_share`: no or unreliable Tmax in the Tmax > 6 s area plus 10 mm, inside plain-CT tissue; the whole brain if there is no such area;
+    - `brain_no_data_share`.
+  - **Volume signals:** `add_volume_signals` gives `log_pred_ml` and `log_disagreement`.
+  - **Targets:** `add_targets` gives `large_error` and `error_10ml`.
+  - **The mapping:** `fit_mapping` is a logistic regression on standardised signals, with ridge 1.0 and missing values filled with the training mean, written with scipy so no new dependency is needed. `predict_confidence` gives confidence.core = 1 − P(large error).
+  - **Cross-fitting:** `cross_fitted_confidence` fits on 4 folds and scores the 5th.
+  - **For inference:** `confidence_core` scores one case from a saved mapping.
+  - **Bands and the check:** `bands` gives three equal bands, `band_table` the per-band errors and crossings, and `done_check` whether low beats high, plus the Spearman correlation.
+  - **Penumbra:** `penumbra_confidence` = 1 − the brain's no-data share. It is a data-quality score only.
+  - **Run record:** `write_config` refuses a placeholder experiment ID. `build_metrics` refuses case IDs.
+- **`notebooks/14_visionA_confidence.ipynb`** (CPU). Install and mount are copied from notebook 12. It:
+  1. writes `config.json`;
+  2. reads EXP-27's `per_case.csv` and checks it against the split;
+  3. measures the scan signals from the slim tar (Tmax, CBF and NCCT only);
+  4. computes the cross-fitted confidence and the band table and check;
+  5. fits the final mapping (`mapping.json`) and summarises confidence.penumbra;
+  6. saves `per_case.csv` (Drive only, held-out check first), then `metrics.json`, last.
+
+  `EXPERIMENT` is the placeholder `EXP-NN` and refuses to run. Lorna gives the number (EXP-28 and 29 are taken). Reading EXP-27's table means this branch does not need the unmerged follow-ups code.
+- **`docs/CONFIDENCE_VISION_A.md`:** the method in plain English, with empty results tables for after the run.
+- `schemas/vision_output.json` and `contract/build.py` are unchanged.
+- **Tests:** `tests/test_confidence.py`, 15 tests on fake data. They include:
+  - a leak check: flipping a case's own label leaves its own score unchanged;
+  - an end-to-end metrics test.
+- pytest on Windows: 504 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
+- Plan §7 "Confidence estimates" is not ticked yet: no results. The item's wording ("fold ensemble disagreement or MC dropout") will be updated to the approved method when it is ticked.
+- **Notion sync:** before the run, Lorna adds the Experiments row and gives its number. Tasks → Vision A confidence: In progress.
+
 ## 2026-11-13 — Parsa's review of PR #1 (Lorna's Vision A error analysis, EXP-15)
 - **Write-up corrected** (`docs/ERROR_ANALYSIS_VISION_A.md`), every number re-checked against EXP-15's `per_case.csv` on Drive (counts and anonymous labels only):
   - **New failure group, no perfusion data.** 3 of the 4 cases with ≥ 5% of the infarct at Tmax −30 are misses. Miss 2 has 51% with no data, so its "62% visible" covers only the third with reliable data. The Limits line that said the slice disagreed with the whole-case number is replaced.
