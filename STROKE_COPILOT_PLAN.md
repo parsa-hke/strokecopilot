@@ -518,7 +518,8 @@ Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the lo
   - `confidence.core` comes from inference-time signals: missing Tmax near the at-risk area, predicted core size, disagreement with the threshold core, and distance to the nearest cut-off. That is version v2, chosen from three. A logistic map, cross-fitted by fold, turns them into a score.
   - `confidence.penumbra` is a data-quality score: 1 minus the share of the perfusion-covered tissue with no reliable Tmax.
   - Fold-ensemble disagreement and MC dropout were not used, because each development case was trained on by 4 of the 5 fold models.
-- [ ] Error analysis: where does the model fail (small lesions, posterior circulation, artefacts)?
+  - Method choice pending DEC-27 (Parsa): cut-off distance alone scored AUC 0.755 against v2's 0.722 at review, and near-empty predictions get high confidence.
+- [x] Error analysis: where does the model fail (small lesions, posterior circulation, artefacts)? Done by Lorna: EXP-15 (fold 0) and EXP-27 (all five folds); write-up in `docs/ERROR_ANALYSIS_VISION_A.md`.
 - [ ] `contract/build.py` produces valid `vision_output.json` for every non-held-out case; validate all
 
 **Vision B**

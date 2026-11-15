@@ -130,6 +130,371 @@ def test_join_tables_refuses_bad_tables():
         error_analysis.join_tables(nnunet.drop(columns=["abs_error_ml"]), threshold)
 
 
+def _fold_tables():
+    """Three fake fold tables (folds 0, 1 and 2, two cases each), as the five nnU-Net runs would give, and a
+    threshold table over all six cases with both variants, as EXP-1 gives."""
+    small, big, empty = _box(24, 34), _box(0, 40), np.zeros(SHAPE, dtype=bool)
+    ref_small, ref_big = mask_ml(small, SPACING), mask_ml(big, SPACING)
+    cases = {  # case: (fold, nnU-Net prediction, truth, reference mL)
+        "f0a": (0, small, small, ref_small), "f0b": (0, empty, small, ref_small),
+        "f1a": (1, big, big, ref_big), "f1b": (1, small, big, ref_big),
+        "f2a": (2, big, small, ref_small), "f2b": (2, small, small, ref_small),
+    }
+    nnunet = [pd.DataFrame([_row(c, p, t, r, fold=f) for c, (f, p, t, r) in cases.items() if f == fold]) for fold in (0, 1, 2)]
+    within = [_row(c, empty, t, r, fold=f) for c, (f, p, t, r) in cases.items()]
+    threshold = pd.concat([pd.DataFrame(within).assign(variant="within_tmax6"),
+                           pd.DataFrame(within).assign(variant="unrestricted", dice=0.5)], ignore_index=True)
+    # Through CSV and back, as the tables arrive from Drive.
+    return ([pd.read_csv(io.StringIO(t.to_csv(index=False))) for t in nnunet],
+            pd.read_csv(io.StringIO(threshold.to_csv(index=False))))
+
+
+def test_five_fold_table_joins_every_fold():
+    nnunet, threshold = _fold_tables()
+    table = error_analysis.five_fold_table(nnunet, threshold, expected_cases=6).set_index("case")
+    assert len(table) == 6
+    assert table["fold"].value_counts().sort_index().to_dict() == {0: 2, 1: 2, 2: 2}
+    assert table.loc["f0a", "nnunet_dice"] == 1.0 and table.loc["f0b", "nnunet_dice"] == 0.0
+    assert (table["threshold_dice"] == 0.0).all()  # the within_tmax6 rows, not the unrestricted 0.5
+    # f2a: nnU-Net predicts 30.72 mL for a 7.68 mL infarct, crossing 21 mL (an over-call, counted in step 2).
+    assert bool(table.loc["f2a", "nnunet_crosses_21"]) and not bool(table.loc["f2a", "nnunet_crosses_31"])
+    assert table.loc["f0b", "miss"] == "both"
+
+
+def test_five_fold_table_refuses_bad_inputs():
+    nnunet, threshold = _fold_tables()
+    two_folds = pd.concat([nnunet[0], nnunet[1]], ignore_index=True)
+    with pytest.raises(ValueError, match="holds 2 folds"):
+        error_analysis.five_fold_table([two_folds, nnunet[2]], threshold)
+    with pytest.raises(ValueError, match="Fold 0 appears in two"):
+        error_analysis.five_fold_table([nnunet[0], nnunet[0].assign(case=["x", "y"])], threshold)
+    repeated = nnunet[1].copy()
+    repeated.loc[0, "case"] = "f0a"
+    with pytest.raises(ValueError, match="more than one fold table"):
+        error_analysis.five_fold_table([nnunet[0], repeated, nnunet[2]], threshold)
+    with pytest.raises(ValueError, match="not 129"):
+        error_analysis.five_fold_table(nnunet, threshold, expected_cases=129)
+    moved = threshold.copy()
+    moved.loc[moved["case"] == "f2b", "fold"] = 1
+    with pytest.raises(ValueError, match="1 cases are in a different fold"):
+        error_analysis.five_fold_table(nnunet, moved)
+    with pytest.raises(ValueError, match="missing from the threshold"):
+        error_analysis.five_fold_table(nnunet, threshold[threshold["case"] != "f1a"])
+
+
+def _five_fold_features():
+    """A hand-made five-fold table with features: 8 cases over folds 0 and 1, known answers."""
+    table = pd.DataFrame({
+        "case": [f"c{i}" for i in range(8)],
+        "fold": [0, 0, 0, 0, 1, 1, 1, 1],
+        "ref_ml": [2.2, 10.0, 101.0, 40.0, 1.1, 15.0, 80.0, 5.0],
+        "nnunet_pred_ml": [0.0, 0.8, 0.0, 30.0, 32.6, 25.0, 60.0, 4.1],
+        "nnunet_dice": [0.0, 0.0, 0.0, 0.52, 0.0, 0.3, 0.6, np.nan],
+        "nnunet_abs_error_ml": [2.2, 9.2, 101.0, 10.0, 31.5, 10.0, 20.0, 0.9],
+        "threshold_pred_ml": [0.0, 5.0, 5.0, 20.0, 0.0, 10.0, 50.0, 3.5],
+        "threshold_dice": [0.0, 0.1, 0.0, 0.3, 0.0, 0.2, 0.4, np.nan],
+        "threshold_abs_error_ml": [2.2, 5.0, 96.0, 20.0, 1.1, 5.0, 30.0, 1.5],
+        "infarct_tmax6_share": [0.1, 0.9, 0.22, 0.7, 0.75, 0.6, np.nan, 0.5],
+        "infarct_tmax_missing_share": [0.0, 0.0, 0.02, 0.0, 0.0, 0.5, 0.9, 0.06],
+        # The contract reasons case_features() stores (volumes.occlusion_site), matching each label and distance.
+        "occlusion_reason": ["nearest_MCA", "nearest_MCA", "ok", "too_far", "empty_mask", "nearest_other",
+                             "nearest_other", "no_labels"],
+        "occlusion_nearest_label": [7, 5, 4, 1, np.nan, 2, 8, np.nan],
+        "occlusion_distance_mm": [1.0, 12.0, 0.0, 20.0, np.nan, 3.0, 2.0, np.nan],
+        "onset_to_imaging_min": [120.0, np.nan, 300.0, np.nan, 90.0, np.nan, 60.0, 200.0],
+    })
+    for model in ("nnunet", "threshold"):
+        for cutoff in evaluate.DECISION_CUTOFFS_ML:
+            table[f"{model}_crosses_{cutoff:g}"] = [evaluate.crosses(p, r, cutoff) for p, r in zip(table[f"{model}_pred_ml"], table["ref_ml"])]
+    return table
+
+
+def test_is_overcall():
+    # c4: 32.6 mL for 1.1 mL, crosses 21 and 31 (the Miss 8 type, Dice 0). c5: 25.0 for 15.0, crosses 21, Dice 0.3.
+    # c3: 30.0 for 40.0 crosses 31 but under-calls, so it is not an over-call.
+    flags = error_analysis.is_overcall(_five_fold_features())
+    assert flags.tolist() == [False, False, False, False, True, True, False, False]
+
+
+def test_is_undercall():
+    # c2: 0 for 101 mL, crosses all four (Dice 0). c3: 30 for 40, crosses 31. c6: 60 for 80, crosses 70.
+    # c4 crosses by over-calling, so it is not an under-call; c0, c1 and c7 under-call but cross nothing.
+    flags = error_analysis.is_undercall(_five_fold_features())
+    assert flags.tolist() == [False, False, True, True, False, False, True, False]
+    assert not (flags & error_analysis.is_overcall(_five_fold_features())).any()
+
+
+@pytest.mark.parametrize("reason, label, distance, group", [
+    # The reasons volumes.occlusion_site() really gives, as case_features() stores them.
+    ("nearest_MCA", 7, 1.0, "MCA"), ("nearest_MCA", 5, 12.0, "too far"),
+    ("ok", 4, 5.0, "ICA"),                                  # 5 mm is still within the limit
+    ("too_far", 1, 5.01, "too far"), ("ambiguous", 6, 2.0, "ICA"),
+    ("nearest_other", 2, 3.0, "PCA"), ("nearest_other", 8, 2.0, "Pcom"),
+    ("nearest_other", 13, 1.0, "unknown"),                  # 13 is not a listed label
+    ("empty_mask", None, None, "no occlusion found"),
+    ("no_labels", None, None, "unknown"), ("shape_mismatch", None, None, "unknown"),
+    ("something_new", 7, 1.0, "unknown"),                   # an unrecognised reason is not trusted
+    ("nearest_MCA", float("nan"), float("nan"), "unknown"),
+])
+def test_artery_group(reason, label, distance, group):
+    assert error_analysis.artery_group(reason, label, distance) == group
+
+
+def test_artery_group_from_case_features():
+    """Through the real pipeline: the reason comes from volumes.occlusion_site(), not from the test."""
+    mca = error_analysis.case_features(synthetic_case(occlusion_label=5))
+    assert mca["occlusion_reason"] == "nearest_MCA"
+    assert error_analysis.artery_group(mca["occlusion_reason"], mca["occlusion_nearest_label"], mca["occlusion_distance_mm"]) == "MCA"
+    far = synthetic_case(occlusion_label=1)
+    far.arrays["occlusion"][:] = False
+    far.arrays["occlusion"][2:4, 2:4, 2:3] = True  # far from the basilar label
+    f = error_analysis.case_features(far)
+    assert f["occlusion_reason"] == "too_far" and f["occlusion_distance_mm"] > 5.0
+    assert error_analysis.artery_group(f["occlusion_reason"], f["occlusion_nearest_label"], f["occlusion_distance_mm"]) == "too far"
+    ica = error_analysis.case_features(synthetic_case(occlusion_label=6))
+    assert ica["occlusion_reason"] == "ok"
+    assert error_analysis.artery_group(ica["occlusion_reason"], ica["occlusion_nearest_label"], ica["occlusion_distance_mm"]) == "ICA"
+
+
+def test_artery_group_limit_is_adjustable():
+    assert error_analysis.artery_group("too_far", 1, 20.0) == "too far"
+    assert error_analysis.artery_group("too_far", 1, 20.0, limit_mm=25.0) == "basilar"
+
+
+def test_add_artery_groups_and_group_summary():
+    table = error_analysis.add_artery_groups(_five_fold_features())
+    assert table["artery_group"].tolist() == ["MCA", "too far", "ICA", "too far", "no occlusion found", "PCA", "Pcom", "unknown"]
+    assert table["territory_within_limit"].tolist() == [
+        "anterior", "too far", "anterior", "too far", "no occlusion found", "posterior", "unknown", "unknown"]
+    table["miss"] = np.where(table["nnunet_dice"] == 0, "both", "neither")
+    rows = {r["group"]: r for r in error_analysis.group_summary(table, "artery_group")}
+    assert rows["too far"]["cases"] == 2 and rows["too far"]["dice0"] == 1
+    assert sum(r["cases"] for r in rows.values()) == 8
+
+
+def test_onset_summary():
+    s = error_analysis.onset_summary(_five_fold_features())
+    assert s["cases"] == 8 and s["onset_known"] == 5
+    # Misses with onset: c0 120, c2 300, c4 90. Others: c6 60, c7 200 (c7 has no Dice, so it is not a miss).
+    assert s["dice0_misses"] == {"onset_known": 3, "median_min": 120.0, "min_min": 90.0, "max_min": 300.0}
+    assert s["rest"] == {"onset_known": 2, "median_min": 130.0, "min_min": 60.0, "max_min": 200.0}
+    assert not error_analysis._ids_in(s, set(_five_fold_features()["case"]))
+
+
+def test_five_fold_counts_overall_and_per_fold():
+    counts = error_analysis.five_fold_counts(_five_fold_features())
+    o = counts["overall"]
+    assert o["cases"] == 8 and o["dice0"] == 4
+    assert o["miss_rate_by_size"] == {"under_21_ml": {"cases": 5, "dice0": 3}, "21_ml_and_over": {"cases": 3, "dice0": 1}}
+    assert o["overcalls"] == 2 and o["overcalls_dice0"] == 1
+    assert o["undercalls"] == 3 and o["undercalls_dice0"] == 1
+    assert o["dice0_misses"] == {"cases": 4, "visible_with_reliable_data": 4, "visible_median": 0.485,
+                                 "visible_under_25pct": 2, "no_data_at_least_5pct": 0}
+    assert o["rest"] == {"cases": 4, "visible_with_reliable_data": 3, "visible_median": 0.6,
+                         "visible_under_25pct": 0, "no_data_at_least_5pct": 3}
+    assert set(counts["per_fold"]) == {"0", "1"}
+    assert counts["per_fold"]["0"]["dice0"] == 3 and counts["per_fold"]["1"]["overcalls"] == 2
+    assert sum(f["cases"] for f in counts["per_fold"].values()) == 8
+    assert not error_analysis._ids_in(counts, set(_five_fold_features()["case"]))
+
+
+def _with_no_infarct_cases(table, rows):
+    """The table plus cases with no final infarct (true volume 0 mL), crossings recomputed from the volumes."""
+    table = pd.concat([table, pd.DataFrame(rows)], ignore_index=True)
+    for model in ("nnunet", "threshold"):
+        for cutoff in evaluate.DECISION_CUTOFFS_ML:
+            table[f"{model}_crosses_{cutoff:g}"] = [evaluate.crosses(p, r, cutoff) for p, r in zip(table[f"{model}_pred_ml"], table["ref_ml"])]
+    return table
+
+
+def _five_fold_with_no_infarct():
+    # c8: nothing to find, 3.9 mL marked, Dice 0 for both models. c9: nothing to find, 30 mL marked, which crosses
+    # 21 mL, so it is an over-call. Both score Dice 0, and neither is a miss.
+    return _with_no_infarct_cases(_five_fold_features(), {
+        "case": ["c8", "c9"], "fold": [1, 1], "ref_ml": [0.0, 0.0], "nnunet_pred_ml": [3.9, 30.0],
+        "nnunet_dice": [0.0, 0.0], "nnunet_abs_error_ml": [3.9, 30.0], "threshold_pred_ml": [15.5, 0.0],
+        "threshold_dice": [0.0, np.nan], "threshold_abs_error_ml": [15.5, 0.0],
+        "infarct_tmax6_share": [np.nan, np.nan], "infarct_tmax_missing_share": [np.nan, np.nan],
+        "occlusion_reason": ["empty_mask", "empty_mask"], "occlusion_nearest_label": [np.nan, np.nan],
+        "occlusion_distance_mm": [np.nan, np.nan], "onset_to_imaging_min": [100.0, np.nan]})
+
+
+def test_no_infarct_flags_and_miss_kind():
+    table = pd.DataFrame({"ref_ml": [0.0, 0.0, 2.0, 2.0, 30.0], "nnunet_dice": [0.0, np.nan, 0.0, 0.0, 0.5],
+                          "threshold_dice": [0.0, np.nan, 0.0, 0.2, 0.01]})
+    assert error_analysis.has_no_infarct(table).tolist() == [True, True, False, False, False]
+    assert error_analysis.is_miss(table).tolist() == [False, False, True, True, False]
+    assert error_analysis.miss_kind(table).tolist() == ["no infarct", "no infarct", "both", "nnunet", "threshold"]
+
+
+def test_join_tables_marks_no_infarct():
+    nnunet, threshold = _tables()
+    for t in (nnunet, threshold):
+        t.loc[t["case"] == "b", "ref_ml"] = 0.0  # b: both models Dice 0, but there is nothing to find
+    joined = error_analysis.join_tables(nnunet, threshold).set_index("case")
+    assert joined["miss"].to_dict() == {"a": "threshold", "b": "no infarct", "c": "neither"}
+
+
+def test_five_fold_counts_leave_no_infarct_out_of_misses():
+    counts = error_analysis.five_fold_counts(_five_fold_with_no_infarct())
+    o = counts["overall"]
+    # The same misses as without c8 and c9; they are counted apart and left out of the size rates and both sides.
+    assert o["cases"] == 10 and o["dice0"] == 4 and o["no_infarct"] == 2
+    assert o["miss_rate_by_size"] == {"under_21_ml": {"cases": 5, "dice0": 3}, "21_ml_and_over": {"cases": 3, "dice0": 1}}
+    assert o["dice0_misses"]["cases"] == 4 and o["rest"]["cases"] == 4
+    # Volume counts keep them: c9 is a third over-call, and not a Dice-0 one.
+    assert o["overcalls"] == 3 and o["overcalls_dice0"] == 1
+    assert o["undercalls"] == 3 and o["undercalls_dice0"] == 1
+    fold1 = counts["per_fold"]["1"]
+    assert fold1["cases"] == 6 and fold1["dice0"] == 1 and fold1["no_infarct"] == 2
+    assert not error_analysis._ids_in(counts, {"c8", "c9"})
+
+
+def test_onset_and_groups_leave_no_infarct_out_of_misses():
+    table = _five_fold_with_no_infarct()
+    s = error_analysis.onset_summary(table)
+    assert s["onset_known"] == 6 and s["no_infarct_onset_known"] == 1
+    assert s["dice0_misses"]["onset_known"] == 3 and s["rest"]["onset_known"] == 2  # as without c8 and c9
+    table = error_analysis.add_artery_groups(table)
+    table["miss"] = error_analysis.miss_kind(table)
+    rows = {r["group"]: r for r in error_analysis.group_summary(table, "artery_group")}
+    # c4 (a miss), c8 and c9 have empty occlusion masks.
+    assert rows["no occlusion found"]["cases"] == 3 and rows["no occlusion found"]["dice0"] == 1
+    assert rows["no occlusion found"]["no_infarct"] == 2 and rows["no occlusion found"]["missed_both"] == 1
+
+
+def test_miss_profile_and_figures_leave_no_infarct_out():
+    table = _with_no_infarct_cases(_step4_table(), {
+        "case": ["sub-07"], "ref_ml": [0.0], "nnunet_dice": [0.0], "nnunet_pred_ml": [3.9], "nnunet_abs_error_ml": [3.9],
+        "threshold_dice": [0.0], "threshold_pred_ml": [15.5], "miss": ["no infarct"], "better_volume": ["nnunet"],
+        "size_band": ["none"], "territory": ["unknown"], "occlusion_site": ["unknown"], "occlusion_distance_mm": [np.nan],
+        "onset_to_imaging_min": [np.nan], "infarct_tmax_missing_share": [np.nan], "infarct_tmax_unreliable_share": [np.nan],
+        "infarct_reliable_share": [np.nan], "infarct_tmax6_share": [np.nan], "threshold_abs_error_ml": [15.5]})
+    profile = error_analysis.miss_profile(table)
+    # The same 3 misses as without sub-07. No infarct: sub-07 and sub-05 (0 mL, both masks empty).
+    assert profile["dice0"] == 3 and profile["no_infarct"] == 2
+    assert profile["ref_ml"]["min"] == 2.0
+    picks = error_analysis.figure_cases(table)
+    assert [p["label"] for p in picks] == ["Miss 1", "Miss 2", "Miss 3", "Best 1", "Best 2"]
+    assert "sub-07" not in [p["case"] for p in picks]
+
+
+def test_exp25_check_matches_and_reports_differences():
+    table = _five_fold_features()
+    # Worked out by hand from the table, rounded as EXP-25 reports, so it should match everywhere.
+    # nnU-Net Dice per fold: 0.13 and 0.3 (c7 has no Dice); mean 0.215, std 0.17/sqrt(2) = 0.120.
+    # nnU-Net abs error per fold: 122.4/4 = 30.6 and 62.4/4 = 15.6; mean 23.1, std 15/sqrt(2) = 10.6.
+    # Threshold Dice per fold: 0.1 and 0.2; mean 0.15, std 0.071. Abs error: 30.8 and 9.4; mean 20.1, std 15.1.
+    # nnU-Net crossings: c2 all four, c3 31, c4 21+31, c5 21, c6 70. Threshold: c2 all four, c3 21+31, c6 51+70.
+    ref = {
+        "nnunet": {"dice_mean": 0.215, "dice_std": 0.12, "abs_error_mean": 23.1, "abs_error_std": 10.6, "crossings": (3, 3, 1, 2)},
+        "threshold": {"dice_mean": 0.15, "dice_std": 0.071, "abs_error_mean": 20.1, "abs_error_std": 15.1, "crossings": (2, 2, 2, 2)},
+        "nnunet_per_fold": {"0": {"cases": 4, "dice_mean": 0.13, "abs_error_mean": 30.6, "crossings": (1, 2, 1, 1)},
+                            "1": {"cases": 4, "dice_mean": 0.3, "abs_error_mean": 15.6, "crossings": (2, 1, 0, 1)}},
+    }
+    rows = error_analysis.exp25_check(table, ref)
+    assert len(rows) == 2 * 8 + 2 * 7
+    assert [r["what"] for r in rows if not r["match"]] == []
+    ref["nnunet_per_fold"]["1"]["crossings"] = (2, 1, 0, 0)  # one wrong number
+    bad = [r for r in error_analysis.exp25_check(table, ref) if not r["match"]]
+    assert bad == [{"what": "fold 1 nnunet wrong side of 70 mL", "ours": 1, "exp25": 0, "match": False}]
+
+
+def test_write_followup_config(tmp_path):
+    run_dir = tmp_path / "EXP-99_visionA_error_followups"
+    inputs = {"nnunet_fold0": "runs/EXP-14_nnunet_fold0/per_case.csv"}
+    config = error_analysis.write_followup_config(run_dir, "abc1234", "EXP-99", inputs)
+    assert config["experiment"] == "EXP-99" and config["name"] == "EXP-99_visionA_error_followups"
+    assert "smaller than the true volume" in config["definitions"]["undercall"]
+    assert "larger than the true volume" in config["definitions"]["overcall"]
+    assert config["definitions"]["artery_distance_limit_mm"] == 5.0
+    assert json.loads((run_dir / "config.json").read_text())["git_commit"] == "abc1234"
+    with pytest.raises(FileExistsError):
+        error_analysis.write_followup_config(run_dir, "def5678", "EXP-99", inputs)
+    for placeholder in ("EXP-NN", "EXP-[your number]", ""):
+        with pytest.raises(ValueError, match="Notion row"):
+            error_analysis.write_followup_config(tmp_path / "other", "abc1234", placeholder, inputs)
+
+
+def test_find_mask_dir(tmp_path):
+    nested = tmp_path / "fold_0" / "validation"
+    nested.mkdir(parents=True)
+    for case in ("sub-a", "sub-b"):
+        (nested / f"{case}.nii.gz").write_bytes(b"")
+    (tmp_path / "sub-a.nii.gz").write_bytes(b"")  # one stray copy higher up
+    folder, found = error_analysis.find_mask_dir(tmp_path, ["sub-a", "sub-b", "sub-c"])
+    assert folder == nested and found == 2
+    with pytest.raises(FileNotFoundError):
+        error_analysis.find_mask_dir(tmp_path, ["sub-x"])
+
+
+def test_compare_with_per_case():
+    table = _five_fold_features()
+    other = pd.DataFrame({"case": table["case"], "dice": table["nnunet_dice"],
+                          "pred_ml": table["nnunet_pred_ml"], "ref_ml": table["ref_ml"]})
+    out = error_analysis.compare_with_per_case(table, other)
+    assert out["in_both"] == 8 and out["only_ours"] == 0 and out["only_theirs"] == 0
+    assert out["columns"] == {"dice": {"compared": 8, "differ": 0}, "pred_ml": {"compared": 8, "differ": 0},
+                              "ref_ml": {"compared": 8, "differ": 0}}
+    other.loc[2, "pred_ml"] = 5.0
+    other = other.iloc[1:]  # one case missing from theirs
+    out = error_analysis.compare_with_per_case(table, other)
+    assert out["only_ours"] == 1 and out["columns"]["pred_ml"]["differ"] == 1
+    assert not error_analysis._ids_in(out, set(table["case"]))
+    with pytest.raises(ValueError, match="repeated"):
+        error_analysis.compare_with_per_case(table, pd.concat([other, other]))
+
+
+def test_followup_metrics_refuses_case_ids():
+    table = _five_fold_features()
+    counts = error_analysis.five_fold_counts(table)
+    groups = error_analysis.group_summary(
+        error_analysis.add_artery_groups(table).assign(miss="neither"), "artery_group")
+    onset = error_analysis.onset_summary(table)
+    metrics = error_analysis.followup_metrics(table, {"experiment": "EXP-99", "git_commit": "abc"}, "def",
+                                              {"artery_group": groups}, onset, counts, [])
+    assert metrics["git_commit"] == "def" and metrics["config_git_commit"] == "abc" and metrics["cases"] == 8
+    json.dumps(metrics)  # must be writable as JSON
+    onset["note"] = "c3"  # a case ID where none should be
+    with pytest.raises(ValueError, match="case IDs"):
+        error_analysis.followup_metrics(table, {}, "def", {}, onset, counts, [])
+
+
+def test_followup_notebook_flow(tmp_path):
+    """What notebook 13 does after loading data, on fake tables: join, add features, count, group, check, save."""
+    nnunet, threshold = _fold_tables()
+    table = error_analysis.five_fold_table(nnunet, threshold, expected_cases=6)
+    features = pd.DataFrame({
+        "case": table["case"], "size_band": "5-21", "infarct_tmax6_share": 0.5, "infarct_tmax_missing_share": 0.0,
+        "occlusion_reason": "nearest_MCA", "occlusion_nearest_label": 7, "occlusion_distance_mm": 2.0,
+        "onset_to_imaging_min": [100.0, np.nan, 150.0, np.nan, 200.0, np.nan]})
+    table = table.merge(features, on="case", how="left", validate="one_to_one")
+    counts = error_analysis.five_fold_counts(table)
+    grouped = error_analysis.add_artery_groups(table)
+    groups = {g: error_analysis.group_summary(grouped, g) for g in ("artery_group", "territory_within_limit")}
+    onset = error_analysis.onset_summary(table)
+    exp25_rows = error_analysis.exp25_check(table)  # the real reference: fake data will not match, that is fine
+    assert len(exp25_rows) > 0 and not all(r["match"] for r in exp25_rows)
+    picks = error_analysis.figure_cases(table[table["fold"] == 0])
+    assert [p["label"] for p in picks] == ["Miss 1", "Best 1"]
+    summary = error_analysis.figure_summary(table[table["fold"] == 0], picks)
+    config = error_analysis.write_followup_config(tmp_path / "EXP-99_x", "abc1234", "EXP-99", {"a": "b"})
+    metrics = error_analysis.followup_metrics(table, config, "def5678", groups, onset, counts, exp25_rows,
+                                              {"x.csv": error_analysis.compare_with_per_case(table, table[["case"]])})
+    path = error_analysis.write_metrics(tmp_path / "EXP-99_x", metrics)
+    saved = json.loads(path.read_text())
+    assert saved["counts"]["overall"]["cases"] == 6 and saved["git_commit"] == "def5678"
+    assert not error_analysis._ids_in(saved, set(table["case"])) and not error_analysis._ids_in(summary, set(table["case"]))
+
+
+def test_exp25_reference_is_consistent():
+    """The recorded EXP-25 per-fold crossings and case counts add up to its totals."""
+    ref = error_analysis.EXP25_REFERENCE
+    folds = ref["nnunet_per_fold"].values()
+    assert sum(f["cases"] for f in folds) == 129
+    assert tuple(sum(f["crossings"][i] for f in folds) for i in range(4)) == ref["nnunet"]["crossings"]
+
+
 def test_join_tables_keeps_one_threshold_variant():
     """EXP-1 has a row per case for each core variant; only within_tmax6 is joined."""
     nnunet, within = _tables()
@@ -213,7 +578,9 @@ def test_tmax6_band(share, band):
 def test_visibility_comparison():
     v = error_analysis.visibility_comparison(_step4_table())
     assert v["dice0_misses"] == {"cases": 3, "with_reliable_data": 3, "median": 0.2, "p25": 0.15, "p75": 0.25}
-    assert v["rest"]["cases"] == 3 and v["rest"]["with_reliable_data"] == 2 and v["rest"]["median"] == 0.85
+    # sub-05 has no final infarct (0 mL), so it is in neither group.
+    assert v["no_infarct"] == 1
+    assert v["rest"]["cases"] == 2 and v["rest"]["with_reliable_data"] == 2 and v["rest"]["median"] == 0.85
 
 
 def test_figure_cases_labels():
@@ -247,6 +614,75 @@ def test_case_figure_is_anonymous():
     assert not any("sub-stroke9999" in t for t in texts)
     assert len(fig.axes) == 3
     plt.close(fig)
+
+
+def _figure_case():
+    """The synthetic case named like a real one, with an NCCT map, for the figure tests."""
+    case = synthetic_case()
+    case.id = case.clinical["case"] = "sub-stroke9999"
+    case.arrays["ncct"] = np.full(SHAPE, 30.0, dtype=np.float32)
+    return case
+
+
+def _outline_colours(fig):
+    """The edge colours of every outline (contour) drawn on the figure's panels, as RGBA tuples."""
+    colours = set()
+    for ax in fig.axes:
+        for collection in ax.collections:
+            for rgba in np.atleast_2d(collection.get_edgecolor()):
+                colours.add(tuple(np.round(rgba, 3)))
+    return colours
+
+
+def test_case_figure_draws_both_outlines():
+    mpl = pytest.importorskip("matplotlib")
+    mpl.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import to_rgba
+
+    case = _figure_case()
+    prediction = np.zeros(SHAPE, dtype=bool)
+    prediction[20:30, 10:18, 6:14] = True  # overlaps part of the infarct, on the same slices
+    fig = error_analysis.case_figure(case, "Miss 8", "under 5", prediction=prediction)
+    colours = _outline_colours(fig)
+    assert tuple(np.round(to_rgba("red"), 3)) in colours and tuple(np.round(to_rgba("cyan"), 3)) in colours
+    texts = error_analysis.figure_texts(fig)
+    assert "Miss 8, under 5 mL: final infarct in red, AI outline in cyan" in texts
+    assert {"Final infarct", "AI outline"} <= set(texts)
+    assert not any("sub-stroke9999" in t for t in texts)
+    plt.close(fig)
+
+
+def test_case_figure_says_when_the_ai_marked_elsewhere_or_nothing():
+    mpl = pytest.importorskip("matplotlib")
+    mpl.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import to_rgba
+
+    case = _figure_case()
+    z = 10  # the infarct's largest slice in the synthetic case is one of z 6 to 13
+    elsewhere = np.zeros(SHAPE, dtype=bool)
+    elsewhere[5:9, 5:9, 16:19] = True  # 3 slices, none with infarct
+    fig = error_analysis.case_figure(case, "Miss 8", prediction=elsewhere, z=z)
+    assert "AI outline: none on this slice (marks on 3 other slices)" in error_analysis.figure_texts(fig)
+    assert tuple(np.round(to_rgba("cyan"), 3)) not in _outline_colours(fig)
+    plt.close(fig)
+    fig = error_analysis.case_figure(case, "Miss 1", prediction=np.zeros(SHAPE, dtype=bool))
+    assert "AI outline: none on this slice, none anywhere" in error_analysis.figure_texts(fig)
+    plt.close(fig)
+    with pytest.raises(ValueError, match="shape"):
+        error_analysis.case_figure(case, "Miss 1", prediction=np.zeros((4, 4, 4), dtype=bool))
+
+
+def test_load_prediction(tmp_path):
+    nib = pytest.importorskip("nibabel")
+    mask = np.zeros(SHAPE, dtype=np.uint8)
+    mask[1:3, 1:3, 1:3] = 1
+    nib.save(nib.Nifti1Image(mask, np.eye(4)), str(tmp_path / "sub-stroke9999.nii.gz"))
+    pred = error_analysis.load_prediction(tmp_path, "sub-stroke9999", SHAPE)
+    assert pred.dtype == bool and int(pred.sum()) == 8
+    with pytest.raises(ValueError, match="shape"):
+        error_analysis.load_prediction(tmp_path, "sub-stroke9999", (4, 4, 4))
 
 
 def test_case_features_missing_inputs():
