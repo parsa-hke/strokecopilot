@@ -15,7 +15,8 @@ Built one step at a time.
 
 Outputs that leave Drive carry counts and summaries only, never case IDs (docs/team/README.md §3).
 Volume error matters more than Dice, because the treatment rules are volume cut-offs
-(evaluate.DECISION_CUTOFFS_ML).
+(evaluate.DECISION_CUTOFFS_ML). A miss is nnU-Net Dice 0 on a case with a final infarct (is_miss()); a case
+with no final infarct (0 mL) scores Dice 0 whenever anything is marked, so it is counted apart (has_no_infarct()).
 """
 
 import json
@@ -29,6 +30,7 @@ from strokecopilot.data.isles24_survey import PENUMBRA_TMAX_S
 from strokecopilot.nlp.notes.generate import minutes
 from strokecopilot.vision.perfusion import volumes
 from strokecopilot.vision.perfusion.evaluate import DECISION_CUTOFFS_ML
+from strokecopilot.vision.perfusion.nnunet_wrapper import FILE_ENDING
 from strokecopilot.vision.perfusion.pod_job import FOLDS_SHA256, SLIM_SHA256
 from strokecopilot.vision.perfusion.thresholds import reliable
 
@@ -47,6 +49,9 @@ SHARED = ("ref_ml", "infarct_reliable_share")
 THRESHOLD_VARIANT = "within_tmax6"
 # Below this Dice a case counts as a miss when comparing the two models.
 MISS_DICE = 0.05
+# A case whose true (final) infarct is at most this volume has no infarct to miss: anything marked scores Dice 0,
+# but nothing was missed. Such cases are counted apart as "no infarct", never as misses (Parsa's review of PR #7).
+NO_INFARCT_ML = 0.0
 # Two reference volumes closer than this (mL) count as the same.
 REF_TOLERANCE_ML = 1e-6
 
@@ -73,6 +78,34 @@ LARGEST_MISS_KEYS = ("ref_ml", "nnunet_pred_ml", "threshold_dice", "threshold_pr
 # Step 6a figures: the maps shown, with display windows (template.PANELS), and how many best cases.
 FIGURE_PANELS = (("ncct", 0, 80), ("cbf", None, None), ("tmax", 0, 12))
 BEST_CASES = 3
+# Follow-ups step 4. Outline colours: the true final infarct, and nnU-Net's prediction (EXP-22 for fold 0).
+TRUE_COLOUR = "red"
+AI_COLOUR = "cyan"
+
+# Follow-ups step 3. Artery type of each Circle of Willis label, side ignored (TopCoW numbering, as for
+# POSTERIOR_LABELS above; not confirmed for this dataset). Labels not listed become "unknown".
+ARTERY_OF_LABEL = {1: "basilar", 2: "PCA", 3: "PCA", 4: "ICA", 6: "ICA", 5: "MCA", 7: "MCA",
+                   8: "Pcom", 9: "Pcom", 10: "Acom", 11: "ACA", 12: "ACA", 15: "ACA"}
+NOT_AN_ARTERY = ("too far", "no occlusion found", "unknown")
+
+# Follow-ups step 2. "Small" infarcts are under the first treatment cut-off, as in the write-up.
+SMALL_ML = 21.0
+# A case counts as having a no-data problem when at least this share of its infarct has Tmax -30 (Parsa's review).
+NO_DATA_SHARE = 0.05
+# Parsa's EXP-25 numbers (CHANGELOG, 13 Nov 2026) for the check in exp25_check(): means and stds over the five folds
+# (mean Dice and mean absolute volume error per fold), cases on the wrong side of 21/31/51/70 mL out of 129, and
+# each nnU-Net fold's own numbers (fold 0 is EXP-14, folds 1 to 4 are EXP-18 to EXP-21).
+EXP25_REFERENCE = {
+    "nnunet": {"dice_mean": 0.215, "dice_std": 0.046, "abs_error_mean": 23.5, "abs_error_std": 3.9, "crossings": (30, 28, 20, 17)},
+    "threshold": {"dice_mean": 0.111, "dice_std": 0.031, "abs_error_mean": 25.2, "abs_error_std": 5.0, "crossings": (35, 29, 23, 17)},
+    "nnunet_per_fold": {
+        "0": {"cases": 26, "dice_mean": 0.218, "abs_error_mean": 19.6, "crossings": (5, 5, 3, 3)},
+        "1": {"cases": 26, "dice_mean": 0.211, "abs_error_mean": 22.0, "crossings": (3, 4, 4, 3)},
+        "2": {"cases": 26, "dice_mean": 0.173, "abs_error_mean": 27.0, "crossings": (9, 6, 3, 3)},
+        "3": {"cases": 26, "dice_mean": 0.290, "abs_error_mean": 20.9, "crossings": (5, 5, 2, 3)},
+        "4": {"cases": 25, "dice_mean": 0.184, "abs_error_mean": 28.3, "crossings": (8, 8, 8, 5)},
+    },
+}
 
 
 def write_config(run_dir, git_commit, folds=(0,), notes=""):
@@ -105,6 +138,7 @@ def write_config(run_dir, git_commit, folds=(0,), notes=""):
         },
         "decision_cutoffs_ml": list(DECISION_CUTOFFS_ML),
         "miss_dice": MISS_DICE,
+        "no_infarct_ml": NO_INFARCT_ML,
         "outputs_policy": "counts and summaries only, never case IDs",
         "notes": notes,
     }
@@ -127,7 +161,8 @@ def join_tables(nnunet, threshold, variant=THRESHOLD_VARIANT):
     - nnunet_<crossing> and threshold_<crossing> for each decision cut-off;
     - dice_gap and abs_error_gap (nnU-Net minus threshold);
     - better_volume: "nnunet", "threshold" or "tie", by absolute volume error;
-    - miss: "both", "nnunet", "threshold" or "neither", by Dice below MISS_DICE;
+    - miss: "both", "nnunet", "threshold" or "neither", by Dice below MISS_DICE, or "no infarct" when the
+      true volume is 0 mL (see miss_kind());
     - crossings_disagree: how many cut-offs one model crosses and the other doesn't.
     """
     if "variant" in threshold.columns:
@@ -159,12 +194,66 @@ def join_tables(nnunet, threshold, variant=THRESHOLD_VARIANT):
     joined["abs_error_gap"] = joined["nnunet_abs_error_ml"] - joined["threshold_abs_error_ml"]
     joined["better_volume"] = np.select(
         [joined["abs_error_gap"] < 0, joined["abs_error_gap"] > 0], ["nnunet", "threshold"], default="tie")
-    # A case with no Dice (both masks empty) is not a miss.
-    nn_miss = joined["nnunet_dice"].lt(MISS_DICE)
-    th_miss = joined["threshold_dice"].lt(MISS_DICE)
-    joined["miss"] = np.select([nn_miss & th_miss, nn_miss, th_miss], ["both", "nnunet", "threshold"], default="neither")
+    joined["miss"] = miss_kind(joined)
     joined["crossings_disagree"] = sum(
         (joined[f"nnunet_{c}"].astype(bool) != joined[f"threshold_{c}"].astype(bool)).astype(int) for c in CROSSINGS)
+    return joined
+
+
+def has_no_infarct(table):
+    """True for rows whose true (final) infarct is 0 mL (at most NO_INFARCT_ML). A boolean per row."""
+    return table["ref_ml"] <= NO_INFARCT_ML
+
+
+def is_miss(table):
+    """A Dice-0 miss: nnU-Net's Dice is exactly 0 on a case that has a final infarct. Cases with no final infarct
+    also score Dice 0 when anything is marked, but nothing was missed, so they are left out. A boolean per row."""
+    return (table["nnunet_dice"] == 0) & ~has_no_infarct(table)
+
+
+def miss_kind(table):
+    """Who misses each case, by Dice below MISS_DICE: "both", "nnunet", "threshold" or "neither", and "no infarct"
+    for a case with no final infarct. A case with no Dice (both masks empty) is not a miss."""
+    nn_miss = table["nnunet_dice"].lt(MISS_DICE)
+    th_miss = table["threshold_dice"].lt(MISS_DICE)
+    return np.select([has_no_infarct(table), nn_miss & th_miss, nn_miss, th_miss],
+                     ["no infarct", "both", "nnunet", "threshold"], default="neither")
+
+
+def five_fold_table(nnunet_folds, threshold, variant=THRESHOLD_VARIANT, expected_cases=None):
+    """Follow-ups step 1. join_tables() over every fold: one row per development case, nnU-Net scored by the
+    fold model that did not train on it.
+
+    nnunet_folds: the per_case.csv tables of the five nnU-Net fold runs (EXP-14 for fold 0, EXP-18 to EXP-21 for
+    folds 1 to 4), as pandas DataFrames, each holding one fold. threshold: EXP-1's per_case.csv, which covers all
+    folds. Raises, with counts only, if a table holds more than one fold, a fold appears in two tables, a case
+    appears twice, the threshold table puts a case in a different fold, or the total is not `expected_cases`.
+    """
+    import pandas as pd
+
+    seen = []
+    for table in nnunet_folds:
+        folds = sorted(table["fold"].dropna().astype(int).unique())
+        if len(folds) != 1:
+            raise ValueError(f"An nnU-Net table holds {len(folds)} folds; each should hold exactly one.")
+        if folds[0] in seen:
+            raise ValueError(f"Fold {folds[0]} appears in two nnU-Net tables.")
+        seen.append(folds[0])
+    nnunet = pd.concat(nnunet_folds, ignore_index=True)
+    nnunet["fold"] = nnunet["fold"].astype(int)
+    if nnunet["case"].duplicated().any():
+        raise ValueError(f"{int(nnunet['case'].duplicated().sum())} cases appear in more than one fold table.")
+    if expected_cases is not None and len(nnunet) != expected_cases:
+        raise ValueError(f"The fold tables hold {len(nnunet)} cases, not {expected_cases}.")
+
+    joined = join_tables(nnunet, threshold, variant=variant)
+
+    if "fold" in threshold.columns:
+        base = threshold[threshold["variant"] == variant] if "variant" in threshold.columns else threshold
+        fold_of = base.drop_duplicates("case").set_index("case")["fold"].astype(int)
+        differ = int((joined["case"].map(fold_of) != joined["fold"]).sum())
+        if differ:
+            raise ValueError(f"{differ} cases are in a different fold in the threshold table.")
     return joined
 
 
@@ -299,14 +388,291 @@ def crossing_counts(table):
 
 
 def visibility_comparison(table):
-    """infarct_tmax6_share for nnU-Net's Dice-0 misses vs the other cases: counts and medians, no IDs."""
-    miss = table["nnunet_dice"] == 0
-    out = {}
-    for name, rows in (("dice0_misses", table[miss]), ("rest", table[~miss])):
+    """infarct_tmax6_share for nnU-Net's Dice-0 misses vs the other cases: counts and medians, no IDs.
+    Cases with no final infarct are in neither group; `no_infarct` gives how many there are."""
+    miss, none = is_miss(table), has_no_infarct(table)
+    out = {"no_infarct": int(none.sum())}
+    for name, rows in (("dice0_misses", table[miss]), ("rest", table[~miss & ~none])):
         share = rows["infarct_tmax6_share"]
         out[name] = {"cases": int(len(rows)), "with_reliable_data": int(share.notna().sum()),
                      "median": _num(share.median()), "p25": _num(share.quantile(0.25)), "p75": _num(share.quantile(0.75))}
     return out
+
+
+def is_overcall(table):
+    """Over-call (agreed with Lorna, follow-ups): nnU-Net's predicted volume is larger than the true volume and
+    crosses at least one decision cut-off, at any Dice. A boolean per row."""
+    over = table["nnunet_pred_ml"] > table["ref_ml"]
+    crosses_any = sum(table[f"nnunet_{c}"].astype(bool) for c in CROSSINGS) > 0
+    return over & crosses_any
+
+
+def is_undercall(table):
+    """Under-call, the mirror of is_overcall(): nnU-Net's predicted volume is smaller than the true volume and
+    crosses at least one decision cut-off, at any Dice. A boolean per row."""
+    under = table["nnunet_pred_ml"] < table["ref_ml"]
+    crosses_any = sum(table[f"nnunet_{c}"].astype(bool) for c in CROSSINGS) > 0
+    return under & crosses_any
+
+
+def _fold_block(rows):
+    """The follow-up counts for one set of rows of the five-fold table: counts and medians only, no case IDs.
+
+    "dice0" counts the misses of is_miss(): cases with no final infarct are not misses. They are counted in
+    `no_infarct`, left out of the miss rate by size and of both sides of the miss comparison, and kept in the
+    over-call and under-call counts, which are about volume.
+    """
+    miss, none = is_miss(rows), has_no_infarct(rows)
+    small = (rows["ref_ml"] < SMALL_ML) & ~none
+    large = rows["ref_ml"] >= SMALL_ML
+    overcall = is_overcall(rows)
+    undercall = is_undercall(rows)
+    visible, missing = rows["infarct_tmax6_share"], rows["infarct_tmax_missing_share"]
+
+    def side(mask):
+        share = visible[mask]
+        return {
+            "cases": int(mask.sum()),
+            "visible_with_reliable_data": int(share.notna().sum()),
+            "visible_median": _num(share.median()),
+            "visible_under_25pct": int((share < 0.25).sum()),
+            "no_data_at_least_5pct": int((missing[mask] >= NO_DATA_SHARE).sum()),
+        }
+
+    return {
+        "cases": int(len(rows)),
+        "dice0": int(miss.sum()),
+        "no_infarct": int(none.sum()),
+        "miss_rate_by_size": {
+            f"under_{SMALL_ML:g}_ml": {"cases": int(small.sum()), "dice0": int((miss & small).sum())},
+            f"{SMALL_ML:g}_ml_and_over": {"cases": int(large.sum()), "dice0": int((miss & large).sum())},
+        },
+        "overcalls": int(overcall.sum()),
+        "overcalls_dice0": int((overcall & miss).sum()),
+        "undercalls": int(undercall.sum()),
+        "undercalls_dice0": int((undercall & miss).sum()),
+        "dice0_misses": side(miss),
+        "rest": side(~miss & ~none),
+    }
+
+
+def five_fold_counts(table):
+    """Follow-ups step 2. On the five-fold table with case_features() added: Dice-0 misses, the miss rate under and
+    over 21 mL, over-calls and under-calls and how many of each are Dice 0, and the visible (Tmax > 6 s) and no-data comparisons
+    for misses against the rest. Overall and per fold; counts and medians only, no case IDs."""
+    return {
+        "overall": _fold_block(table),
+        "per_fold": {str(int(f)): _fold_block(table[table["fold"] == f]) for f in sorted(table["fold"].unique())},
+    }
+
+
+def artery_group(reason, nearest_label, distance_mm, limit_mm=None):
+    """Follow-ups step 3. The artery the occlusion sits next to, counted only within the distance limit.
+
+    `reason` is the contract's reason from volumes.occlusion_site(), as case_features() stores it. That says "ok"
+    only for an ICA or basilar occlusion within the limit; "nearest_<site>", "ambiguous" and "too_far" also come
+    from good evidence, so all of these are used. Returns the artery type, side ignored (ARTERY_OF_LABEL), "too far"
+    when the occlusion is more than `limit_mm` from its nearest label, "no occlusion found" for an empty occlusion
+    mask, and "unknown" for "no_labels", "shape_mismatch", any other reason, an unlisted label or a missing value.
+    The default limit is the contract's (volumes.DISTANCE_LIMIT_MM).
+    """
+    limit_mm = volumes.DISTANCE_LIMIT_MM if limit_mm is None else limit_mm
+    if reason == "empty_mask":
+        return "no occlusion found"
+    usable = reason in ("ok", "too_far", "ambiguous") or (isinstance(reason, str) and reason.startswith("nearest_"))
+    if not usable or nearest_label is None or distance_mm is None:
+        return "unknown"
+    if isinstance(nearest_label, float) and np.isnan(nearest_label):
+        return "unknown"
+    if isinstance(distance_mm, float) and np.isnan(distance_mm):
+        return "unknown"
+    if distance_mm > limit_mm:
+        return "too far"
+    return ARTERY_OF_LABEL.get(int(nearest_label), "unknown")
+
+
+def add_artery_groups(table, limit_mm=None):
+    """A copy of the table with `artery_group` and `territory_within_limit` (anterior, posterior, or the same
+    "too far" / "no occlusion found" / "unknown" as artery_group)."""
+    table = table.copy()
+    groups = [artery_group(r, l, d, limit_mm) for r, l, d in
+              zip(table["occlusion_reason"], table["occlusion_nearest_label"], table["occlusion_distance_mm"])]
+    table["artery_group"] = groups
+    territory = []
+    for group, label in zip(groups, table["occlusion_nearest_label"]):
+        territory.append(territory_of_label(int(label)) if group not in NOT_AN_ARTERY else group)
+    table["territory_within_limit"] = territory
+    return table
+
+
+def onset_summary(table):
+    """Follow-ups step 3. Onset to scan time (minutes) for the cases that have it, misses against the rest:
+    how many cases have it, the median and the range. Cases with no final infarct are in neither group
+    (`no_infarct_onset_known`). Counts and values only, no case IDs."""
+    known = table[table["onset_to_imaging_min"].notna()]
+    miss, none = is_miss(known), has_no_infarct(known)
+    out = {"cases": int(len(table)), "onset_known": int(len(known)), "no_infarct_onset_known": int(none.sum())}
+    for name, rows in (("dice0_misses", known[miss]), ("rest", known[~miss & ~none])):
+        minutes_ = rows["onset_to_imaging_min"]
+        out[name] = {"onset_known": int(len(rows)), "median_min": _num(minutes_.median(), 0),
+                     "min_min": _num(minutes_.min(), 0), "max_min": _num(minutes_.max(), 0)}
+    return out
+
+
+def write_followup_config(run_dir, git_commit, experiment, inputs, notes=""):
+    """Follow-ups step 5. config.json for the follow-up run, written before it and never overwritten.
+
+    experiment: the Notion Experiments ID, such as "EXP-27"; a placeholder is refused. inputs: the Drive paths
+    the run reads. Records the definitions agreed with Lorna (over-call, under-call, small, no data, the artery
+    distance limit) and the counts-only output rule. No case IDs.
+    """
+    import re
+
+    if not re.fullmatch(r"EXP-\d+", str(experiment)):
+        raise ValueError(f"Set the experiment ID from the Notion row (like EXP-27), not {experiment!r}.")
+    if not git_commit:
+        raise ValueError("git_commit is required: the commit the notebook installed.")
+    run_dir = Path(run_dir)
+    path = run_dir / "config.json"
+    if path.exists():
+        raise FileExistsError(f"{path} already exists. config.json is written once, before the run.")
+    config = {
+        "experiment": experiment,
+        "name": run_dir.name,
+        "runner": "strokecopilot.vision.perfusion.error_analysis (notebooks/13_visionA_error_analysis_followups.ipynb)",
+        "git_commit": git_commit,
+        "data_version": ISLES24_SLIM,
+        "data_sha256": SLIM_SHA256,
+        "folds_sha256": FOLDS_SHA256,
+        "cases": "development only (folds 0-4); held-out cases are refused by the loaders",
+        "inputs": dict(inputs),
+        "threshold_variant": THRESHOLD_VARIANT,
+        "definitions": {
+            "miss": "nnU-Net Dice exactly 0 on a case with a final infarct (true volume above 0 mL)",
+            "no_infarct": "true volume 0 mL: counted apart, never as a miss; kept in the over-call and under-call counts",
+            "overcall": "nnU-Net predicted volume larger than the true volume and on the wrong side of at least one "
+                        "decision cut-off, at any Dice; also counted: how many of these are Dice 0",
+            "undercall": "nnU-Net predicted volume smaller than the true volume and on the wrong side of at least one "
+                         "decision cut-off, at any Dice; also counted: how many of these are Dice 0",
+            "small_ml": SMALL_ML,
+            "no_data_share": NO_DATA_SHARE,
+            "visible": "share of the infarct with Tmax > 6 s, among infarct voxels with reliable data",
+            "artery_distance_limit_mm": volumes.DISTANCE_LIMIT_MM,
+            "artery_types": {str(k): v for k, v in ARTERY_OF_LABEL.items()},
+        },
+        "decision_cutoffs_ml": list(DECISION_CUTOFFS_ML),
+        "exp25_reference": "Parsa's CHANGELOG entry of 13 Nov 2026 (EXP25_REFERENCE)",
+        "figures": "fold 0 only: every Dice-0 miss and the 3 best cases, with the EXP-22 outlines",
+        "outputs_policy": "counts and summaries only, never case IDs",
+        "notes": notes,
+    }
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, indent=1))
+    return config
+
+
+def find_mask_dir(root, case_ids):
+    """The folder under `root` (itself or any subfolder) that holds `<case>.nii.gz` masks for the most of
+    `case_ids`. Raises if none holds any. Returns the path and how many of the cases it holds."""
+    root = Path(root)
+    best, found = None, 0
+    for folder in [root, *[p for p in root.rglob("*") if p.is_dir()]]:
+        n = sum((folder / f"{case}{FILE_ENDING}").exists() for case in case_ids)
+        if n > found:
+            best, found = folder, n
+    if best is None:
+        raise FileNotFoundError(f"No predicted masks for these {len(case_ids)} cases under {root}.")
+    return best, found
+
+
+def compare_with_per_case(table, other, tolerance=1e-6):
+    """Case-by-case check of the five-fold table against another per-case file of nnU-Net results (such as
+    EXP-25's). `other` needs a `case` column and one row per case; its `dice`, `pred_ml`, `abs_error_ml` and
+    `ref_ml` columns, where present, are compared with ours. Returns counts only, no case IDs."""
+    if "case" not in other.columns:
+        raise ValueError("The other table has no case column.")
+    if other["case"].duplicated().any():
+        raise ValueError(f"The other table has {int(other['case'].duplicated().sum())} repeated cases; "
+                         "pick the nnU-Net rows before comparing.")
+    ours = table.set_index("case")
+    theirs = other.set_index("case")
+    common = ours.index.intersection(theirs.index)
+    out = {"ours": int(len(ours)), "theirs": int(len(theirs)), "in_both": int(len(common)),
+           "only_ours": int(len(ours.index.difference(theirs.index))),
+           "only_theirs": int(len(theirs.index.difference(ours.index))), "columns": {}}
+    for column, mine in (("dice", "nnunet_dice"), ("pred_ml", "nnunet_pred_ml"),
+                         ("abs_error_ml", "nnunet_abs_error_ml"), ("ref_ml", "ref_ml")):
+        if column not in theirs.columns:
+            continue
+        a = pd_numeric(ours.loc[common, mine])
+        b = pd_numeric(theirs.loc[common, column])
+        both_missing = a.isna() & b.isna()
+        differ = ~both_missing & ((a - b).abs().gt(tolerance) | a.isna() | b.isna())
+        out["columns"][column] = {"compared": int(len(common)), "differ": int(differ.sum())}
+    return out
+
+
+def pd_numeric(series):
+    """A column as floats, with blanks and text such as 'None' as missing."""
+    import pandas as pd
+
+    return pd.to_numeric(series, errors="coerce")
+
+
+def followup_metrics(table, config, git_commit, groups, onset, counts, exp25_rows, per_case_check=None):
+    """metrics.json for the follow-up run: run details, the five-fold counts, the artery groups, the onset
+    summary and the EXP-25 check. Raises if any case ID appears anywhere in it."""
+    if not git_commit:
+        raise ValueError("git_commit is required: the commit this run installed.")
+    metrics = {
+        "experiment": config.get("experiment"),
+        "git_commit": git_commit,
+        "config_git_commit": config.get("git_commit"),
+        "data_version": config.get("data_version", ISLES24_SLIM),
+        "cases": int(len(table)),
+        "counts": counts,
+        "artery_groups": groups,
+        "onset": onset,
+        "exp25_check": {"numbers": len(exp25_rows), "differ": sum(not r["match"] for r in exp25_rows),
+                        "rows": exp25_rows},
+        "exp25_per_case_check": per_case_check,
+    }
+    leaked = _ids_in(metrics, set(table["case"].astype(str)))
+    if leaked:
+        raise ValueError(f"{len(leaked)} case IDs reached metrics.json. Nothing was written.")
+    return metrics
+
+
+def exp25_check(table, reference=None):
+    """Compare the five-fold table with Parsa's EXP-25 numbers (CHANGELOG, 13 Nov 2026), rounded as EXP-25 reports
+    them. Returns one row per number: what, ours, exp25, match. Counts and means only, no case IDs."""
+    reference = EXP25_REFERENCE if reference is None else reference
+    rows = []
+
+    def add(what, ours, ref, digits):
+        ours = None if ours is None else round(float(ours), digits)
+        rows.append({"what": what, "ours": ours, "exp25": ref, "match": ours is not None and abs(ours - ref) < 1e-9})
+
+    folds = sorted(table["fold"].unique())
+    for model in ("nnunet", "threshold"):
+        means = {m: [table.loc[table["fold"] == f, f"{model}_{m}"].mean() for f in folds] for m in ("dice", "abs_error_ml")}
+        ref = reference[model]
+        add(f"{model} Dice, mean over folds", np.mean(means["dice"]), ref["dice_mean"], 3)
+        add(f"{model} Dice, std over folds", np.std(means["dice"], ddof=1), ref["dice_std"], 3)
+        add(f"{model} abs volume error mL, mean over folds", np.mean(means["abs_error_ml"]), ref["abs_error_mean"], 1)
+        add(f"{model} abs volume error mL, std over folds", np.std(means["abs_error_ml"], ddof=1), ref["abs_error_std"], 1)
+        for cutoff, count in zip(DECISION_CUTOFFS_ML, ref["crossings"]):
+            add(f"{model} wrong side of {cutoff:g} mL", table[f"{model}_crosses_{cutoff:g}"].astype(bool).sum(), count, 0)
+    for fold, ref in reference["nnunet_per_fold"].items():
+        rows_f = table[table["fold"] == int(fold)]
+        add(f"fold {fold} cases", len(rows_f), ref["cases"], 0)
+        if rows_f.empty:
+            continue
+        add(f"fold {fold} nnunet Dice mean", rows_f["nnunet_dice"].mean(), ref["dice_mean"], 3)
+        add(f"fold {fold} nnunet abs volume error mL", rows_f["nnunet_abs_error_ml"].mean(), ref["abs_error_mean"], 1)
+        for cutoff, count in zip(DECISION_CUTOFFS_ML, ref["crossings"]):
+            add(f"fold {fold} nnunet wrong side of {cutoff:g} mL", rows_f[f"nnunet_crosses_{cutoff:g}"].astype(bool).sum(), count, 0)
+    return rows
 
 
 def _num(value, digits=3):
@@ -329,7 +695,8 @@ def _scores(rows):
         "nnunet_dice_median": _num(dice.median()),
         "nnunet_abs_error_ml_mean": _num(rows["nnunet_abs_error_ml"].mean(), 1),
         "threshold_abs_error_ml_mean": _num(rows["threshold_abs_error_ml"].mean(), 1),
-        "dice0": int((dice == 0).sum()),
+        "dice0": int(is_miss(rows).sum()),
+        "no_infarct": int(has_no_infarct(rows).sum()),
         "missed_nnunet_only": int((rows["miss"] == "nnunet").sum()),
         "missed_both": int((rows["miss"] == "both").sum()),
     }
@@ -339,8 +706,8 @@ def group_summary(table, by):
     """Step 5. One row per group of column `by` (missing values form their own group), as a list of dicts.
 
     Each row: group, cases, nnU-Net Dice mean and median (cases with no Dice left out), mean absolute
-    volume error (mL), dice0 (nnU-Net Dice exactly 0), and missed_nnunet_only / missed_both by the
-    `miss` column of join_tables() (Dice < MISS_DICE). Counts and summaries only, no case IDs.
+    volume error (mL), dice0 (the misses of is_miss()), no_infarct (cases with no final infarct, never
+    misses), and missed_nnunet_only / missed_both by the `miss` column of join_tables() (Dice < MISS_DICE). Counts and summaries only, no case IDs.
     """
     groups = table[by].astype(object).where(table[by].notna(), "missing").astype(str)
     return [{"group": group, **_scores(table[groups == group])} for group in sorted(groups.unique())]
@@ -353,14 +720,15 @@ def summarise_features(table, features=GROUP_FEATURES):
 
 
 def miss_profile(table, features=GROUP_FEATURES):
-    """Who the nnU-Net Dice-0 misses are, as counts and values only, never case IDs.
+    """Who the nnU-Net Dice-0 misses are (is_miss(): cases with no final infarct are left out and counted in
+    `no_infarct`), as counts and values only, never case IDs.
 
     Returns the number of misses, how many the threshold also missed, their reference and predicted
     volume ranges, counts per group of each feature, and the largest miss (by reference volume) as values.
     """
     table = add_groups(table)
-    misses = table[table["nnunet_dice"] == 0]
-    out = {"cases": int(len(table)), "dice0": int(len(misses))}
+    misses = table[is_miss(table)]
+    out = {"cases": int(len(table)), "dice0": int(len(misses)), "no_infarct": int(has_no_infarct(table).sum())}
     if misses.empty:
         return {**out, "largest_miss": None}
     stats = lambda s: {"min": _num(s.min(), 1), "median": _num(s.median(), 1), "max": _num(s.max(), 1)}
@@ -431,7 +799,7 @@ def figure_cases(table, best=BEST_CASES):
 
     Returns dicts with label, case and size_band. The case ID is for loading only: keep it on Drive.
     """
-    misses = table[table["nnunet_dice"] == 0].sort_values("ref_ml", ascending=False)
+    misses = table[is_miss(table)].sort_values("ref_ml", ascending=False)
     top = table[table["nnunet_dice"] > 0].sort_values("nnunet_dice", ascending=False).head(best)
     picks = []
     for prefix, rows in (("Miss", misses), ("Best", top)):
@@ -449,31 +817,66 @@ def figure_summary(table, picks):
     out = []
     for pick in picks:
         row = rows.loc[pick["case"]]
-        out.append({"label": pick["label"], "size_band": pick["size_band"], "dice0": bool(row["nnunet_dice"] == 0),
+        dice0 = bool(row["nnunet_dice"] == 0 and not row["ref_ml"] <= NO_INFARCT_ML)
+        out.append({"label": pick["label"], "size_band": pick["size_band"], "dice0": dice0,
                     "infarct_tmax6_share": _num(row["infarct_tmax6_share"], 2)})
     return out
 
 
-def case_figure(case, label, size_band=None, z=None):
+def load_prediction(pred_dir, case_id, shape):
+    """Follow-ups step 4. nnU-Net's predicted mask for one case from a folder of validation masks (EXP-22 for
+    fold 0: `<case>.nii.gz`, on the slim grid), as booleans. Raises if the shape differs from `shape`."""
+    import nibabel as nib
+
+    path = Path(pred_dir) / f"{case_id}{FILE_ENDING}"
+    pred = np.asanyarray(nib.load(str(path)).dataobj) > 0
+    if pred.shape != tuple(shape):
+        raise ValueError(f"A predicted mask has shape {pred.shape}, expected {tuple(shape)}.")
+    return pred
+
+
+def case_figure(case, label, size_band=None, z=None, prediction=None):
     """NCCT, CBF and Tmax at the slice with the most infarct, the final infarct outlined in red.
 
+    With `prediction` (nnU-Net's mask, same grid), its outline is drawn in cyan on the same slice, with a small
+    legend. The legend says when the AI marked nothing on this slice, and on how many other slices it did.
     Titled only with the anonymous label and size band, never the case ID. Returns the figure.
     """
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
 
     z = template.largest_infarct_slice(case) if z is None else z
     infarct = np.asarray(case.arrays["infarct"][:, :, z], dtype=bool)
-    fig, axes = plt.subplots(1, len(FIGURE_PANELS), figsize=(3.2 * len(FIGURE_PANELS), 3.6))
+    pred = None
+    if prediction is not None:
+        prediction = np.asarray(prediction, dtype=bool)
+        if prediction.shape != case.arrays["infarct"].shape:
+            raise ValueError(f"The predicted mask has shape {prediction.shape}, expected {case.arrays['infarct'].shape}.")
+        pred = prediction[:, :, z]
+    fig, axes = plt.subplots(1, len(FIGURE_PANELS), figsize=(3.2 * len(FIGURE_PANELS), 3.9))
     for ax, (name, low, high) in zip(axes, FIGURE_PANELS):
         low, high = template._window(case.arrays[name], low, high)
         ax.imshow(case.arrays[name][:, :, z].T, cmap="gray", vmin=low, vmax=high, origin="lower")
         if infarct.any():
-            ax.contour(infarct.T, levels=[0.5], colors="red", linewidths=0.8)
+            ax.contour(infarct.T, levels=[0.5], colors=TRUE_COLOUR, linewidths=0.8)
+        if pred is not None and pred.any():
+            ax.contour(pred.T, levels=[0.5], colors=AI_COLOUR, linewidths=0.8)
         ax.set_title(name.upper(), fontsize=9)
         ax.axis("off")
     band = f", {size_band} mL" if size_band else ""
-    fig.suptitle(f"{label}{band}: final infarct in red", fontsize=10)
-    fig.tight_layout()
+    if prediction is None:
+        fig.suptitle(f"{label}{band}: final infarct in red", fontsize=10)
+        fig.tight_layout()
+        return fig
+    fig.suptitle(f"{label}{band}: final infarct in red, AI outline in cyan", fontsize=10)
+    ai_label = "AI outline"
+    if not pred.any():
+        others = int(np.count_nonzero(prediction.any(axis=(0, 1))))
+        ai_label = "AI outline: none on this slice" + (f" (marks on {others} other slices)" if others else ", none anywhere")
+    handles = [Line2D([0], [0], color=TRUE_COLOUR, lw=1.5, label="Final infarct"),
+               Line2D([0], [0], color=AI_COLOUR, lw=1.5, label=ai_label)]
+    fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=8, frameon=False)
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
     return fig
 
 

@@ -1,5 +1,45 @@
 # CHANGELOG
 
+## 2026-11-15 — Parsa's review of PR #7 (Lorna's Vision A error-analysis follow-ups, EXP-27)
+- **Notebook 13:** `REPO_REF` is `main`, for reruns after merge. The per-fold table shows `no_infarct`. Still output-free.
+- **Code, cases with no final infarct (0 mL):** `error_analysis.has_no_infarct`, `is_miss` (Dice 0 on a case with a final infarct) and `miss_kind` (the `miss` column, now with "no infarct"). These cases score Dice 0 whenever anything is marked, but miss nothing. They are now counted apart (`no_infarct`) and left out of the Dice-0 miss counts, the miss rate by size, both sides of the miss comparisons, the onset groups, `group_summary`'s `dice0`, `miss_profile` and the figure picks. They stay in the over-call and under-call counts. The follow-up `config.json` definitions say so. 5 new tests (84 in `test_error_analysis.py`). No fold-0 (EXP-15) number changes: fold 0 has no such case.
+- **Write-up** (`docs/ERROR_ANALYSIS_VISION_A.md`):
+  1. Artery groups: "does not seem to change how often the AI misses" (3/13 ICA, 12/45 MCA) now says no difference was seen, but the groups are too small to rule one out.
+  2. "Missed by both" explained: Dice < 0.05 for both methods, a looser line than Dice 0, so it is larger than the Dice-0 misses (restated in 4).
+  3. Added: 10 of 129 predictions are empty, all of them misses; how many misses have under 1 mL predicted (restated in 4).
+  4. 2 of the 39 have no final infarct (0 mL; the AI marked 0.35 and 3.9 mL, both fold 2). With the code change above, **every five-fold count that involves misses is restated**, recomputed at review from EXP-27's `per_case.csv` with the new rule, not by a notebook rerun (`metrics.json` on Drive still has the old counts): 37 misses of 127 cases with a final infarct; 32 of 82 under 21 mL against 5 of 45; fold 2 has 5 misses, not 7; 24 of the 37 have under 1 mL predicted; missed by both 50 and AI alone under 0.05 in 53; MCA 11 Dice 0, "no occlusion found" 1, front 17. Visible share, no-data, onset, over-call and under-call counts are unchanged. The write-up's section intro and Limits say this.
+  5. The intro's "this draft" is now "this write-up". Figure legends unchanged.
+  6. After "no significance test was run": the size and visible-share gaps are large at 129 cases, but size and visibility go together, and the split by size (7) cannot fully separate them. No p-values added.
+  7. Added the visible share split by size: under 21 mL, median 35% for misses (31 with data) against 53% (50); at 21 mL and over, 22% (5) against 69% (40). The gap shows in both groups, but size still varies inside each, so it hints, not proves.
+- **EXP-27 config exception accepted:** the rerun at `0cd342c` wrote `per_case.csv` and `metrics.json` into the folder whose `config.json` is from `f493883`. It is documented in the write-up's Limits, and `metrics.json` records both commits.
+- **CHANGELOG:** Lorna's 7 working entries are folded into one (2026-11-14 below). The stale "artery numbers need a rerun" line is dropped; the rerun happened.
+- **Lorna's own entry below** keeps the counts as her run gave them (39 Dice 0); the restated counts are in this entry and the write-up.
+- **Back to Lorna:** only rerun notebook 13 after merge, to refresh `metrics.json` and the figures with the new rule.
+- `pytest` (Mac): 594 passed.
+- **Notion sync:** none from this review.
+
+## 2026-11-14 — Lorna (Vision A error-analysis follow-ups, EXP-27; 7 working sessions folded into one entry at review)
+- **Branch `lorna/error-analysis-followups`**, from `main` at `dfc832f`: the four follow-ups from Parsa's PR #1 review (all five folds, artery groups and onset, AI outlines on the pictures), in one notebook and one Colab run.
+- **Code, `error_analysis`:**
+  - `five_fold_table` joins the five nnU-Net folds (EXP-14, EXP-18 to 21) with EXP-1 (`within_tmax6`). It stops, with counts only, on a repeated fold or case, a fold mismatch or a wrong total.
+  - `is_overcall` / `is_undercall`: the AI's volume is larger / smaller than the true volume and on the wrong side of at least one cut-off (21, 31, 51, 70 mL), at any Dice. `five_fold_counts` gives the misses, the miss rate under and over 21 mL, over- and under-calls, and the visible and no-data comparisons, overall and per fold.
+  - `exp25_check` compares with Parsa's EXP-25 numbers (`EXP25_REFERENCE`, from the CHANGELOG); `compare_with_per_case` does a case-by-case check.
+  - `artery_group` / `add_artery_groups`: the nearest artery within 5 mm (`volumes.DISTANCE_LIMIT_MM`), else "too far", "no occlusion found" or "unknown". `onset_summary` gives onset to scan, misses against the rest.
+  - **Bug found by Lorna, fixed in `0cd342c`:** `artery_group` first used only the reason "ok", so every artery except ICA and basilar fell into "unknown". It now uses "ok", "too_far", "ambiguous" and any "nearest_*" reason.
+  - `case_figure(..., prediction=...)` draws the AI's outline in cyan next to the red infarct, with a legend; `load_prediction` and `find_mask_dir` read the EXP-22 masks. `write_followup_config` and `followup_metrics` refuse placeholder IDs and case IDs.
+  - **Tests:** 79 in `test_error_analysis.py`, including the notebook's steps end to end on fake tables and the artery reasons through `case_features()`.
+- **Notebook 13** (`notebooks/13_visionA_error_analysis_followups.ipynb`, CPU) checks the inputs, writes `config.json`, builds the five-fold table, runs `case_features` on the 129 development cases, prints the counts, artery groups and onset, runs the EXP-25 check, draws the fold-0 pictures with the EXP-22 outlines, and saves `per_case.csv` (Drive only) and `metrics.json`. Counts only, never case IDs.
+- **EXP-27** (`runs/EXP-27_visionA_error_followups/`): `config.json` written at `f493883`, results from the rerun at `0cd342c` after the artery fix, into the same folder. `metrics.json` records both commits. Accepted by Parsa as a documented exception. All numbers except the artery groups were the same in both runs.
+- **Key results (129 cases):** 39 Dice 0, 34 of 84 under 21 mL against 5 of 45 at 21 mL and over. 9 over-calls (1 of them Dice 0, Miss 8) against 34 under-calls (5 Dice 0). Median visible share 35% for misses against 62%. At least 5% with no data: 13 of 39 misses against 14 of 90. Onset known for 59, no clear difference. Artery groups within 5 mm: MCA 45 / 12 Dice 0, ICA 13 / 3, too far 61 / 17; ACA, posterior and no occlusion are too small to conclude. EXP-25 check: 0 of 51 numbers differ.
+- **Fold-0 pictures:** Miss 8's AI outline sits in a different, deeper place (an over-call); Miss 1 and 2 have none; Miss 4 has marks only on 7 other slices. Lorna confirmed the Miss 1, 2 and 8 readings.
+- **Plan §7** "Error analysis" is ticked; the write-up is `docs/ERROR_ANALYSIS_VISION_A.md`.
+- **Open points:** the EXP-25 case-by-case check was skipped (EXP-25 has no per-case csv); the TopCoW label numbering is unconfirmed; no significance tests on the five-fold groups.
+- pytest on Windows: 521 passed, 5 skipped, 9 failed, the same 9 as before (8 Windows-only, 1 missing `cv2`).
+- **Notion sync:**
+  - Experiments → EXP-27: Done; Git commit `0cd342c` (first run `f493883`, which wrote `config.json`); add the results above.
+  - Experiments → EXP-15: point to EXP-27 for the five-fold follow-ups.
+  - Tasks → Vision A error analysis (Task 1): Done; link the write-up.
+
 ## 2026-11-13 — Parsa's review of PR #1 (Lorna's Vision A error analysis, EXP-15)
 - **Write-up corrected** (`docs/ERROR_ANALYSIS_VISION_A.md`), every number re-checked against EXP-15's `per_case.csv` on Drive (counts and anonymous labels only):
   - **New failure group, no perfusion data.** 3 of the 4 cases with ≥ 5% of the infarct at Tmax −30 are misses. Miss 2 has 51% with no data, so its "62% visible" covers only the third with reliable data. The Limits line that said the slice disagreed with the whole-case number is replaced.
