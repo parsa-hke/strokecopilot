@@ -526,7 +526,7 @@ Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the lo
 **NLP A**
 - [ ] Switch reasoner inputs from fixtures to real `vision_output.json` + generated notes
 - [ ] Prompt v2 informed by Phase 2 verifier findings (what did the model get wrong?) — `prompts/reasoner_v2.md` written 9 Nov 2026 (Hana, from the EXP-12 labels); paid v1/v2 comparison pending (Parsa)
-- [ ] `providers.py`: at least three models — one frontier API model, one open mid-size model (e.g. Llama-class via HF or API), one small medical model. Exact list → Decisions row — DEC-24; `VLLMJSON` added 14 Nov 2026 (Hana) for Qwen3.5-27B, MedGemma 27B text and Gemma 3 27B on vLLM, tested with fakes — adapter merged (PR #8); first GPU call pending (Parsa)
+- [ ] `providers.py`: at least three models — one frontier API model, one open mid-size model (e.g. Llama-class via HF or API), one small medical model. Exact list → Decisions row — DEC-24; `VLLMJSON` added 14 Nov 2026 (Hana) for Qwen3.5-27B, MedGemma 27B text and Gemma 3 27B on vLLM, tested with fakes — adapter in PR #8; first GPU call pending (Parsa)
 - [ ] Run all three on all fixtures, the synthetic scenarios and a sample of real cases, with and without the rulebook; outputs to `runs/`
 
 **NLP B**
