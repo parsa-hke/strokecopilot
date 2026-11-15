@@ -4,8 +4,9 @@ Every wrapper is a callable `llm(system, user, schema) -> dict`: one request who
 matching `schema`. The verifier (claim extractor and judge) and, later, the reasoner use this
 shape, so tests pass a plain function instead.
 
-The key comes from Colab or Kaggle Secrets, or the ANTHROPIC_API_KEY environment variable, never
-from code. Current Claude models reject `temperature` (docs/HALLUCINATION_METRIC.md §6), so none is
+Keys come from Colab or Kaggle Secrets, or the environment, never from code (secret()): ANTHROPIC_API_KEY for
+Claude; for an open model on a vLLM server, none for a local server, else the secret named by VLLMJSON's key_name
+(VLLM_API_KEY by convention, the variable `vllm serve` reads). compute/keyscan.ENV_KEYS lists every such name. Current Claude models reject `temperature` (docs/HALLUCINATION_METRIC.md §6), so none is
 sent. Server-side refusal fallbacks are left off on purpose: a fallback would swap the judge or
 extractor model mid-run, and the verifier must record exactly which model produced each verdict.
 A refusal is raised instead, and the caller records it.
@@ -14,8 +15,13 @@ A refusal is raised instead, and the caller records it.
 import json
 import os
 import time
+from urllib.parse import urlparse
 
 DEFAULT_MAX_TOKENS = 16000
+# VLLMJSON's default: vLLM rejects a request whose prompt plus max_tokens exceeds the server's --max-model-len.
+VLLM_MAX_TOKENS = 8000
+VLLM_KEY_NAME = "VLLM_API_KEY"  # the conventional key_name for a vLLM server started with an API key
+VLLM_TIMEOUT_S = 1800  # one long reasoner answer at 4-bit on one card can take minutes; the openai default is 600 s
 
 # USD per million tokens (input, output) on the Claude API, prompts up to 100K tokens. Cache reads: Opus 5.5 $0.20,
 # Sonnet 5.5 $0.10 (0.05x input; it was $0.20 here until 12 Nov 2026, which overstated logged Sonnet costs, as Hana
@@ -195,25 +201,34 @@ class VLLMJSON:
       counted (usage["reasoning_tokens"]), not parsed.
     - Usage keys match ClaudeJSON: input_tokens excludes cached prompt tokens, which go in cache_read_input_tokens.
     - cost_usd() returns None for these models: GPU time is billed per hour by the pod, not per token, and the pod's
-      own log records it (compute/pod.py).
-    - A local vLLM server needs no key. For a server that does, pass key_name and the key comes from secret().
+      own log records it (compute/pod.py). describe() says so ("billing"), so a None cost never reads as free.
+    - A local vLLM server needs no key. For a server that does, pass key_name (VLLM_KEY_NAME by convention) and the
+      key comes from secret().
+    - describe() records base_url only for a server on localhost or 127.0.0.1 (an SSH tunnel); any other address is
+      recorded as "remote", so a pod's public IP and port never land in a run's config.json.
+    - The client waits up to VLLM_TIMEOUT_S per request and retries once, not the openai defaults (600 s, 2 retries).
     - merge_system puts the system prompt at the top of the user message, for a chat template without a system role.
     - extra_body passes vLLM-only request options and is recorded in describe(). For example, Qwen3.5 thinks before
       answering by default; extra_body={"chat_template_kwargs": {"enable_thinking": False}} turns that off.
-    - Context: the server's --max-model-len must hold the prompt plus max_tokens. The reasoner's system prompt is about
-      10.6k tokens (EXP-8) and its answers about 3.1k to 3.4k (EXP-8, EXP-9), so max_tokens around 8000 leaves room
-      on a 24 GB card; the 20000 used for Claude (run.REASONER_MAX_TOKENS) needs a context of about 31k.
-    - Errors from the server itself (unreachable, or a 4xx such as a schema it rejects) are not caught here, as in
-      ClaudeJSON: a run stops loudly instead of recording every case as a format failure.
+    - Context: vLLM rejects a request whose prompt plus max_tokens exceeds the server's --max-model-len. The reasoner's
+      system prompt is about 10.6k tokens on Claude's tokenizer (EXP-8) and about 6k to 7k on the Qwen and Gemma
+      tokenizers; answers ran about 3.1k to 3.4k (EXP-8, EXP-9). So the default is VLLM_MAX_TOKENS (8000): prompt plus
+      answer budget stays near 15k, which a 16k context holds on a 24 GB card at 4-bit. A thinking model spends its
+      reasoning from the same budget. The 20000 used for Claude (run.REASONER_MAX_TOKENS) would need about 27k.
+    - Errors from the server itself (unreachable, or a 4xx such as a request over --max-model-len or a schema it
+      rejects) are not caught here, as in ClaudeJSON: a run stops loudly instead of recording every case as a format
+      failure.
+    - A cut-off answer (finish_reason "length") or one that does not parse raises with the start of the reply and, if
+      the server split out the model's thinking, its length and start, so calls/ shows where the budget went.
     """
 
-    def __init__(self, model, base_url="http://localhost:8000/v1", key_name=None, max_tokens=DEFAULT_MAX_TOKENS,
+    def __init__(self, model, base_url="http://localhost:8000/v1", key_name=None, max_tokens=VLLM_MAX_TOKENS,
                  temperature=0.0, quantization=None, merge_system=False, extra_body=None, client=None):
         if client is None:
             import openai
 
             key = secret(key_name) if key_name else None
-            client = openai.OpenAI(base_url=base_url, api_key=key or "EMPTY", max_retries=2)
+            client = openai.OpenAI(base_url=base_url, api_key=key or "EMPTY", timeout=VLLM_TIMEOUT_S, max_retries=1)
         self.client = client
         self.model, self.base_url, self.max_tokens, self.temperature = model, base_url, max_tokens, temperature
         self.quantization, self.merge_system, self.extra_body = quantization, merge_system, extra_body
@@ -221,9 +236,10 @@ class VLLMJSON:
                       "cache_creation_input_tokens": 0, "reasoning_tokens": 0, "seconds": 0.0}
 
     def describe(self):
-        return {"provider": "vllm", "model": self.model, "base_url": self.base_url, "temperature": self.temperature,
-                "max_tokens": self.max_tokens, "quantization": self.quantization, "merge_system": self.merge_system,
-                "extra_body": self.extra_body}
+        return {"provider": "vllm", "model": self.model, "base_url": recorded_url(self.base_url),
+                "temperature": self.temperature, "max_tokens": self.max_tokens, "quantization": self.quantization,
+                "merge_system": self.merge_system, "extra_body": self.extra_body,
+                "billing": "gpu-time (pod), not token-priced"}
 
     def messages(self, system, user):
         if self.merge_system:
@@ -258,13 +274,33 @@ class VLLMJSON:
         message = choice.message
         if getattr(message, "refusal", None):
             raise RefusalError(f"{self.model} declined the request: {message.refusal}")
+        text = message.content or ""
+        thinking = _reasoning_note(message)
         if choice.finish_reason == "length":
-            raise RuntimeError(f"{self.model} hit max_tokens ({self.max_tokens}) before finishing the JSON.")
-        text = message.content
-        if not text or not text.strip():
-            raise RuntimeError(f"{self.model} returned no content (finish_reason {choice.finish_reason!r}).")
+            raise RuntimeError(f"{self.model} hit max_tokens ({self.max_tokens}) before finishing the JSON; "
+                               f"reply began {text[:500]!r}{thinking}")
+        if not text.strip():
+            raise RuntimeError(f"{self.model} returned no content (finish_reason {choice.finish_reason!r}){thinking}.")
         try:
             return json.loads(text)
         except json.JSONDecodeError as e:
             # A RuntimeError, so run.py records it as "no valid JSON" with the start of the raw reply kept in calls/.
-            raise RuntimeError(f"no valid JSON from {self.model}: {e}; reply began {text[:500]!r}") from e
+            raise RuntimeError(f"no valid JSON from {self.model}: {e}; reply began {text[:500]!r}{thinking}") from e
+
+
+def recorded_url(base_url):
+    """base_url as a run config may store it: unchanged on localhost or 127.0.0.1 (an SSH tunnel), else "remote"."""
+    try:
+        parsed = urlparse(base_url or "")
+        host = parsed.hostname
+    except ValueError:
+        return "remote"
+    return base_url if parsed.scheme == "http" and host in ("localhost", "127.0.0.1") else "remote"
+
+
+def _reasoning_note(message):
+    """'; thinking N chars, began ...' when vLLM's reasoning parser split the model's thinking out, else ''."""
+    reasoning = getattr(message, "reasoning_content", None) or getattr(message, "reasoning", None)
+    if not isinstance(reasoning, str) or not reasoning:
+        return ""
+    return f"; thinking {len(reasoning)} chars, began {reasoning[:200]!r}"
