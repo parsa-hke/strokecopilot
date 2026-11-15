@@ -26,7 +26,7 @@
   5. fits the final mapping (`mapping.json`) and summarises confidence.penumbra;
   6. saves `per_case.csv` (Drive only, held-out check first), then `metrics.json`, last.
 
-  `EXPERIMENT` is the placeholder `EXP-NN` and refuses to run. Lorna gives the number (EXP-28 and 29 are taken). Reading EXP-27's table means this branch does not need the unmerged follow-ups code.
+  `EXPERIMENT` is `EXP-30`, Lorna's Notion row, set in a follow-up commit; the run folder is `runs/EXP-30_visionA_confidence`. Reading EXP-27's table means this branch does not need the unmerged follow-ups code.
 - **`docs/CONFIDENCE_VISION_A.md`:** the method in plain English, with empty results tables for after the run.
 - `schemas/vision_output.json` and `contract/build.py` are unchanged.
 - **Tests:** `tests/test_confidence.py`, 15 tests on fake data. They include:
@@ -34,7 +34,7 @@
   - an end-to-end metrics test.
 - pytest on Windows: 504 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
 - Plan §7 "Confidence estimates" is not ticked yet: no results. The item's wording ("fold ensemble disagreement or MC dropout") will be updated to the approved method when it is ticked.
-- **Notion sync:** before the run, Lorna adds the Experiments row and gives its number. Tasks → Vision A confidence: In progress.
+- **Notion sync:** Experiments → EXP-30 added by Lorna (Running); fill in the commit and results after the run. Tasks → Vision A confidence: In progress.
 
 ## 2026-11-13 — Parsa's review of PR #1 (Lorna's Vision A error analysis, EXP-15)
 - **Write-up corrected** (`docs/ERROR_ANALYSIS_VISION_A.md`), every number re-checked against EXP-15's `per_case.csv` on Drive (counts and anonymous labels only):

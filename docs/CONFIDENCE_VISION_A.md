@@ -2,7 +2,7 @@
 
 Lorna, Vision A. Task 2 of `docs/team/lorna_vision_a.md`. Design approved by Parsa, 15 Nov 2026.
 
-**Status:** method built and tested on fake data. The results below are empty until the Colab run (notebook 14, experiment number to be set).
+**Status:** method built and tested on fake data. The results below are empty until the Colab run (notebook 14, EXP-30).
 
 ## What this is for
 
@@ -42,7 +42,7 @@ The contract (`schemas/vision_output.json`) gives the reasoner two numbers from 
 
 *To fill in after the Colab run.*
 
-**Run:** EXP-?, notebook `notebooks/14_visionA_confidence.ipynb`, commit `?`. Inputs: EXP-27's `per_case.csv` and the slim tarball. Outputs on Drive in `runs/EXP-?_visionA_confidence/`.
+**Run:** EXP-30, notebook `notebooks/14_visionA_confidence.ipynb`, commit `?`. Inputs: EXP-27's `per_case.csv` and the slim tarball. Outputs on Drive in `runs/EXP-30_visionA_confidence/`.
 
 **Confidence bands** (three equal groups of the 129 cases by `confidence.core`):
 
