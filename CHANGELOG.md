@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 2026-11-15 — Claude Code session (Phase 3: PRs #5–#9 reviewed, fixed and merged; DEC-27 confidence; DEC-28 Vision B threshold; C7 contract build)
+## 2026-11-15 — Claude Code session (Phase 3: PRs #5–#9 reviewed, fixed and merged; DEC-27 confidence; DEC-28 Vision B threshold; C7 contract build; DEC-24 hosting amended)
 - **Five teammate PRs reviewed, fixed on their branches and squash-merged** (one review agent per PR, findings re-checked by hand; the review entries for each PR are below):
   - #7 `0920766`, #9 `e17999b`, #6 `3305288`, #8 `6b10cd0`, #5 `3847cf6`.
   - Each branch was updated from main before its merge, with the CHANGELOG entries combined; `main` passes all tests after each one.
@@ -45,9 +45,19 @@
     - Median core 4.5 mL, median penumbra 143.1 mL.
   - **Note for the paid runs:** 115 unknown sites follow the §8.1 rule. The labels cannot separate M1 from M2, so real-case thrombectomy reasoning will often meet "site not reported".
   - Plan §7 C7 ticked.
+- **DEC-24 amended (Parsa): hosting of the open models.** The RTX 4090 cannot hold three of the four at 4-bit in a form vLLM loads.
+  - **Qwen3.5-27B** runs through OpenRouter at full precision.
+  - **Gemma 3 27B and MedGemma 27B text** run together on one rented 48 GB GPU (L40S or RTX A6000, about $0.40–0.60/h on Vast, searched today) at the same 8-bit setting.
+  - **Estimated** open-model cost: about $5–7, not measured.
+  - **Pending before the runs:**
+    - Parsa's OpenRouter key in his shell environment;
+    - a Hugging Face token on the pod for the gated Gemma models, which needs a DEC-21 change;
+    - Parsa's reading of the HAI-DEF terms §3.2.
+  - **Fallback:** Baichuan-M2-32B and Qwen2.5-32B-Instruct replace the Gemma pair.
+  - **Code still to do (C8 prep):** concurrent requests for direct llms, the 8-bit and OpenRouter entries in `open_models.py`, and one test request per model.
 - `pytest`: 694 passed. **Spend:** no GPU, no API.
 - **Notion sync:**
-  - Decisions: DEC-27, DEC-28.
+  - Decisions: DEC-27, DEC-28; DEC-24 amended (hosting).
   - Tasks: the Vision B operating-point task set to Done; contract/build.py set to Done; a note on Hana's real-inputs task.
   - Experiments: EXP-33.
   - Experiments: EXP-32.
