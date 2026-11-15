@@ -119,3 +119,70 @@ def test_batched_run_sends_one_batch_per_pass_and_halves_the_cost(tmp_path):
     assert extractor.batches == [5]  # every extraction was cached: no second batch
     config = json.loads((tmp_path / "config.json").read_text())
     assert config["batched"]["reasoner"] and config["batched"]["extractor"] and again["summary"]["cases"] == 5
+
+
+class Crashing(Fake):
+    """A direct reasoner whose server goes away after `ok` calls: the error is not one gather() records, so the run stops."""
+
+    def __init__(self, ok):
+        super().__init__("reasoner")
+        self.ok = ok
+
+    def __call__(self, *req):
+        if self.calls >= self.ok:
+            raise ConnectionError("server gone")
+        return super().__call__(*req)
+
+
+class Direct:
+    """A direct llm that records each user message; it fails one request and the server goes away after `crash_at`."""
+
+    def __init__(self, model, calls, crash_at=None):
+        self.model, self.calls, self.crash_at = model, calls, crash_at
+
+    def __call__(self, system, user, schema):
+        if len(self.calls) == self.crash_at:
+            raise ConnectionError("server gone")  # not an error gather() records: the run stops
+        self.calls.append(user)
+        if user == "u c":
+            raise RuntimeError("bad")  # a format failure, recorded and saved like an answer
+        return {"u": user}
+
+
+def test_gather_saves_direct_answers_and_resumes_after_a_crash(tmp_path):
+    path, calls = tmp_path / batched.ANSWERS_FILE, []
+    reqs = {k: ("s", f"u {k}", {}) for k in "abcde"}
+    with pytest.raises(ConnectionError):
+        batched.gather(reqs, Direct("m", calls, crash_at=3), log=lambda *_: None, answers_path=path)
+    assert calls == ["u a", "u b", "u c"] and len(path.read_text().splitlines()) == 3
+    path.write_text(path.read_text() + '{"key": "d", "mod')  # a line cut off mid-write is skipped
+    logs = []
+    out = batched.gather(reqs, Direct("m", calls), log=logs.append, answers_path=path)
+    assert calls == ["u a", "u b", "u c", "u d", "u e"]  # only the rest was asked
+    assert out["a"] == {"reply": {"u": "u a"}} and out["c"] == {"error": "bad", "refusal": False} and set(out) == set(reqs)
+    assert "3 of 5" in logs[0]
+    assert batched.gather(reqs, Direct("m", calls), log=lambda *_: None, answers_path=path) == out and len(calls) == 5
+    with pytest.raises(RuntimeError, match="not 'other'"):  # another model's answers are never mixed in
+        batched.gather(reqs, Direct("other", calls), log=lambda *_: None, answers_path=path)
+
+
+def test_gather_leaves_a_batch_llm_unchanged(tmp_path):
+    path = tmp_path / batched.ANSWERS_FILE
+    batch = FakeBatch("extractor", "claude-sonnet-5-5")
+    batch.run = lambda requests, log=print: {k: {"reply": {"k": k}} for k in requests}
+    assert batched.gather({"a": ("s", "u", {})}, batch, answers_path=path) == {"a": {"reply": {"k": "a"}}}
+    assert not path.exists()
+
+
+def test_run_batched_resumes_a_crashed_direct_reasoner_run(tmp_path):
+    cases = e2e.load_cases("fixtures")
+    with pytest.raises(ConnectionError):
+        batched.run_batched(cases, Crashing(ok=2), Fake("extractor"), Fake("judge"), retriever, tmp_path, log=lambda *_: None,
+                            source="fixtures")
+    assert len((tmp_path / batched.ANSWERS_FILE).read_text().splitlines()) == 2
+    reasoner = Fake("reasoner")
+    metrics = batched.run_batched(cases, reasoner, Fake("extractor"), Fake("judge"), retriever, tmp_path, log=lambda *_: None,
+                                  source="fixtures")
+    assert reasoner.calls == 3 and metrics["summary"]["cases"] == 5
+    config = json.loads((tmp_path / "config.json").read_text())
+    assert config["resumed_reasoner_answers"] == 2
