@@ -31,6 +31,13 @@ def test_keyscan_finds_env_key_and_patterns(tmp_path):
     assert "abcdef" not in str(e.value)  # file names only, never the key
 
 
+def test_keyscan_finds_the_open_model_keys(tmp_path):
+    """The keys VLLMJSON and the Hugging Face tools read are checked like the API keys."""
+    root = _repo(tmp_path, {"cfg.json": '{"k": "vllmkeyvllmkeyvllmkey"}\n', "n.md": "hfvaluehfvaluehfvalue\n"})
+    found = keyscan.scan(root, {"VLLM_API_KEY": "vllmkeyvllmkeyvllmkey", "HF_TOKEN": "hfvaluehfvaluehfvalue"})
+    assert ("cfg.json", "the value of $VLLM_API_KEY") in found and ("n.md", "the value of $HF_TOKEN") in found
+
+
 def test_keyscan_clean_repo(tmp_path):
     root = _repo(tmp_path, {"a.py": "print('hi')\n"})
     assert keyscan.scan(root, {"VAST_API_KEY": "zzzzzzzzzzzzzzzzzzzzzzzz"}) == []

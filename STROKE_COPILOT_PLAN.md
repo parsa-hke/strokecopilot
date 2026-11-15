@@ -125,6 +125,7 @@ strokecopilot/
 │   │   ├── __init__.py
 │   │   ├── isles24.py             # load_case(), list_cases(), slim format reader
 │   │   ├── rsna.py                # RSNA slice/scan loaders, windowing
+│   │   ├── rsna_geometry.py       # RSNA slice spacing and field of view from the shard index
 │   │   ├── prep_isles24.py        # raw archive → slim tarball (run once)
 │   │   ├── prep_rsna.py           # raw DICOM → JPEG tar shards + scan index (run once, on Kaggle)
 │   │   └── splits.py              # reads splits/folds.json; guards against held-out use
@@ -204,6 +205,7 @@ strokecopilot/
 │   ├── 20_visionB_train.ipynb     # runs on Kaggle: RSNA split, slice classifier, scan calibration
 │   ├── 21_visionB_isles_check.ipynb # Colab: Vision B on ISLES'24 native NCCT (presumed no bleed)
 │   ├── 22_visionB_operating_point.ipynb # Kaggle: cross-fitted operating point on the RSNA validation split
+│   ├── 23_visionB_rsna_geometry.ipynb # Kaggle, CPU: RSNA training scans' slice spacing and field of view
 │   ├── 30_nlpA_corpus.ipynb
 │   ├── 31_nlpA_reasoner.ipynb
 │   ├── 40_nlpB_verifier.ipynb
@@ -514,19 +516,23 @@ Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the lo
 - [x] All 5 folds for nnU-Net; mean ± std Dice; compare against threshold baseline — done 13 Nov 2026 as EXP-14, EXP-18..21 and the summary EXP-25: Dice 0.215 ± 0.046 over 5 folds against the threshold's 0.111 ± 0.031 (paired +0.104, 95% CI +0.078 to +0.133); abs volume error 23.5 ± 3.9 mL against 25.2 ± 5.0 mL (paired −1.6 mL, CI −4.5 to +1.3, not a clear difference); wrong side of 21/31/51/70 mL in 30/28/20/17 of 129 against 35/29/23/17. Fold costs measured from the Vast credit, about $8.8 for folds 1–4 with failed attempts
 - [x] Core/penumbra heads or a two-stage approach (predict final infarct = core proxy; penumbra from Tmax) — decide and record — DEC-26, 13 Nov 2026: two-stage (nnU-Net core proxy, Tmax > 6 s penumbra), no heads and no volume calibration; EXP-26
 - [x] Decide which core feeds the contract: rCBF < 30% threshold or learned model, compared on volume error and decision-threshold crossings (§8.1) — DEC-25, 13 Nov 2026: nnU-Net (each development case from the fold model that did not train on it). On EXP-25 it is no worse on volume error or crossings and clearly better on Dice; its volume is not measurably better, which the report states
-- [ ] Confidence estimates (`confidence.core/penumbra`) from fold ensemble disagreement or MC dropout
-- [ ] Error analysis: where does the model fail (small lesions, posterior circulation, artefacts)?
+- [x] Confidence estimates (`confidence.core/penumbra`). Done by Lorna (EXP-30, EXP-31; `docs/CONFIDENCE_VISION_A.md`).
+  - `confidence.core` comes from inference-time signals: missing Tmax near the at-risk area, predicted core size, disagreement with the threshold core, and distance to the nearest cut-off. That is version v2, chosen from three. A logistic map, cross-fitted by fold, turns them into a score.
+  - `confidence.penumbra` is a data-quality score: 1 minus the share of the perfusion-covered tissue with no reliable Tmax.
+  - Fold-ensemble disagreement and MC dropout were not used, because each development case was trained on by 4 of the 5 fold models.
+  - Method choice pending DEC-27 (Parsa): cut-off distance alone scored AUC 0.755 against v2's 0.722 at review, and near-empty predictions get high confidence.
+- [x] Error analysis: where does the model fail (small lesions, posterior circulation, artefacts)? Done by Lorna: EXP-15 (fold 0) and EXP-27 (all five folds); write-up in `docs/ERROR_ANALYSIS_VISION_A.md`.
 - [ ] `contract/build.py` produces valid `vision_output.json` for every non-held-out case; validate all
 
 **Vision B**
 - [ ] Tune aggregation and threshold for high sensitivity at acceptable specificity (false "no bleed" is the worst failure in the system — state the operating point and why) — EXP-17 (Mohamed, Kaggle, `ff522bd`): EXP-6's top-2 aggregation kept; threshold cross-fitted on validation patient halves (20 seeds). Proposed 0.175 (96% target): sensitivity 0.961 (95% CI 0.946–0.972), specificity 0.878 (0.859–0.895); on ISLES'24 it would flag 68 of 129 presumed bleed-free scans (52.7%). Parsa's threshold decision pending
-- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate — EXP-16 (Mohamed, 8 Nov 2026, `23e2f92`): at the provisional 0.278, 45 of 129 development scans called positive (34.9%, 95% CI 27.2–43.4%) on 5 mm slabs, 61 of 129 on native thin slices; review of the top scans and a check of RSNA's slice thickness on Kaggle still open
+- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate — EXP-16 (Mohamed, 8 Nov 2026, `23e2f92`): at the provisional 0.278, 45 of 129 development scans called positive (34.9%, 95% CI 27.2–43.4%) on 5 mm slabs, 61 of 129 on native thin slices; review of the top scans and a check of RSNA's slice thickness on Kaggle still open; EXP-28 (14 Nov 2026, notebook 23): RSNA training scans' slice spacing median 5.037 mm (66.0% within 0.25 mm of 5 mm), field of view median 250.0 mm (p5–p95 216.0–253.3); EXP-29 (14 Nov 2026, `fea2c15`): with the field of view matched to 250 mm, 42 of 129 (32.6%) against 45 of 129 reproduced as in EXP-16; paired flips 11 and 8 (p = 0.65), so the field of view does not explain the rate. At EXP-17's proposed 0.175: 68 of 129 (52.7%, 95% CI 44.1–61.1%) unmatched against 64 of 129 (49.6%, 41.1–58.1%) matched; 54 under both, flips 14 and 10 (p ≈ 0.54). ISLES'24's field of view is median 229.0 mm (p25 215.6, p75 250.2), and 33 of 129 scans are over 250 mm, so matching crops about a quarter rather than padding them; whether any head was cut is unverified. Top-scan review, partial (read from Mohamed's Drive sheet at review, not in `per_case.csv`): of the 8 highest-scoring scans at 5 mm (confidence 0.66–0.99, above both thresholds), calcification 3, hyperdense vessel 2, artefact 2, nothing obvious 1, none read as a bleed. Open, needs the images: the scans between 0.175 and 0.278 by cause, and a check of the 33 cropped scans
 - [ ] Optional: per-subtype outputs if time allows
 
 **NLP A**
 - [ ] Switch reasoner inputs from fixtures to real `vision_output.json` + generated notes
 - [ ] Prompt v2 informed by Phase 2 verifier findings (what did the model get wrong?) — `prompts/reasoner_v2.md` written 9 Nov 2026 (Hana, from the EXP-12 labels); paid v1/v2 comparison pending (Parsa)
-- [ ] `providers.py`: at least three models — one frontier API model, one open mid-size model (e.g. Llama-class via HF or API), one small medical model. Exact list → Decisions row
+- [ ] `providers.py`: at least three models — one frontier API model, one open mid-size model (e.g. Llama-class via HF or API), one small medical model. Exact list → Decisions row — DEC-24; `VLLMJSON` added 14 Nov 2026 (Hana) for Qwen3.5-27B, MedGemma 27B text and Gemma 3 27B on vLLM, tested with fakes — adapter in PR #8; first GPU call pending (Parsa)
 - [ ] Run all three on all fixtures, the synthetic scenarios and a sample of real cases, with and without the rulebook; outputs to `runs/`
 
 **NLP B**
