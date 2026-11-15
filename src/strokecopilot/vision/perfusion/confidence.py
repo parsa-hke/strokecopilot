@@ -12,6 +12,12 @@ A small logistic regression turns the signals into the chance of a large error, 
 chance. It is cross-fitted by fold on the 129 development cases (fit on 4 folds, score the 5th), so no case is
 scored by a mapping that saw it. A final fit on all 129 is saved for inference. Held-out cases are never used.
 
+Which values the contract uses (contract/build.py):
+- development cases: the cross-fitted values in the confidence run's per_case.csv (EXP-31), read with
+  development_confidence. The final mapping (mapping_v2.json) was fitted on all 129 development cases, so applying
+  it to one of them is in-sample and flatters it (AUC 0.757 against 0.722 cross-fitted);
+- held-out cases (Phase 4 only): mapping_v2.json from load_default_mapping, applied with case_confidence.
+
 A large error is a case that lands on the wrong side of at least one decision cut-off (21, 31, 51 or 70 mL); a
 volume error of 10 mL or more is reported too. The true infarct is used only to mark these, never as an input.
 
@@ -184,15 +190,29 @@ def log_cutoff_distance(pred_ml):
     return np.min(np.abs(pred[..., None] - cuts), axis=-1)
 
 
+def _volume(name, value):
+    """A core volume as a float, or ValueError if it is missing or not finite (it must never become 0 mL)."""
+    value = np.nan if value is None else float(value)
+    if not np.isfinite(value):
+        raise ValueError(f"{name} is {value}: a core volume is needed, and a missing one is not 0 mL.")
+    return value
+
+
 def signal_row(at_risk_share, nnunet_ml, threshold_ml, tmax6=None):
-    """Every signal for one case from its inputs at inference (missing ones as NaN)."""
+    """Every signal for one case from its inputs at inference (missing ones as NaN).
+
+    Both core volumes are required: a missing or NaN volume raises ValueError rather than being read as 0 mL. A
+    missing or NaN `tmax6` counts as missing, like a missing no-data share.
+    """
+    nnunet_ml, threshold_ml = _volume("nnunet_ml", nnunet_ml), _volume("threshold_ml", threshold_ml)
     nn, th = np.log1p(max(0.0, nnunet_ml)), np.log1p(max(0.0, threshold_ml))
+    tmax6 = np.nan if tmax6 is None else float(tmax6)
     return {
         "at_risk_no_data_share": np.nan if at_risk_share is None else float(at_risk_share),
         "log_pred_ml": float(nn),
         "log_disagreement": float(abs(nn - th)),
         "log_cutoff_distance": float(log_cutoff_distance(nnunet_ml)),
-        "log_tmax6_ml": np.nan if tmax6 is None else float(np.log1p(max(0.0, tmax6))),
+        "log_tmax6_ml": np.nan if np.isnan(tmax6) else float(np.log1p(max(0.0, tmax6))),
     }
 
 
@@ -305,9 +325,55 @@ def cross_fitted_confidence(table, features=FEATURES, l2=L2):
 
 def confidence_core(mapping, at_risk_share, nnunet_ml, threshold_ml, tmax6=None):
     """confidence.core for one case at inference, from a saved mapping and the case's inputs. Use the chosen
-    version's mapping (load_default_mapping, v2) unless comparing versions; v2 does not need `tmax6`."""
+    version's mapping (load_default_mapping, v2) unless comparing versions; v2 does not need `tmax6`.
+
+    For held-out (Phase 4) cases only. A development case was among the final mapping's training cases, so use its
+    cross-fitted value instead (development_confidence)."""
     row = signal_row(at_risk_share, nnunet_ml, threshold_ml, tmax6)
     return float(predict_confidence(mapping, [[row[f] for f in mapping["features"]]])[0])
+
+
+def case_confidence(case, mapping, nnunet_ml, threshold_ml, margin_mm=MARGIN_MM):
+    """The contract's confidence for one held-out (Phase 4) case: {"core": ..., "penumbra": ...}.
+
+    case: a loaded isles24.Case (tmax, cbf and ncct arrays). mapping: load_default_mapping (mapping_v2.json).
+    nnunet_ml, threshold_ml: the case's core volumes from nnU-Net and the threshold method. Development cases use
+    development_confidence instead, because the mapping was fitted on them.
+    """
+    signals = case_signals(case, margin_mm)
+    core = confidence_core(mapping, signals["at_risk_no_data_share"], nnunet_ml, threshold_ml, signals["tmax6_ml"])
+    return {"core": core, "penumbra": signals["confidence_penumbra"]}
+
+
+def development_confidence(per_case_csv, version=CHOSEN_VERSION, folds=None):
+    """The cross-fitted confidence of every development case, from a confidence run's per_case.csv (EXP-31's):
+    {case: {"core": confidence_core_<version>, "penumbra": confidence_penumbra}}.
+
+    These are the honest values for development cases: each core value comes from a mapping that never saw the
+    case. Raises ValueError, with counts only, for a missing column, a repeated case, or a value that is missing or
+    outside 0 to 1, and HeldoutError for any held-out case before Phase 4 (splits.check_ids). `folds` is for tests.
+    """
+    import pandas as pd
+
+    from strokecopilot.data.splits import check_ids
+
+    if version not in VERSIONS:
+        raise ValueError(f"Unknown version {version!r}; expected one of {sorted(VERSIONS)}.")
+    core = f"confidence_core_{version}"
+    table = pd.read_csv(per_case_csv)
+    missing = [c for c in ("case", core, "confidence_penumbra") if c not in table.columns]
+    if missing:
+        raise ValueError(f"per_case.csv lacks columns {missing}.")
+    if table["case"].duplicated().any():
+        raise ValueError(f"per_case.csv repeats {int(table['case'].duplicated().sum())} cases.")
+    values = table[[core, "confidence_penumbra"]].apply(pd.to_numeric, errors="coerce")
+    bad = (values.isna() | (values < 0) | (values > 1)).any(axis=1)
+    if bad.any():
+        raise ValueError(f"{int(bad.sum())} cases have a confidence that is missing, not a number or outside 0 to 1.")
+    cases = table["case"].astype(str).tolist()
+    check_ids(cases, folds)
+    return {case: {"core": float(c), "penumbra": float(p)}
+            for case, c, p in zip(cases, values[core], values["confidence_penumbra"])}
 
 
 def save_mapping(path, mapping):

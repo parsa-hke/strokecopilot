@@ -73,7 +73,7 @@ This run used v1 and counted missing data over all plain-CT tissue. It is kept h
 | Share of tissue with no Tmax data | Median | Lowest | Highest |
 |---|---|---|---|
 | Before (EXP-30): all plain-CT tissue | 32.2% | 17.2% | 70.0% |
-| After (EXP-31): the measurement area | 11.5% | in `metrics.json` | in `metrics.json` |
+| After (EXP-31): the measurement area | 11.5% | 6.1% | 40.4% |
 
 The fix cut the typical missing share from about a third to about a tenth. What is left is a mix of real gaps in the perfusion data and the limits of the measurement area (see Limits).
 
@@ -90,9 +90,25 @@ Each signal fitted alone on all 129 cases. A positive weight means more risk, so
 | Missing data near the at-risk area | 0.015 | Almost no effect | 0.074 |
 
 - **Distance to a cut-off is the strongest signal.** A volume far from any cut-off is rarely on the wrong side of one.
-- **Core size still points the opposite way to the original design:** a bigger core means lower confidence. As explained under the first run, that fits the main measure.
+- **Alone, core size still points the opposite way to the original design:** a bigger core means lower confidence. As explained under the first run, that fits the main measure. Inside v2 the sign flips (see v2's final weights).
 - **Disagreement still raises confidence,** but its link to the volume error is close to zero (−0.08).
-- **The missing-data signal adds almost nothing** once missing data is counted correctly.
+- **On its own, the missing-data signal adds almost nothing** once missing data is counted correctly. Inside v2 it does more (see below).
+
+### v2's final weights
+
+The final v2 mapping, fitted on all 129 cases (`mapping_v2.json` and `metrics.json`). Signals are on a common scale; a positive weight means more risk, so lower confidence.
+
+| Signal | Weight in v2 | Effect on confidence, the other signals held fixed |
+|---|---|---|
+| Distance to the nearest cut-off | −1.188 | Farther from a cut-off, higher confidence |
+| Missing data near the at-risk area | 0.248 | More missing data, lower confidence |
+| Predicted core size | −0.249 | Bigger core, slightly higher confidence |
+| Disagreement | −0.017 | Almost no effect |
+| (intercept) | −0.838 | |
+
+- **Together, the signals behave differently from alone.** Once distance to a cut-off is in the model, a bigger core gives slightly **higher** confidence, not lower: much of what core size said alone was really "near a cut-off or not".
+- **Missing data carries a real weight in v2** (0.248, about the same size as core size), even though alone it does almost nothing.
+- **Disagreement drops to almost nothing** in v2.
 
 ### Three versions side by side
 
@@ -122,6 +138,12 @@ After the fix: median 0.885, lowest 0.596, and 94 of 129 cases under 0.9. Before
 
 **Lorna's choice**, with Parsa's go-ahead to decide the design. `confidence.py` uses v2 by default, and `mapping_v2.json` from EXP-31 is the mapping for scoring new cases.
 
+### Which values build.py uses
+
+- **Development cases (the 129):** the cross-fitted `confidence_core_v2` and `confidence_penumbra` in EXP-31's `per_case.csv`, read with `development_confidence`. Each comes from a mapping that never saw the case.
+- **Held-out cases (Phase 4 only):** `mapping_v2.json`, loaded with `load_default_mapping` and applied with `case_confidence`.
+- **Why not `mapping_v2.json` for everything:** it was fitted on all 129 development cases, so scoring one of them with it is marking its own homework. It looks better than it is (AUC 0.757 against 0.722 cross-fitted).
+
 **Why v2:**
 - Our main measure is a case landing on the wrong side of a cut-off, and v2 puts the most of those in the low band.
 - Distance to a cut-off is the clearest clinical reason for doubt: near a cut-off, a small error changes the decision.
@@ -137,7 +159,7 @@ So v2's advantage is small, and Phase 4's held-out cases are its real test.
 ## Limits
 
 - **Complete misses still get high confidence.** In every version, all 7 cases on the wrong side of a cut-off in the high band are under-calls: the AI predicted too little. A complete miss like Miss 1 (0 mL predicted for a 101 mL infarct) looks like a confident small prediction, far from any cut-off. The at-risk volume (v3) was meant to catch these, and it did not.
-- **The missing-data signal adds little** (weight 0.015 alone) once missing data is counted correctly. It stays in v2 because it is part of the approved design and does no harm.
+- **The missing-data signal is weak alone** (weight 0.015) once missing data is counted correctly, but it carries a weight of 0.248 inside v2, so its effect depends on the other signals.
 - **confidence.penumbra is a data-quality score only.** It is not validated against any penumbra label, because none exists in ISLES'24. It says how complete the perfusion data is, not how right the penumbra volume is.
 - **Only 129 cases,** about 43 per band, so differences between bands and between versions are rough.
 - **The version was chosen on the same cases it was scored on.** Picking the best of three flatters the winner a little, and v1 and v2 differ by 2 cases. The real test comes in Phase 4, on the held-out cases.

@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-11-15 — Parsa's review of PR #9
+- **Development cases now read their cross-fitted confidence.** `mapping_v2.json` was fitted on all 129 development cases, so scoring one of them with it is in-sample (AUC 0.757 against 0.722 cross-fitted). New `development_confidence(per_case_csv, version="v2")` reads `confidence_core_v2` and `confidence_penumbra` from EXP-31's `per_case.csv` as {case: {"core", "penumbra"}}. It refuses a missing column, a repeated case, a value that is missing or outside 0 to 1, and held-out cases (`splits.check_ids`).
+- **One call for held-out cases:** `case_confidence(case, mapping, nnunet_ml, threshold_ml)` returns {"core", "penumbra"}, so `contract/build.py` does not stitch `case_signals` and `confidence_core` itself. The module text and docstrings say `mapping_v2` is for held-out (Phase 4) cases only.
+- **A NaN core volume now raises `ValueError`** instead of silently becoming 0 mL (`max(0.0, nan)` is 0.0). A NaN Tmax > 6 s volume counts as missing, like `None`.
+- **`docs/CONFIDENCE_VISION_A.md`:**
+  - the slab-check range after the fix, 6.1% to 40.4% (from EXP-31's `metrics.json`);
+  - v2's final weights: cut-off distance −1.188, missing data 0.248, core size −0.249, disagreement −0.017;
+  - the per-signal story corrected to match them: inside v2 a bigger core gives slightly higher confidence, and missing data carries a real weight;
+  - a "Which values build.py uses" note.
+- **Notebook 14:** confidence.penumbra described as the share of the measurement area, not of the brain.
+- **Pending Parsa's decision (a DEC):** the method (cut-off distance alone or v2); the complete misses (25 cases predicted under 0.5 mL get a median confidence of 0.90, and 5 of them are on the wrong side of a cut-off); and what the reasoner should read `confidence.core` as.
+- **Tests:** 590 passed.
+- **Notion sync:** none from the review.
+
 ## 2026-11-16, Claude Code session (Lorna, Vision A confidence: EXP-31 results, v2 chosen, Task 2 done)
 - **EXP-31 at `217bc59`** (numbers from Lorna's Colab run; full tables in `metrics.json` on Drive):
   - **All three versions pass the done check.**

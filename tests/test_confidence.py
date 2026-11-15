@@ -341,3 +341,77 @@ def test_build_metrics_end_to_end_and_refuses_case_ids(tmp_path):
     versions["v1"]["bands"]["low"]["note"] = "sub-007"
     with pytest.raises(ValueError, match="case IDs"):
         conf.build_metrics(table, {}, "def", versions, {}, {})
+
+
+# ---------------------------------------------------------------------------- What the contract reads
+
+
+def test_nan_volume_is_refused_not_zero(tmp_path):
+    with pytest.raises(ValueError, match="nnunet_ml"):
+        conf.signal_row(0.1, float("nan"), 5.0)
+    with pytest.raises(ValueError, match="threshold_ml"):
+        conf.signal_row(0.1, 5.0, None)
+    table = _fake_table()
+    mapping = conf.fit_mapping(table[list(conf.FEATURES)].to_numpy(), table["large_error"].to_numpy())
+    with pytest.raises(ValueError, match="not 0 mL"):
+        conf.confidence_core(mapping, 0.1, 5.0, float("nan"))
+    # A missing Tmax > 6 s volume counts as missing, never as 0 mL.
+    assert np.isnan(conf.signal_row(0.1, 5.0, 5.0, float("nan"))["log_tmax6_ml"])
+
+
+def test_case_confidence_gives_the_contract_shape():
+    ncct, cbf, tmax = _slab_head()
+    tmax[24:30, 8:20, 6:14] = 10.0
+    case = Case(id="sub-stroke9999", arrays={"ncct": ncct, "cbf": cbf, "tmax": tmax}, spacing_mm=SPACING,
+                affine=np.eye(4), clinical={})
+    table = _fake_table()
+    mapping = conf.fit_mapping(table[list(conf.FEATURES)].to_numpy(), table["large_error"].to_numpy())
+    out = conf.case_confidence(case, mapping, 12.0, 4.0)
+    assert set(out) == {"core", "penumbra"} and all(0.0 <= v <= 1.0 for v in out.values())
+    signals = conf.case_signals(case)
+    assert out["core"] == pytest.approx(conf.confidence_core(mapping, signals["at_risk_no_data_share"], 12.0, 4.0))
+    assert out["penumbra"] == signals["confidence_penumbra"]
+    with pytest.raises(ValueError, match="nnunet_ml"):
+        conf.case_confidence(case, mapping, float("nan"), 4.0)
+
+
+FAKE_FOLDS = {"heldout": ["sub-stroke9990"], "folds": {"0": ["sub-stroke9998"], "1": ["sub-stroke9999"]}}
+
+
+def _per_case(tmp_path, rows):
+    path = tmp_path / "per_case.csv"
+    pd.DataFrame(rows, columns=["case", "fold", "confidence_core_v1", "confidence_core_v2",
+                                "confidence_penumbra"]).to_csv(path, index=False)
+    return path
+
+
+def test_development_confidence_reads_the_cross_fitted_values(tmp_path, monkeypatch):
+    monkeypatch.delenv("ALLOW_HELDOUT", raising=False)
+    path = _per_case(tmp_path, [["sub-stroke9998", 0, 0.4, 0.3, 0.9], ["sub-stroke9999", 1, 0.6, 0.8, 1.0]])
+    out = conf.development_confidence(path, folds=FAKE_FOLDS)
+    assert out == {"sub-stroke9998": {"core": 0.3, "penumbra": 0.9}, "sub-stroke9999": {"core": 0.8, "penumbra": 1.0}}
+    assert conf.development_confidence(path, "v1", folds=FAKE_FOLDS)["sub-stroke9998"]["core"] == 0.4
+    with pytest.raises(ValueError, match="lacks columns"):
+        conf.development_confidence(path, "v3", folds=FAKE_FOLDS)
+    with pytest.raises(ValueError, match="Unknown version"):
+        conf.development_confidence(path, "v9", folds=FAKE_FOLDS)
+
+
+@pytest.mark.parametrize("bad", [1.2, -0.1, float("nan"), "high"])
+def test_development_confidence_refuses_bad_values(tmp_path, monkeypatch, bad):
+    monkeypatch.delenv("ALLOW_HELDOUT", raising=False)
+    path = _per_case(tmp_path, [["sub-stroke9998", 0, 0.4, bad, 0.9], ["sub-stroke9999", 1, 0.6, 0.8, 1.0]])
+    with pytest.raises(ValueError, match="1 cases"):
+        conf.development_confidence(path, folds=FAKE_FOLDS)
+
+
+def test_development_confidence_refuses_repeats_and_heldout(tmp_path, monkeypatch):
+    from strokecopilot.data.splits import HeldoutError
+
+    monkeypatch.delenv("ALLOW_HELDOUT", raising=False)
+    path = _per_case(tmp_path, [["sub-stroke9998", 0, 0.4, 0.3, 0.9], ["sub-stroke9998", 0, 0.4, 0.3, 0.9]])
+    with pytest.raises(ValueError, match="repeats 1 cases"):
+        conf.development_confidence(path, folds=FAKE_FOLDS)
+    path = _per_case(tmp_path, [["sub-stroke9998", 0, 0.4, 0.3, 0.9], ["sub-stroke9990", 0, 0.4, 0.3, 0.9]])
+    with pytest.raises(HeldoutError):
+        conf.development_confidence(path, folds=FAKE_FOLDS)
