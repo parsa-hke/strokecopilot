@@ -1,5 +1,45 @@
 # CHANGELOG
 
+## 2026-11-16, Claude Code session (Lorna, Vision A confidence: slab fix, checks, three versions)
+- **First run, EXP-30 at `aac4cb0` (v1, numbers from Lorna):**
+  - **The done check passed:** wrong side of a cut-off, low band against high, 24 against 7; errors of 10 mL or more, 33 against 17; Spearman −0.345.
+  - **Final weights:** at-risk no-data 0.239, log predicted core 0.667, log disagreement −0.212.
+  - **Penumbra:** median 0.678, all 129 cases under 0.9.
+  - **Brain no-data share:** median 0.322, range 0.172 to 0.700.
+- **Two problems, and what was done:**
+  - **The no-data share was inflated** by the plain CT covering the whole head (scalp included) while the perfusion scan covers a slab. `confidence.measurement_area` now counts missing data only in plain-CT tissue inside the perfusion region (`perfusion_region`): the slices from the first to the last with perfusion values, and in each the maps' area with holes filled. A covered slice with no values takes the slab's outline, so a missing slice still counts. This applies to the at-risk signal and to confidence.penumbra. The old whole-tissue share is kept as `tissue_no_data_share` for a before/after `slab_check`.
+  - **Two signals pointed against the design:** a bigger core gave lower confidence, and more disagreement gave higher confidence. The likely reasons, written in `docs/CONFIDENCE_VISION_A.md`: small predictions rarely cross a cut-off, errors grow with size, and disagreement overlaps with size.
+- **Checks added:**
+  - `signals_alone` gives each signal's weight when fitted alone, and its Spearman correlation with the volume error.
+  - `add_targets` marks `undercall` (smaller than true and on the wrong side of a cut-off), and the band table counts under-calls per band.
+- **Two candidate signals (Lorna's decision, with Parsa's go-ahead):**
+  - `log_cutoff_distance`: |log(1 + nnU-Net mL) − log(1 + nearest cut-off)|, nearest on the log scale;
+  - `log_tmax6_ml`: log(1 + mL of reliable Tmax > 6 s).
+- **Three versions:**
+  - v1: the 3 approved signals;
+  - v2: v1 plus the cut-off distance;
+  - v3: v2 plus the Tmax > 6 s volume.
+
+  `compare_versions` cross-fits every version on the same cases and reports each band table, done check (now with under-calls in the high band) and final mapping. All versions are kept. `fit_mapping`, `cross_fitted_confidence` and `confidence_core` take any version's signals.
+- **Notebook 14:** slab check (section 5), signals alone (6), the three versions side by side with band tables and final weights (7), `mapping_v1/v2/v3.json` and penumbra (8), save (9).
+  - **The notebook stops if the run folder's `config.json` is from the first run.** That file predates the changes, so the run needs a new Experiments number, or the old file moved aside. `EXPERIMENT` is still `EXP-30` until Lorna decides.
+- **`docs/CONFIDENCE_VISION_A.md`** now has:
+  - the measurement area and the five signals;
+  - the three versions;
+  - the first run and its two problems;
+  - empty tables for the slab check, signals alone, the three versions, and the version chosen.
+- **Tests:** `tests/test_confidence.py`, 24 tests (from 15). New ones cover:
+  - the slab and footprint fix (scalp and uncovered slices not counted; an enclosed gap and a missing slice inside the slab still counted);
+  - the Tmax > 6 s volume and the cut-off distance;
+  - under-calls;
+  - every version's leak check and single-case scoring;
+  - the signals-alone check, the side-by-side versions and the slab check.
+- pytest on Windows: 513 passed, 5 skipped, 9 failed. These are the same 9 as before (8 Windows, 1 missing `cv2`).
+- **Notion sync:**
+  - Experiments → EXP-30: record the first run's results, and that the method changed after it.
+  - A new Experiments row for the rerun, if Lorna chooses one.
+  - Tasks → Vision A confidence: In progress.
+
 ## 2026-11-15, Claude Code session (Lorna, Vision A Task 2: confidence, built on fake data)
 - **Branch `lorna/confidence` from `main` at `dfc832f`.** Design approved by Parsa (15 Nov 2026). Choices agreed with Lorna:
   - the main error measure is the wrong side of at least one cut-off; a volume error of 10 mL or more is the second;
