@@ -125,6 +125,7 @@ strokecopilot/
 │   │   ├── __init__.py
 │   │   ├── isles24.py             # load_case(), list_cases(), slim format reader
 │   │   ├── rsna.py                # RSNA slice/scan loaders, windowing
+│   │   ├── rsna_geometry.py       # RSNA slice spacing and field of view from the shard index
 │   │   ├── prep_isles24.py        # raw archive → slim tarball (run once)
 │   │   ├── prep_rsna.py           # raw DICOM → JPEG tar shards + scan index (run once, on Kaggle)
 │   │   └── splits.py              # reads splits/folds.json; guards against held-out use
@@ -204,6 +205,7 @@ strokecopilot/
 │   ├── 20_visionB_train.ipynb     # runs on Kaggle: RSNA split, slice classifier, scan calibration
 │   ├── 21_visionB_isles_check.ipynb # Colab: Vision B on ISLES'24 native NCCT (presumed no bleed)
 │   ├── 22_visionB_operating_point.ipynb # Kaggle: cross-fitted operating point on the RSNA validation split
+│   ├── 23_visionB_rsna_geometry.ipynb # Kaggle, CPU: RSNA training scans' slice spacing and field of view
 │   ├── 30_nlpA_corpus.ipynb
 │   ├── 31_nlpA_reasoner.ipynb
 │   ├── 40_nlpB_verifier.ipynb
@@ -524,7 +526,7 @@ Owners (agreed by Parsa, 6 Nov 2026; briefs in `docs/team/`): Parsa keeps the lo
 
 **Vision B**
 - [ ] Tune aggregation and threshold for high sensitivity at acceptable specificity (false "no bleed" is the worst failure in the system — state the operating point and why) — EXP-17 (Mohamed, Kaggle, `ff522bd`): EXP-6's top-2 aggregation kept; threshold cross-fitted on validation patient halves (20 seeds). Proposed 0.175 (96% target): sensitivity 0.961 (95% CI 0.946–0.972), specificity 0.878 (0.859–0.895); on ISLES'24 it would flag 68 of 129 presumed bleed-free scans (52.7%). Parsa's threshold decision pending
-- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate — EXP-16 (Mohamed, 8 Nov 2026, `23e2f92`): at the provisional 0.278, 45 of 129 development scans called positive (34.9%, 95% CI 27.2–43.4%) on 5 mm slabs, 61 of 129 on native thin slices; review of the top scans and a check of RSNA's slice thickness on Kaggle still open
+- [ ] Domain shift check: run on ISLES'24 NCCT (which should mostly be negative); report the false-positive rate — EXP-16 (Mohamed, 8 Nov 2026, `23e2f92`): at the provisional 0.278, 45 of 129 development scans called positive (34.9%, 95% CI 27.2–43.4%) on 5 mm slabs, 61 of 129 on native thin slices; review of the top scans and a check of RSNA's slice thickness on Kaggle still open; EXP-28 (14 Nov 2026, notebook 23): RSNA training scans' slice spacing median 5.037 mm (66.0% within 0.25 mm of 5 mm), field of view median 250.0 mm (p5–p95 216.0–253.3); EXP-29 (14 Nov 2026, `fea2c15`): with the field of view matched to 250 mm, 42 of 129 (32.6%) against 45 of 129 reproduced as in EXP-16; paired flips 11 and 8 (p = 0.65), so the field of view does not explain the rate. At EXP-17's proposed 0.175: 68 of 129 (52.7%, 95% CI 44.1–61.1%) unmatched against 64 of 129 (49.6%, 41.1–58.1%) matched; 54 under both, flips 14 and 10 (p ≈ 0.54). ISLES'24's field of view is median 229.0 mm (p25 215.6, p75 250.2), and 33 of 129 scans are over 250 mm, so matching crops about a quarter rather than padding them; whether any head was cut is unverified. Top-scan review, partial (read from Mohamed's Drive sheet at review, not in `per_case.csv`): of the 8 highest-scoring scans at 5 mm (confidence 0.66–0.99, above both thresholds), calcification 3, hyperdense vessel 2, artefact 2, nothing obvious 1, none read as a bleed. Open, needs the images: the scans between 0.175 and 0.278 by cause, and a check of the 33 cropped scans
 - [ ] Optional: per-subtype outputs if time allows
 
 **NLP A**
