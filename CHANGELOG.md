@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 2026-11-15 — Claude Code session (Phase 3: PRs #5–#9 reviewed, fixed and merged; DEC-27 confidence; DEC-28 Vision B threshold)
+## 2026-11-15 — Claude Code session (Phase 3: PRs #5–#9 reviewed, fixed and merged; DEC-27 confidence; DEC-28 Vision B threshold; C7 contract build)
 - **Five teammate PRs reviewed, fixed on their branches and squash-merged** (one review agent per PR, findings re-checked by hand; the review entries for each PR are below):
   - #7 `0920766`, #9 `e17999b`, #6 `3305288`, #8 `6b10cd0`, #5 `3847cf6`.
   - Each branch was updated from main before its merge, with the CHANGELOG entries combined; `main` passes all tests after each one.
@@ -31,10 +31,25 @@
   - **Cost on ISLES'24:** 68 of 129 presumed bleed-free scans are flagged, against 45 at 0.278. This is reported as domain shift, not tuned away, and the predicted-vision arm will show its downstream cost.
   - **Code:** `vision/haemorrhage/infer.py` has `CONTRACT_THRESHOLD = 0.174984` and `contract_calibrator(calibration_json)`, which applies it over EXP-6's calibration and leaves the Drive file unchanged. A test was added.
   - **Plan:** §2 row DEC-28 added; the §7 "Tune aggregation and threshold" item ticked. The domain-shift item stays open for Mohamed's image checks.
-- `pytest`: 691 passed. **Spend:** no GPU, no API.
+- **C7 done: `contract/build.py`** (commit `5acea14`) assembles `vision_output.json` for the 129 development cases. No model is run; each field is read from a finished run and joined by case:
+  - core from the nnU-Net fold runs (DEC-25);
+  - penumbra and occlusion evidence from EXP-1, with the contract's site rule applied (DEC-7, DEC-26);
+  - haemorrhage from EXP-16's calibrated scan confidence at 0.175 (DEC-28);
+  - confidence from EXP-32 (DEC-27), and ASPECTS null (DEC-9).
+  - **Safeguards:** held-out cases, repeated or missing cases, fold mismatches and failed Vision B scans are refused. Every object is validated, and nothing is written unless all 129 build. 3 tests on synthetic tables.
+  - **EXP-33** wrote the 129 files to Drive `artifacts/vision_outputs_v1/`; all re-validated. Counts are in `runs/EXP-33_contract_build/metrics.json`:
+    - bleed flagged 68;
+    - core under 1 mL 30;
+    - core 70 mL or more 9;
+    - occlusion site ICA 13, basilar 1, unknown 115.
+    - Median core 4.5 mL, median penumbra 143.1 mL.
+  - **Note for the paid runs:** 115 unknown sites follow the §8.1 rule. The labels cannot separate M1 from M2, so real-case thrombectomy reasoning will often meet "site not reported".
+  - Plan §7 C7 ticked.
+- `pytest`: 694 passed. **Spend:** no GPU, no API.
 - **Notion sync:**
   - Decisions: DEC-27, DEC-28.
-  - Tasks: the Vision B operating-point task set to Done.
+  - Tasks: the Vision B operating-point task set to Done; contract/build.py set to Done; a note on Hana's real-inputs task.
+  - Experiments: EXP-33.
   - Experiments: EXP-32.
   - Tasks: a note on Lorna's confidence task.
 
