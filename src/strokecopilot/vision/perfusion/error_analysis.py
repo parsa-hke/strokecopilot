@@ -15,7 +15,8 @@ Built one step at a time.
 
 Outputs that leave Drive carry counts and summaries only, never case IDs (docs/team/README.md §3).
 Volume error matters more than Dice, because the treatment rules are volume cut-offs
-(evaluate.DECISION_CUTOFFS_ML).
+(evaluate.DECISION_CUTOFFS_ML). A miss is nnU-Net Dice 0 on a case with a final infarct (is_miss()); a case
+with no final infarct (0 mL) scores Dice 0 whenever anything is marked, so it is counted apart (has_no_infarct()).
 """
 
 import json
@@ -48,6 +49,9 @@ SHARED = ("ref_ml", "infarct_reliable_share")
 THRESHOLD_VARIANT = "within_tmax6"
 # Below this Dice a case counts as a miss when comparing the two models.
 MISS_DICE = 0.05
+# A case whose true (final) infarct is at most this volume has no infarct to miss: anything marked scores Dice 0,
+# but nothing was missed. Such cases are counted apart as "no infarct", never as misses (Parsa's review of PR #7).
+NO_INFARCT_ML = 0.0
 # Two reference volumes closer than this (mL) count as the same.
 REF_TOLERANCE_ML = 1e-6
 
@@ -134,6 +138,7 @@ def write_config(run_dir, git_commit, folds=(0,), notes=""):
         },
         "decision_cutoffs_ml": list(DECISION_CUTOFFS_ML),
         "miss_dice": MISS_DICE,
+        "no_infarct_ml": NO_INFARCT_ML,
         "outputs_policy": "counts and summaries only, never case IDs",
         "notes": notes,
     }
@@ -156,7 +161,8 @@ def join_tables(nnunet, threshold, variant=THRESHOLD_VARIANT):
     - nnunet_<crossing> and threshold_<crossing> for each decision cut-off;
     - dice_gap and abs_error_gap (nnU-Net minus threshold);
     - better_volume: "nnunet", "threshold" or "tie", by absolute volume error;
-    - miss: "both", "nnunet", "threshold" or "neither", by Dice below MISS_DICE;
+    - miss: "both", "nnunet", "threshold" or "neither", by Dice below MISS_DICE, or "no infarct" when the
+      true volume is 0 mL (see miss_kind());
     - crossings_disagree: how many cut-offs one model crosses and the other doesn't.
     """
     if "variant" in threshold.columns:
@@ -188,13 +194,30 @@ def join_tables(nnunet, threshold, variant=THRESHOLD_VARIANT):
     joined["abs_error_gap"] = joined["nnunet_abs_error_ml"] - joined["threshold_abs_error_ml"]
     joined["better_volume"] = np.select(
         [joined["abs_error_gap"] < 0, joined["abs_error_gap"] > 0], ["nnunet", "threshold"], default="tie")
-    # A case with no Dice (both masks empty) is not a miss.
-    nn_miss = joined["nnunet_dice"].lt(MISS_DICE)
-    th_miss = joined["threshold_dice"].lt(MISS_DICE)
-    joined["miss"] = np.select([nn_miss & th_miss, nn_miss, th_miss], ["both", "nnunet", "threshold"], default="neither")
+    joined["miss"] = miss_kind(joined)
     joined["crossings_disagree"] = sum(
         (joined[f"nnunet_{c}"].astype(bool) != joined[f"threshold_{c}"].astype(bool)).astype(int) for c in CROSSINGS)
     return joined
+
+
+def has_no_infarct(table):
+    """True for rows whose true (final) infarct is 0 mL (at most NO_INFARCT_ML). A boolean per row."""
+    return table["ref_ml"] <= NO_INFARCT_ML
+
+
+def is_miss(table):
+    """A Dice-0 miss: nnU-Net's Dice is exactly 0 on a case that has a final infarct. Cases with no final infarct
+    also score Dice 0 when anything is marked, but nothing was missed, so they are left out. A boolean per row."""
+    return (table["nnunet_dice"] == 0) & ~has_no_infarct(table)
+
+
+def miss_kind(table):
+    """Who misses each case, by Dice below MISS_DICE: "both", "nnunet", "threshold" or "neither", and "no infarct"
+    for a case with no final infarct. A case with no Dice (both masks empty) is not a miss."""
+    nn_miss = table["nnunet_dice"].lt(MISS_DICE)
+    th_miss = table["threshold_dice"].lt(MISS_DICE)
+    return np.select([has_no_infarct(table), nn_miss & th_miss, nn_miss, th_miss],
+                     ["no infarct", "both", "nnunet", "threshold"], default="neither")
 
 
 def five_fold_table(nnunet_folds, threshold, variant=THRESHOLD_VARIANT, expected_cases=None):
@@ -365,10 +388,11 @@ def crossing_counts(table):
 
 
 def visibility_comparison(table):
-    """infarct_tmax6_share for nnU-Net's Dice-0 misses vs the other cases: counts and medians, no IDs."""
-    miss = table["nnunet_dice"] == 0
-    out = {}
-    for name, rows in (("dice0_misses", table[miss]), ("rest", table[~miss])):
+    """infarct_tmax6_share for nnU-Net's Dice-0 misses vs the other cases: counts and medians, no IDs.
+    Cases with no final infarct are in neither group; `no_infarct` gives how many there are."""
+    miss, none = is_miss(table), has_no_infarct(table)
+    out = {"no_infarct": int(none.sum())}
+    for name, rows in (("dice0_misses", table[miss]), ("rest", table[~miss & ~none])):
         share = rows["infarct_tmax6_share"]
         out[name] = {"cases": int(len(rows)), "with_reliable_data": int(share.notna().sum()),
                      "median": _num(share.median()), "p25": _num(share.quantile(0.25)), "p75": _num(share.quantile(0.75))}
@@ -392,9 +416,15 @@ def is_undercall(table):
 
 
 def _fold_block(rows):
-    """The follow-up counts for one set of rows of the five-fold table: counts and medians only, no case IDs."""
-    miss = rows["nnunet_dice"] == 0
-    small = rows["ref_ml"] < SMALL_ML
+    """The follow-up counts for one set of rows of the five-fold table: counts and medians only, no case IDs.
+
+    "dice0" counts the misses of is_miss(): cases with no final infarct are not misses. They are counted in
+    `no_infarct`, left out of the miss rate by size and of both sides of the miss comparison, and kept in the
+    over-call and under-call counts, which are about volume.
+    """
+    miss, none = is_miss(rows), has_no_infarct(rows)
+    small = (rows["ref_ml"] < SMALL_ML) & ~none
+    large = rows["ref_ml"] >= SMALL_ML
     overcall = is_overcall(rows)
     undercall = is_undercall(rows)
     visible, missing = rows["infarct_tmax6_share"], rows["infarct_tmax_missing_share"]
@@ -412,16 +442,17 @@ def _fold_block(rows):
     return {
         "cases": int(len(rows)),
         "dice0": int(miss.sum()),
+        "no_infarct": int(none.sum()),
         "miss_rate_by_size": {
             f"under_{SMALL_ML:g}_ml": {"cases": int(small.sum()), "dice0": int((miss & small).sum())},
-            f"{SMALL_ML:g}_ml_and_over": {"cases": int((~small).sum()), "dice0": int((miss & ~small).sum())},
+            f"{SMALL_ML:g}_ml_and_over": {"cases": int(large.sum()), "dice0": int((miss & large).sum())},
         },
         "overcalls": int(overcall.sum()),
         "overcalls_dice0": int((overcall & miss).sum()),
         "undercalls": int(undercall.sum()),
         "undercalls_dice0": int((undercall & miss).sum()),
         "dice0_misses": side(miss),
-        "rest": side(~miss),
+        "rest": side(~miss & ~none),
     }
 
 
@@ -476,11 +507,12 @@ def add_artery_groups(table, limit_mm=None):
 
 def onset_summary(table):
     """Follow-ups step 3. Onset to scan time (minutes) for the cases that have it, misses against the rest:
-    how many cases have it, the median and the range. Counts and values only, no case IDs."""
+    how many cases have it, the median and the range. Cases with no final infarct are in neither group
+    (`no_infarct_onset_known`). Counts and values only, no case IDs."""
     known = table[table["onset_to_imaging_min"].notna()]
-    miss = known["nnunet_dice"] == 0
-    out = {"cases": int(len(table)), "onset_known": int(len(known))}
-    for name, rows in (("dice0_misses", known[miss]), ("rest", known[~miss])):
+    miss, none = is_miss(known), has_no_infarct(known)
+    out = {"cases": int(len(table)), "onset_known": int(len(known)), "no_infarct_onset_known": int(none.sum())}
+    for name, rows in (("dice0_misses", known[miss]), ("rest", known[~miss & ~none])):
         minutes_ = rows["onset_to_imaging_min"]
         out[name] = {"onset_known": int(len(rows)), "median_min": _num(minutes_.median(), 0),
                      "min_min": _num(minutes_.min(), 0), "max_min": _num(minutes_.max(), 0)}
@@ -516,7 +548,8 @@ def write_followup_config(run_dir, git_commit, experiment, inputs, notes=""):
         "inputs": dict(inputs),
         "threshold_variant": THRESHOLD_VARIANT,
         "definitions": {
-            "miss": "nnU-Net Dice exactly 0",
+            "miss": "nnU-Net Dice exactly 0 on a case with a final infarct (true volume above 0 mL)",
+            "no_infarct": "true volume 0 mL: counted apart, never as a miss; kept in the over-call and under-call counts",
             "overcall": "nnU-Net predicted volume larger than the true volume and on the wrong side of at least one "
                         "decision cut-off, at any Dice; also counted: how many of these are Dice 0",
             "undercall": "nnU-Net predicted volume smaller than the true volume and on the wrong side of at least one "
@@ -662,7 +695,8 @@ def _scores(rows):
         "nnunet_dice_median": _num(dice.median()),
         "nnunet_abs_error_ml_mean": _num(rows["nnunet_abs_error_ml"].mean(), 1),
         "threshold_abs_error_ml_mean": _num(rows["threshold_abs_error_ml"].mean(), 1),
-        "dice0": int((dice == 0).sum()),
+        "dice0": int(is_miss(rows).sum()),
+        "no_infarct": int(has_no_infarct(rows).sum()),
         "missed_nnunet_only": int((rows["miss"] == "nnunet").sum()),
         "missed_both": int((rows["miss"] == "both").sum()),
     }
@@ -672,8 +706,8 @@ def group_summary(table, by):
     """Step 5. One row per group of column `by` (missing values form their own group), as a list of dicts.
 
     Each row: group, cases, nnU-Net Dice mean and median (cases with no Dice left out), mean absolute
-    volume error (mL), dice0 (nnU-Net Dice exactly 0), and missed_nnunet_only / missed_both by the
-    `miss` column of join_tables() (Dice < MISS_DICE). Counts and summaries only, no case IDs.
+    volume error (mL), dice0 (the misses of is_miss()), no_infarct (cases with no final infarct, never
+    misses), and missed_nnunet_only / missed_both by the `miss` column of join_tables() (Dice < MISS_DICE). Counts and summaries only, no case IDs.
     """
     groups = table[by].astype(object).where(table[by].notna(), "missing").astype(str)
     return [{"group": group, **_scores(table[groups == group])} for group in sorted(groups.unique())]
@@ -686,14 +720,15 @@ def summarise_features(table, features=GROUP_FEATURES):
 
 
 def miss_profile(table, features=GROUP_FEATURES):
-    """Who the nnU-Net Dice-0 misses are, as counts and values only, never case IDs.
+    """Who the nnU-Net Dice-0 misses are (is_miss(): cases with no final infarct are left out and counted in
+    `no_infarct`), as counts and values only, never case IDs.
 
     Returns the number of misses, how many the threshold also missed, their reference and predicted
     volume ranges, counts per group of each feature, and the largest miss (by reference volume) as values.
     """
     table = add_groups(table)
-    misses = table[table["nnunet_dice"] == 0]
-    out = {"cases": int(len(table)), "dice0": int(len(misses))}
+    misses = table[is_miss(table)]
+    out = {"cases": int(len(table)), "dice0": int(len(misses)), "no_infarct": int(has_no_infarct(table).sum())}
     if misses.empty:
         return {**out, "largest_miss": None}
     stats = lambda s: {"min": _num(s.min(), 1), "median": _num(s.median(), 1), "max": _num(s.max(), 1)}
@@ -764,7 +799,7 @@ def figure_cases(table, best=BEST_CASES):
 
     Returns dicts with label, case and size_band. The case ID is for loading only: keep it on Drive.
     """
-    misses = table[table["nnunet_dice"] == 0].sort_values("ref_ml", ascending=False)
+    misses = table[is_miss(table)].sort_values("ref_ml", ascending=False)
     top = table[table["nnunet_dice"] > 0].sort_values("nnunet_dice", ascending=False).head(best)
     picks = []
     for prefix, rows in (("Miss", misses), ("Best", top)):
@@ -782,7 +817,8 @@ def figure_summary(table, picks):
     out = []
     for pick in picks:
         row = rows.loc[pick["case"]]
-        out.append({"label": pick["label"], "size_band": pick["size_band"], "dice0": bool(row["nnunet_dice"] == 0),
+        dice0 = bool(row["nnunet_dice"] == 0 and not row["ref_ml"] <= NO_INFARCT_ML)
+        out.append({"label": pick["label"], "size_band": pick["size_band"], "dice0": dice0,
                     "infarct_tmax6_share": _num(row["infarct_tmax6_share"], 2)})
     return out
 

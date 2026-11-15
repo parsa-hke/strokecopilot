@@ -298,6 +298,87 @@ def test_five_fold_counts_overall_and_per_fold():
     assert not error_analysis._ids_in(counts, set(_five_fold_features()["case"]))
 
 
+def _with_no_infarct_cases(table, rows):
+    """The table plus cases with no final infarct (true volume 0 mL), crossings recomputed from the volumes."""
+    table = pd.concat([table, pd.DataFrame(rows)], ignore_index=True)
+    for model in ("nnunet", "threshold"):
+        for cutoff in evaluate.DECISION_CUTOFFS_ML:
+            table[f"{model}_crosses_{cutoff:g}"] = [evaluate.crosses(p, r, cutoff) for p, r in zip(table[f"{model}_pred_ml"], table["ref_ml"])]
+    return table
+
+
+def _five_fold_with_no_infarct():
+    # c8: nothing to find, 3.9 mL marked, Dice 0 for both models. c9: nothing to find, 30 mL marked, which crosses
+    # 21 mL, so it is an over-call. Both score Dice 0, and neither is a miss.
+    return _with_no_infarct_cases(_five_fold_features(), {
+        "case": ["c8", "c9"], "fold": [1, 1], "ref_ml": [0.0, 0.0], "nnunet_pred_ml": [3.9, 30.0],
+        "nnunet_dice": [0.0, 0.0], "nnunet_abs_error_ml": [3.9, 30.0], "threshold_pred_ml": [15.5, 0.0],
+        "threshold_dice": [0.0, np.nan], "threshold_abs_error_ml": [15.5, 0.0],
+        "infarct_tmax6_share": [np.nan, np.nan], "infarct_tmax_missing_share": [np.nan, np.nan],
+        "occlusion_reason": ["empty_mask", "empty_mask"], "occlusion_nearest_label": [np.nan, np.nan],
+        "occlusion_distance_mm": [np.nan, np.nan], "onset_to_imaging_min": [100.0, np.nan]})
+
+
+def test_no_infarct_flags_and_miss_kind():
+    table = pd.DataFrame({"ref_ml": [0.0, 0.0, 2.0, 2.0, 30.0], "nnunet_dice": [0.0, np.nan, 0.0, 0.0, 0.5],
+                          "threshold_dice": [0.0, np.nan, 0.0, 0.2, 0.01]})
+    assert error_analysis.has_no_infarct(table).tolist() == [True, True, False, False, False]
+    assert error_analysis.is_miss(table).tolist() == [False, False, True, True, False]
+    assert error_analysis.miss_kind(table).tolist() == ["no infarct", "no infarct", "both", "nnunet", "threshold"]
+
+
+def test_join_tables_marks_no_infarct():
+    nnunet, threshold = _tables()
+    for t in (nnunet, threshold):
+        t.loc[t["case"] == "b", "ref_ml"] = 0.0  # b: both models Dice 0, but there is nothing to find
+    joined = error_analysis.join_tables(nnunet, threshold).set_index("case")
+    assert joined["miss"].to_dict() == {"a": "threshold", "b": "no infarct", "c": "neither"}
+
+
+def test_five_fold_counts_leave_no_infarct_out_of_misses():
+    counts = error_analysis.five_fold_counts(_five_fold_with_no_infarct())
+    o = counts["overall"]
+    # The same misses as without c8 and c9; they are counted apart and left out of the size rates and both sides.
+    assert o["cases"] == 10 and o["dice0"] == 4 and o["no_infarct"] == 2
+    assert o["miss_rate_by_size"] == {"under_21_ml": {"cases": 5, "dice0": 3}, "21_ml_and_over": {"cases": 3, "dice0": 1}}
+    assert o["dice0_misses"]["cases"] == 4 and o["rest"]["cases"] == 4
+    # Volume counts keep them: c9 is a third over-call, and not a Dice-0 one.
+    assert o["overcalls"] == 3 and o["overcalls_dice0"] == 1
+    assert o["undercalls"] == 3 and o["undercalls_dice0"] == 1
+    fold1 = counts["per_fold"]["1"]
+    assert fold1["cases"] == 6 and fold1["dice0"] == 1 and fold1["no_infarct"] == 2
+    assert not error_analysis._ids_in(counts, {"c8", "c9"})
+
+
+def test_onset_and_groups_leave_no_infarct_out_of_misses():
+    table = _five_fold_with_no_infarct()
+    s = error_analysis.onset_summary(table)
+    assert s["onset_known"] == 6 and s["no_infarct_onset_known"] == 1
+    assert s["dice0_misses"]["onset_known"] == 3 and s["rest"]["onset_known"] == 2  # as without c8 and c9
+    table = error_analysis.add_artery_groups(table)
+    table["miss"] = error_analysis.miss_kind(table)
+    rows = {r["group"]: r for r in error_analysis.group_summary(table, "artery_group")}
+    # c4 (a miss), c8 and c9 have empty occlusion masks.
+    assert rows["no occlusion found"]["cases"] == 3 and rows["no occlusion found"]["dice0"] == 1
+    assert rows["no occlusion found"]["no_infarct"] == 2 and rows["no occlusion found"]["missed_both"] == 1
+
+
+def test_miss_profile_and_figures_leave_no_infarct_out():
+    table = _with_no_infarct_cases(_step4_table(), {
+        "case": ["sub-07"], "ref_ml": [0.0], "nnunet_dice": [0.0], "nnunet_pred_ml": [3.9], "nnunet_abs_error_ml": [3.9],
+        "threshold_dice": [0.0], "threshold_pred_ml": [15.5], "miss": ["no infarct"], "better_volume": ["nnunet"],
+        "size_band": ["none"], "territory": ["unknown"], "occlusion_site": ["unknown"], "occlusion_distance_mm": [np.nan],
+        "onset_to_imaging_min": [np.nan], "infarct_tmax_missing_share": [np.nan], "infarct_tmax_unreliable_share": [np.nan],
+        "infarct_reliable_share": [np.nan], "infarct_tmax6_share": [np.nan], "threshold_abs_error_ml": [15.5]})
+    profile = error_analysis.miss_profile(table)
+    # The same 3 misses as without sub-07. No infarct: sub-07 and sub-05 (0 mL, both masks empty).
+    assert profile["dice0"] == 3 and profile["no_infarct"] == 2
+    assert profile["ref_ml"]["min"] == 2.0
+    picks = error_analysis.figure_cases(table)
+    assert [p["label"] for p in picks] == ["Miss 1", "Miss 2", "Miss 3", "Best 1", "Best 2"]
+    assert "sub-07" not in [p["case"] for p in picks]
+
+
 def test_exp25_check_matches_and_reports_differences():
     table = _five_fold_features()
     # Worked out by hand from the table, rounded as EXP-25 reports, so it should match everywhere.
@@ -497,7 +578,9 @@ def test_tmax6_band(share, band):
 def test_visibility_comparison():
     v = error_analysis.visibility_comparison(_step4_table())
     assert v["dice0_misses"] == {"cases": 3, "with_reliable_data": 3, "median": 0.2, "p25": 0.15, "p75": 0.25}
-    assert v["rest"]["cases"] == 3 and v["rest"]["with_reliable_data"] == 2 and v["rest"]["median"] == 0.85
+    # sub-05 has no final infarct (0 mL), so it is in neither group.
+    assert v["no_infarct"] == 1
+    assert v["rest"]["cases"] == 2 and v["rest"]["with_reliable_data"] == 2 and v["rest"]["median"] == 0.85
 
 
 def test_figure_cases_labels():
