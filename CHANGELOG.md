@@ -22,12 +22,33 @@
   - the run plan's cells, 150/75 scenarios and settings.
 - **Dry run with fake models on the real inputs** (no API, no cost): all 18 ready cells for the four models finished in 4 sittings: 820 cases, 42 batches, 4,116 judge requests. The no-rulebook arms would add 400 cases.
 - **Local setup:** the `openai` client (a declared dependency, used for OpenRouter and vLLM) was missing from the Mac's venv and is installed.
+- **The 48 GB serve pod (code only; no pod was created):**
+  - `compute/jobs.py`: EXP-36 (one test request per model) and EXP-37 (the reasoner pass) are `serve` runs.
+    - They carry their own offer filters: one GPU with at least 44 GB, at most $0.90/h, 200 GB of disk, at least 500 Mbps down.
+    - They serve `SERVE_MODELS`, the Gemma pair.
+    - `SERVE_POLICY` keeps `allow_gated` and `allow_medgemma` **off**. A commit that turns one on records Parsa's decision.
+  - `compute/pod.py`:
+    - `search`, `find_offer` and `offers` use a run's own filters.
+    - `up` for a serve run sends no data and none of our code: bootstrap, watchdog, `pip install vllm`.
+    - Only when `allow_gated` is on, the Hugging Face token is written to a root-only file on the pod. It travels on SSH's stdin and is never logged.
+    - `Tunnel` forwards a local port to the pod's 127.0.0.1.
+  - `compute/remote.py`: `SERVE_SETUP`, `hf_env`, `start_serve`, `STOP_SERVE`.
+  - `pipeline/paid_runs.py`:
+    - `run_pod_models` handles each served model in turn: start vLLM, wait until it lists the model, answer every cell that lacks answers (8 at a time, each saved on the Mac), then stop the server. It keeps the server's last log lines and **always destroys the pod**, on errors too.
+    - `advance_all` skips a pod model's cell until its answers are saved.
+    - `smoke` sends one request and projects the cost.
+    - `scripts/paid_runs status|advance|serve|smoke` is the launcher.
+  - **Tests, 8 added:** the serve spec and policy, a run's own filters, the scripts and the tunnel command, the driver's order of actions, the pod destroyed after a server failure and after a refused gated model, the readiness wait, and the smoke request.
+  - **Unverified until the test requests on a real pod:**
+    - that `pip install vllm` works in the PyTorch image;
+    - that each model fits and loads with `--quantization fp8`;
+    - that the JSON-schema backend accepts our schema;
+    - the download time and the speed.
 - **Not done yet:**
-  - the 48 GB pod job (vLLM serve and the tunnel);
   - the without-rulebook arm's definition;
   - the v1 vs v2 prompt check;
   - test requests.
-- `pytest`: 709 passed. **Spend:** none.
+- `pytest`: 717 passed. **Spend:** none.
 - **Notion sync:** Decisions: DEC-24 amended (judge batching).
 
 ## 2026-11-16 — Claude Code session (Phase 3: teammates' open tasks done from the Mac — Hana's real inputs, Lorna's reruns, Mohamed's checks)

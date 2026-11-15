@@ -21,7 +21,33 @@ def _fold(k):
             "args": f"--mode train --fold {k} --epochs 300", "hours": 5.5, "est_hours": 4.0}
 
 
+# Open reasoner models served with vLLM on one rented 48 GB GPU (DEC-24, hosting amended 15 Nov 2026). A `serve` run
+# carries no data and no job: the pod only serves one model at a time to the Mac through an SSH tunnel, and the
+# pipeline on the Mac sends the requests (pipeline/paid_runs.py). The watchdog still enforces the hour limit.
+SERVE_FILTERS = {
+    "num_gpus": {"eq": 1}, "gpu_ram": {"gte": 44_000}, "verified": {"eq": True}, "rentable": {"eq": True},
+    "rented": {"eq": False}, "reliability": {"gte": 0.98}, "cpu_cores_effective": {"gte": 8}, "cpu_ram": {"gte": 48_000},
+    "disk_space": {"gte": 200}, "inet_down": {"gte": 500}, "dph_total": {"lte": 0.90}, "cuda_max_good": {"gte": 12.8},
+}
+SERVE_DISK_GB = 200  # two 27B models in 16-bit weights are about 110 GB of downloads
+# The pair served. If Parsa rules the Gemma pair out, this becomes ("qwen2.5-32b", "baichuan-m2-32b") (DEC-24).
+SERVE_MODELS = ("gemma-3-27b", "medgemma-27b-text")
+# Policy switches, off until Parsa decides; a commit that turns one on is the record of that decision.
+# allow_gated: a Hugging Face token (read-only, for these repositories) goes to the pod, which DEC-21 forbade.
+# allow_medgemma: Parsa has read the HAI-DEF terms section 3.2.
+SERVE_POLICY = {"allow_gated": False, "allow_medgemma": False}
+
+
+def _serve(what, run_dir, hours, est_hours):
+    return {"what": what, "run_dir": run_dir, "hours": hours, "est_hours": est_hours, "filters": SERVE_FILTERS,
+            "disk_gb": SERVE_DISK_GB, "serve": {"models": SERVE_MODELS, **SERVE_POLICY}}
+
+
 RUNS = {
+    "EXP-36": _serve("Open reasoner models on a 48 GB GPU: one test request per model (C8 dummy)",
+                     "EXP-36_paid_runs_test", 1.5, 0.8),
+    "EXP-37": _serve("Open reasoner models on a 48 GB GPU: the paid runs' reasoner pass (C8)",
+                     "EXP-37_paid_runs", 5.0, 3.5),
     "EXP-13": {"what": "nnU-Net fold 0 dummy: 2 epochs, resume to 3, predict and score (timing, workers, resume, collect, down)",
                "run_dir": "EXP-13_nnunet_pod_dummy", "args": "--mode dummy --fold 0", "hours": 1.5, "est_hours": 0.6},
     "EXP-14": {"what": "nnU-Net fold 0, 300 epochs (DEC-21)",

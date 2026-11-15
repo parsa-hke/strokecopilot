@@ -130,6 +130,8 @@ def test_start_job_quotes_and_records_exit():
 def test_jobs_registry():
     for exp, spec in jobs.RUNS.items():
         assert spec["est_hours"] < spec["hours"]
+        if "serve" in spec:  # a serve pod runs vLLM only, with no job of ours
+            continue
         cmd = jobs.command(exp, "abc1234")
         assert "pod_job" in cmd and "--commit abc1234" in cmd and f"/root/sc/runs/{exp}" in cmd
     assert "--epochs 300" in jobs.get("EXP-14")["args"]
@@ -431,3 +433,41 @@ def test_up_refuses_an_offer_whose_contract_ends_too_soon(stubbed):
     assert round(vast.contract_hours({"end_date": 1000 + 7200}, now=1000), 1) == 2.0
     assert vast.contract_hours({"duration": 3600}) == 1.0
     assert "contract 2.0 h left" in Vast(key="k").describe({"id": 1, "end_date": time.time() + 7200 + 60})
+
+
+def test_serve_runs_ask_for_a_48gb_gpu_and_keep_policy_off():
+    for exp in ("EXP-36", "EXP-37"):
+        spec = jobs.get(exp)
+        assert spec["filters"]["gpu_ram"] == {"gte": 44_000} and spec["filters"]["dph_total"] == {"lte": 0.90}
+        assert "gpu_name" not in spec["filters"] and spec["disk_gb"] == 200
+        assert spec["serve"] == {"models": ("gemma-3-27b", "medgemma-27b-text"), "allow_gated": False, "allow_medgemma": False}
+
+
+def test_search_passes_a_runs_own_filters():
+    class P:
+        def __init__(self):
+            self.calls = []
+
+        def offers(self, filters=None, limit=10):
+            self.calls.append(filters)
+            return [{"id": 7, "dph_total": 0.6}]
+
+    p = P()
+    assert pod.search(p, rounds=2)[0]["id"] == 7 and p.calls == [None, None]  # the provider's own filters
+    assert pod.find_offer(p, 7, rounds=1, filters=jobs.SERVE_FILTERS)["id"] == 7 and p.calls[-1] is jobs.SERVE_FILTERS
+    assert pod.find_offer(p, 8, rounds=2, filters=jobs.SERVE_FILTERS) is None
+
+
+def test_serve_scripts_and_tunnel():
+    script = remote.start_serve(["vllm", "serve", "org/model", "--host", "127.0.0.1", "--port", "8000"])
+    assert "tmux new-session -d -s serve" in script and "HF_HOME=/root/sc/hf" in script and "serve.log" in script
+    assert "127.0.0.1" in script and "/root/sc/hf_env" in script
+    env = remote.hf_env("hf_fake_not_a_real_token")
+    assert "umask 077" in env and "export HF_TOKEN='hf_fake_not_a_real_token'" in env and "echo token stored" in env
+    for bad in ("", "a'b", "a\nb"):
+        with pytest.raises(ValueError):
+            remote.hf_env(bad)
+    assert "pip install -q vllm" in remote.SERVE_SETUP and "tmux kill-session -t serve" in remote.STOP_SERVE
+    argv = pod.tunnel_argv({"host": "1.2.3.4", "port": 2222, "user": "root"}, 8000, 8000)
+    assert argv[0] == "ssh" and argv[-1] == "root@1.2.3.4" and "-N" in argv
+    assert argv[argv.index("-L") + 1] == "127.0.0.1:8000:127.0.0.1:8000"

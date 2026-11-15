@@ -74,5 +74,36 @@ def status(exp):
             f"tail -n 2 /root/sc/watchdog.log 2>/dev/null")
 
 
+# A serve pod (jobs.SERVE_*): vLLM from PyPI, no package of ours, no data. HF_HOME keeps the weights on the pod's disk.
+SERVE_SETUP = r"""set -e
+export PATH=/opt/conda/bin:/usr/local/bin:$PATH
+mkdir -p /root/sc/hf
+python -m pip install -q --upgrade pip >/dev/null
+python -m pip install -q vllm >/root/sc/pip.log 2>&1 || (tail -20 /root/sc/pip.log; exit 1)
+python -c "import vllm, torch; print('vllm', vllm.__version__, 'torch', torch.__version__, 'cuda', torch.cuda.is_available())"
+"""
+
+
+def hf_env(token):
+    """Write the Hugging Face token to a file only root can read, for gated weights (jobs.SERVE_POLICY allow_gated).
+    The script travels on SSH's stdin, so the token is in no command line; it is never echoed or logged."""
+    if not token or "\n" in token or "'" in token:
+        raise ValueError("The Hugging Face token is missing or malformed.")
+    return f"umask 077; cat > /root/sc/hf_env <<'HF'\nexport HF_TOKEN='{token}'\nHF\necho token stored"
+
+
+def start_serve(argv):
+    """Start `vllm serve` (open_models.serve_command) under tmux, replacing any server already running."""
+    inner = (f"{PATH}; export HF_HOME=/root/sc/hf; [ -f /root/sc/hf_env ] && . /root/sc/hf_env; "
+             f"exec {' '.join(quote(a) for a in argv)} > /root/sc/serve.log 2>&1")
+    return (f"tmux kill-session -t serve 2>/dev/null; sleep 1; tmux new-session -d -s serve {quote(inner)} "
+            f"&& sleep 2 && tmux has-session -t serve && echo serve started")
+
+
+STOP_SERVE = ("tmux kill-session -t serve 2>/dev/null; sleep 8; "
+              "nvidia-smi --query-gpu=memory.used --format=csv,noheader; echo serve stopped")
+SERVE_LOG = "tail -n 25 /root/sc/serve.log 2>/dev/null; true"
+
+
 def quote(s):
     return "'" + s.replace("'", "'\"'\"'") + "'"

@@ -147,6 +147,37 @@ def remote_sh(state, script, capture=True, timeout=600):
     return out.stdout
 
 
+def tunnel_argv(state, local_port, remote_port):
+    base = ssh_base(state["host"], state["port"], state["user"])
+    return base[:-1] + ["-N", "-o", "ExitOnForwardFailure=yes", "-L", f"127.0.0.1:{int(local_port)}:127.0.0.1:{int(remote_port)}",
+                        base[-1]]
+
+
+class Tunnel:
+    """`with Tunnel(state, 8000):` forwards localhost:8000 on the Mac to the pod's 127.0.0.1:8000, where vLLM listens.
+    Nothing on the pod is open to the internet, and no key of ours is on the pod."""
+
+    def __init__(self, state, local_port, remote_port=None):
+        self.argv = tunnel_argv(state, local_port, remote_port or local_port)
+        self.proc = None
+
+    def __enter__(self):
+        self.proc = subprocess.Popen(self.argv, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        time.sleep(3)
+        if self.proc.poll() is not None:
+            raise PodError(f"The SSH tunnel did not start: {(self.proc.stderr.read() or '')[-300:]}")
+        return self
+
+    def __exit__(self, *exc):
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+        return False
+
+
 UPLOAD_LIMIT_S = 1800
 
 
@@ -186,21 +217,26 @@ def preferred(offer):
     return (offer.get("geolocation") or "").rsplit(",", 1)[-1].strip().upper() in PREFERRED
 
 
-def search(p, rounds=6):
+def _offers(p, filters):
+    return p.offers(limit=64) if filters is None else p.offers(filters=filters, limit=64)
+
+
+def search(p, rounds=6, filters=None):
     """Every offer seen over several searches, cheapest first. Vast answers each search with a varying sample of
-    about 15 matching offers (checked 5 Nov 2026), so one search can miss an offer that is still for rent."""
+    about 15 matching offers (checked 5 Nov 2026), so one search can miss an offer that is still for rent.
+    `filters` replaces the provider's own (a run's jobs spec may carry them, such as a 48 GB GPU for a serve run)."""
     seen = {}
     for _ in range(rounds):
-        for o in p.offers(limit=64):
+        for o in _offers(p, filters):
             seen[str(o["id"])] = o
     return sorted(seen.values(), key=lambda o: o.get("dph_total", 1e9))
 
 
-def find_offer(p, offer_id, rounds=25):
+def find_offer(p, offer_id, rounds=25, filters=None):
     """The offer if it still passes the filters. Searches until it appears, because a search shows a varying sample:
     on 12 Nov 2026 a rentable offer appeared in only 2 of 10 searches."""
     for _ in range(rounds):
-        for o in p.offers(limit=64):
+        for o in _offers(p, filters):
             if str(o["id"]) == str(offer_id):
                 return o
     return None
@@ -210,7 +246,7 @@ def offers(exp, provider_name="vast", log=print, show=6):
     """The cheapest offers that pass the filters, US and EU hosts first."""
     spec = jobs.get(exp)
     p = provider(provider_name)
-    found = search(p)
+    found = search(p, filters=spec.get("filters"))
     found = ([o for o in found if preferred(o)] + [o for o in found if not preferred(o)])[:show]
     balance = p.balance()
     log(f"{exp}: {spec['what']}; hour limit {spec['hours']} h; estimated {spec['est_hours']} h. Balance ${balance:.2f}.")
@@ -231,7 +267,7 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
     p = provider(provider_name)
     if any(i.get("label") == label(exp) for i in p.instances()):
         raise PodError(f"An instance labelled {label(exp)} already exists. Run down first.")
-    offer = find_offer(p, offer_id)
+    offer = find_offer(p, offer_id, filters=spec.get("filters"))
     if offer is None:
         raise PodError(f"Offer {offer_id} no longer passes the filters or is gone. Run offers again.")
     if provider_name == "vast" and vast.contract_hours(offer) < spec["hours"] + 1:
@@ -242,19 +278,28 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
         raise PodError(f"Balance ${p.balance():.2f} is under ${need:.2f} (1.5 x the estimated cost). Top up first.")
     if not go:
         raise PodError(f"Not created: add --go once Parsa has approved {p.describe(offer)} with an hour limit of {spec['hours']} h.")
-    dirty = uncommitted()
+    serve = spec.get("serve")  # a serve pod runs no code of ours and gets no data: only vLLM (jobs.SERVE_*)
+    hf_token = None
+    if serve and serve["allow_gated"]:
+        from strokecopilot.nlp.reasoner.providers import secret
+
+        hf_token = secret("HF_TOKEN")
+        if not hf_token:
+            raise PodError("HF_TOKEN is not set, and the models served are gated.")
+    dirty = [] if serve else uncommitted()
     if dirty and commit is None:
         raise PodError(f"{len(dirty)} file(s) under src/ or the package config are not committed, and the pod runs the "
                        f"committed code: {', '.join(dirty[:5])}. Commit first.")
-    tar = tarball_path()
-    if sha256(tar) != TARBALL_SHA256:
-        raise PodError("The local tarball's sha256 does not match the recorded one.")
-    sources = input_files(exp)
+    if not serve:
+        tar = tarball_path()
+        if sha256(tar) != TARBALL_SHA256:
+            raise PodError("The local tarball's sha256 does not match the recorded one.")
+    sources = [] if serve else input_files(exp)
     commit = commit or head_commit()
-    instance_id = p.create(offer["id"], IMAGE, DISK_GB, label(exp))
+    instance_id = p.create(offer["id"], spec.get("image", IMAGE), spec.get("disk_gb", DISK_GB), label(exp))
     state = {"exp": exp, "provider": provider_name, "instance_id": instance_id, "offer": offer["id"],
              "dph": offer["dph_total"], "machine_id": offer.get("machine_id"), "created_utc": dt.datetime.now(dt.timezone.utc).isoformat(), "commit": commit,
-             "hours_limit": spec["hours"], "runs": jobs.chain(exp),
+             "hours_limit": spec["hours"], "runs": [] if serve else jobs.chain(exp),
              "inputs_sha256": {dst: sha256(src) for src, dst in sources}, "destroyed": False}
     save_state(exp, state)
     log(f"Created instance {instance_id} ({p.describe(offer)}). Waiting for it to run.")
@@ -265,6 +310,15 @@ def up(exp, offer_id, go=False, provider_name="vast", commit=None, log=print):
         wait_ssh(state)
         log(remote_sh(state, remote.BOOTSTRAP).strip())
         log(remote_sh(state, remote.start_watchdog(spec["hours"] * 3600)).strip())
+        if serve:
+            log(remote_sh(state, remote.SERVE_SETUP, timeout=1800).strip())
+            if hf_token:
+                log(remote_sh(state, remote.hf_env(hf_token)).strip())
+            state["serve"] = {"models": list(serve["models"]), "hf_token_on_pod": bool(hf_token)}
+            state["job_started_utc"] = dt.datetime.now(dt.timezone.utc).isoformat()
+            save_state(exp, state)
+            log(f"{exp} is ready to serve on {state['host']}:{state['port']} (reached through an SSH tunnel).")
+            return state
         started = time.time()
         # A host whose inbound link crawls costs pod time while nothing runs: on 12 Nov 2026 one took 38 min for 1.9 of
         # 3.1 GB (EXP-14 took 15 min for all of it). Past UPLOAD_LIMIT_S the copy fails and the pod is destroyed.

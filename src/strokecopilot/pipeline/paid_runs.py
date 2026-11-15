@@ -156,3 +156,170 @@ def status(models, paths):
 def make_retriever():
     """The verifier's retriever, as in every run: BAAI/bge-base-en-v1.5 over the corpus (loaded once)."""
     return index.Index.from_corpus().search
+
+
+# ---------------------------------------------------------------------------- The pod models (served through a tunnel)
+
+def answer_model(model):
+    """The model name a cell's reasoner answers are saved under (the llm's own `model`)."""
+    return om.API_ROUTES[model].model_id if model in om.API_ROUTES else model
+
+
+def reasoner_answered(model, arm, paths, version=rp.REASONER_PROMPT, folds=None):
+    """True when every reasoner request of the cell already has a saved answer, so the cell needs no reasoner call."""
+    system = rp.system_prompt(version)
+    wanted = {batched.request_key(system, rp.user_message(c["vision"], c["note"])) for c in arm_cases(model, arm, paths, folds)}
+    saved = batched.load_answers(cell_dir(paths, model, arm) / batched.ANSWERS_FILE, answer_model(model))
+    return wanted <= set(saved)
+
+
+def wait_ready(port, model, timeout_s=3600, every_s=15, log=print, fetch=None, sleep=None):
+    """Wait until the vLLM server behind the tunnel lists `model` (the first start downloads the weights)."""
+    import json
+    import time
+    import urllib.error
+    import urllib.request
+
+    def default_fetch():
+        with urllib.request.urlopen(f"http://127.0.0.1:{int(port)}/v1/models", timeout=10) as response:
+            return json.loads(response.read())
+
+    fetch, sleep, started = fetch or default_fetch, sleep or time.sleep, time.time()
+    while True:
+        try:
+            if any(m.get("id") == model for m in fetch().get("data", [])):
+                log(f"{model} is being served ({time.time() - started:.0f} s after start).")
+                return
+        except (urllib.error.URLError, ConnectionError, TimeoutError, OSError, ValueError):
+            pass
+        if time.time() - started > timeout_s:
+            raise TimeoutError(f"{model} was not being served after {timeout_s} s.")
+        sleep(every_s)
+
+
+class PodOps:
+    """What the driver does to the pod, in one place so tests can replace it."""
+
+    def __init__(self, exp):
+        from strokecopilot.compute import pod, remote
+
+        self.exp, self.pod, self.remote = exp, pod, remote
+        self.state = pod.load_state(exp)
+        if not self.state or self.state.get("destroyed") or "serve" not in self.state:
+            raise RuntimeError(f"{exp} has no serve pod up. Create it first with scripts/pod up.")
+
+    def tunnel(self, port):
+        return self.pod.Tunnel(self.state, port)
+
+    def start(self, argv):
+        return self.pod.remote_sh(self.state, self.remote.start_serve(argv)).strip()
+
+    def stop(self):
+        return self.pod.remote_sh(self.state, self.remote.STOP_SERVE).strip()
+
+    def log_tail(self):
+        return self.pod.remote_sh(self.state, self.remote.SERVE_LOG)
+
+    def down(self, log=print):
+        self.pod.down(self.exp, log=log)
+
+
+def run_pod_models(exp, paths, retriever, version=rp.REASONER_PROMPT, log=print, port=8000, ops=None, verifier=None,
+                   llm_for=reasoner_llm, ready=wait_ready, only_arms=None, folds=None):
+    """The reasoner pass of the pod models: for each model of the serve run, start vLLM, wait for it, answer every
+    cell that still lacks answers (each saved on the Mac as it arrives, WORKERS at a time), and stop the server. The
+    pod is destroyed at the end whatever happens, with the server's last log lines kept in the cell folder's parent.
+    Returns {(model, arm): advance()'s result}; the extraction batches of finished cells are submitted on the way."""
+    from strokecopilot.compute import jobs
+
+    serve = jobs.get(exp)["serve"]
+    ops = ops or PodOps(exp)
+    extractor, judge = verifier or verifier_llms()
+    results = {}
+    try:
+        with ops.tunnel(port):
+            for model in serve["models"]:
+                todo = [arm for _, arm in cells([model]) if (only_arms is None or arm in only_arms)
+                        and not reasoner_answered(model, arm, paths, version, folds)]
+                if not todo:
+                    log(f"{model}: every cell already has its reasoner answers.")
+                    continue
+                argv = om.serve_command(model, port, allow_gated=serve["allow_gated"], allow_medgemma=serve["allow_medgemma"])
+                log(f"{model}: {ops.start(argv)}")
+                try:
+                    ready(port, model, log=log)
+                    for arm in todo:
+                        results[(model, arm)] = advance(model, arm, paths, llm_for(model, port), extractor, judge, retriever,
+                                                        version, log=log, folds=folds)
+                finally:
+                    tail = ops.log_tail()
+                    out = Path(paths.out_root) / model
+                    out.mkdir(parents=True, exist_ok=True)
+                    (out / "serve_log_tail.txt").write_text(tail or "")
+                    log(f"{model}: {ops.stop()}")
+    finally:
+        ops.down(log=log)
+    return results
+
+
+def smoke(model, llm, version=rp.REASONER_PROMPT, stem="fx02_thrombectomy_large_mismatch"):
+    """One reasoner request (a fixture) to a model: did it return a valid recommendation, how long, how many tokens,
+    and what a full run of N requests would cost at that size. Numbers only."""
+    case = next(c for c in e2e.load_cases("fixtures") if c["id"] == stem)
+    rec, call = rr.recommend(case["vision"], case["note"], llm, version=version)
+    usage = dict(getattr(llm, "usage", {}))
+    cost = providers.cost_usd(getattr(llm, "model", ""), usage)
+    return {"model": model, "valid": rec is not None, "error": call["error"], "seconds": call.get("seconds"), "usage": usage,
+            "cost_usd": cost, "projected_cost_usd": {n: None if cost is None else round(cost * n, 2) for n in (195, 295)}}
+
+
+def advance_all(models, paths, retriever, version=rp.REASONER_PROMPT, wait=False, log=print, llm_for=reasoner_llm, verifier=None,
+                only_arms=None):
+    """Move every ready cell of `models` one step. A pod model's cell is skipped until its reasoner answers are saved
+    (run_pod_models). Returns [{model, arm, state}]."""
+    extractor, judge = verifier or verifier_llms()
+    rows = []
+    for model, arm in cells(models):
+        if only_arms is not None and arm not in only_arms:
+            continue
+        needs_pod = model != SONNET and model not in om.API_ROUTES
+        if needs_pod and not reasoner_answered(model, arm, paths, version):
+            rows.append({"model": model, "arm": arm, "state": "needs the pod"})
+            continue
+        result = advance(model, arm, paths, llm_for(model), extractor, judge, retriever, version, wait=wait, log=log)
+        rows.append({"model": model, "arm": arm, "state": "done" if "done" in result else f"waiting: {result['waiting']} batch"})
+    return rows
+
+
+def main(argv=None):
+    import argparse
+    import json
+
+    repo = Path(__file__).resolve().parents[3]
+    parser = argparse.ArgumentParser(description="The paid model runs (C8): status, advance, serve, smoke.")
+    parser.add_argument("command", choices=("status", "advance", "serve", "smoke"))
+    parser.add_argument("--out", required=True, help="the run folder, e.g. runs/EXP-37_paid_runs")
+    parser.add_argument("--models", default=",".join(MODELS))
+    parser.add_argument("--prompt", default=rp.REASONER_PROMPT)
+    parser.add_argument("--exp", help="serve: the pod's run, e.g. EXP-37")
+    parser.add_argument("--wait", action="store_true", help="advance: poll each batch instead of returning")
+    parser.add_argument("--artifacts", default=str(repo / "data" / "local" / "artifacts"))
+    args = parser.parse_args(argv)
+    art = Path(args.artifacts)
+    paths = Paths(art / "vision_outputs_v1", art / "vision_outputs_gt_v1", art / "isles24_notes_v1", Path(args.out))
+    models = [m for m in args.models.split(",") if m]
+    if args.command == "status":
+        rows = status(models, paths)
+    elif args.command == "advance":
+        rows = advance_all(models, paths, make_retriever(), args.prompt, wait=args.wait)
+    elif args.command == "serve":
+        results = run_pod_models(args.exp, paths, make_retriever(), args.prompt)
+        rows = [{"model": m, "arm": a, "state": "done" if "done" in r else f"waiting: {r['waiting']} batch"}
+                for (m, a), r in results.items()]
+    else:
+        rows = [smoke(m, reasoner_llm(m), args.prompt) for m in models]
+    print(json.dumps(rows, indent=1))
+
+
+if __name__ == "__main__":
+    main()
