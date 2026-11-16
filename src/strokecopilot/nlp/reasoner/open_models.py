@@ -148,6 +148,7 @@ class ApiRoute:
     key_name: str  # read with providers.secret(): an environment variable on the Mac, never in the repo
     max_tokens: int
     extra_body: dict
+    merge_system: bool = False  # True: the system prompt goes at the top of the user message (VLLMJSON)
     notes: str = ""
     sources: tuple = field(default=(), compare=False)
 
@@ -163,6 +164,10 @@ API_ROUTES = {
         # says "json"; the reasoner prompt does ("Return one JSON object").
         extra_body={"provider": {"order": ["alibaba"], "allow_fallbacks": False, "require_parameters": True,
                                  "data_collection": "deny"}},
+        # EXP-37 (16 Nov 2026): this route dropped the system message (a probe billed 95 prompt tokens for an
+        # 11k-character system prompt; EXP-36's smoke the day before billed 7,758), so 295 answers were written without
+        # the instructions or the rulebook and were set aside. The same text at the top of the user message arrives.
+        merge_system=True,
         notes="DEC-24 amended (15 Nov 2026): through OpenRouter, pinned to Alibaba, instead of a 4-bit build on the pod. "
               "List price about $0.20 in / $1.56 out per million tokens (15 Nov 2026; providers vary). The model "
               "thinks by default; whether to turn that off is a run-plan choice. max_tokens matches the Claude "
@@ -179,5 +184,6 @@ def api_llm(name, client=None, **overrides):
 
     route = API_ROUTES[name]
     settings = {"base_url": route.base_url, "key_name": route.key_name, "max_tokens": route.max_tokens,
-                "extra_body": route.extra_body, "provider": route.provider, "billing": "per token (API)", **overrides}
+                "extra_body": route.extra_body, "provider": route.provider, "billing": "per token (API)",
+                "merge_system": route.merge_system, **overrides}
     return VLLMJSON(route.model_id, client=client, **settings)

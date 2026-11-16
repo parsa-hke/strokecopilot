@@ -27,6 +27,34 @@ def model_name(llm):
     return describe()["model"] if describe else getattr(llm, "model", "unknown")
 
 
+def _bare_id(value):
+    """'[AHA2026-T8-ich]' -> 'AHA2026-T8-ich'; anything else unchanged."""
+    if isinstance(value, str) and len(value) > 2 and value[0] == "[" and value[-1] == "]" and "[" not in value[1:-1]:
+        return value[1:-1]
+    return value
+
+
+def _strip_id_brackets(rec):
+    """Parsa, 16 Nov 2026 (EXP-37): one pair of square brackets around a passage ID is removed, in each decision's
+    rule_ids and in rationale sources of type passage, for every model; returns how many were removed. The prompt's
+    rulebook shows each ID as [ID], and MedGemma copied the brackets into most citations. An ID that still names no
+    passage after this stays an error. Uncertainty text is not touched (the prompt asks for [ID] there)."""
+    count = 0
+    for decision in ("thrombolysis", "thrombectomy"):
+        part = rec.get(decision)
+        if isinstance(part, dict) and isinstance(part.get("rule_ids"), list):
+            bare = [_bare_id(i) for i in part["rule_ids"]]
+            count += sum(a != b for a, b in zip(part["rule_ids"], bare))
+            part["rule_ids"] = bare
+    for entry in rec.get("rationale") or []:
+        for source in (entry.get("sources") or []) if isinstance(entry, dict) else []:
+            if isinstance(source, dict) and source.get("type") == "passage" and "id" in source:
+                bare = _bare_id(source["id"])
+                count += bare != source["id"]
+                source["id"] = bare
+    return count
+
+
 def recommend(vision, note, llm, version=rp.REASONER_PROMPT, system=None):
     """(recommendation or None, call record). The record holds the user message, the raw reply and any error."""
     validate_vision_output(vision)
@@ -45,7 +73,20 @@ def recommend(vision, note, llm, version=rp.REASONER_PROMPT, system=None):
     finally:
         record["seconds"] = round(time.perf_counter() - started, 2)
     record["reply"] = reply
+    if isinstance(reply, list) and len(reply) == 1 and isinstance(reply[0], dict):
+        # Parsa, 16 Nov 2026 (EXP-37): a list holding exactly one object is scored as that object, for every model,
+        # and counted (record["unwrapped_list"], metrics "unwrapped_lists"). Qwen through OpenRouter (Alibaba) wraps
+        # many answers this way although the request asks for a strict JSON object: the provider's enforcement, not
+        # the answer's content. Any other non-object reply is still a format failure.
+        reply = reply[0]
+        record["unwrapped_list"] = True
+    if not isinstance(reply, dict):
+        record["error"] = f"format failure: the reply is a JSON {type(reply).__name__}, not an object"
+        return None, record
     rec = {"case_id": vision["case_id"], "model": model_name(llm), "prompt_version": version, **reply}
+    stripped = _strip_id_brackets(rec)
+    if stripped:
+        record["stripped_ids"] = stripped
     try:
         validate_recommendation(rec)
     except ContractError as e:

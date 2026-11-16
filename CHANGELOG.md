@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## 2026-11-16 — Claude Code session (EXP-37, the main paid run: fixes made while it ran)
+- **EXP-37 started** (C8, the go given 16 Nov 2026): prompt v3, commit `6162cd2` on Colab.
+  - **Colab A100**, notebook 53 in `run` mode, about 2 h: Gemma 3 27B and MedGemma 27B text answered all 295 requests each.
+  - **The Mac:** Sonnet's 315 answers through the Batch API, no errors; Qwen3.5-27B live through OpenRouter.
+  - Checking runs through the Batch API, with an auto-collector advancing every 15 min.
+  - **Sonnet's and Gemma's cells are done.** MedGemma's and Qwen's checking is still running.
+- **Qwen's first 295 answers were invalid and are set aside** (`runs/EXP-37_paid_runs/_set_aside/`; their open check batches were cancelled).
+  - OpenRouter's Alibaba route had started dropping the system message. A probe was billed 95 prompt tokens for an 11k-character system prompt, where EXP-36's smoke the day before was billed 7,758.
+  - So Qwen answered without the instructions or the rulebook: 0 of its 833 cited IDs exist in the rulebook.
+  - It was found from Qwen's first finished cell: 42% of claims were flagged, mostly citations of non-existent passages.
+  - **Fix:** the route now puts the system prompt at the top of the user message (`ApiRoute.merge_system`), so the same text arrives (8,513 tokens per request).
+  - **Guard:** `VLLMJSON` raises `ProviderError` when a provider bills fewer than one prompt token per 8 characters sent (`MIN_CHARS_PER_BILLED_TOKEN`), so the run stops instead of scoring the answer.
+  - Qwen was redone: 295 answers, 287 valid.
+  - **Cost of the mistake (estimates):** about $1.03 of OpenRouter credit and about $2.67 of Anthropic batch spend.
+- **Other fixes to the live path:**
+  - A reply with no choices (OpenRouter's upstream error sent as a normal reply) is retried after 10, 30 and 90 s, counted in `usage["provider_errors"]`, then raises `ProviderError`.
+  - `ProviderError` is not a `RuntimeError`, so it stops the run and is never scored as a format failure.
+  - A reply that is not a JSON object is a format failure instead of a crash.
+- **Two metric rules, approved by Parsa on 16 Nov 2026** (`docs/HALLUCINATION_METRIC.md` points 17 and 18; both apply to every model and are counted per cell in `metrics.json`):
+  - **17.** A list holding exactly one object is scored as that object (`unwrapped_lists`). Qwen on Alibaba wraps answers as `[ {...} ]` although the request asks for a strict object: 47 of its 295 redone answers. Any other non-object reply stays a format failure.
+  - **18.** One pair of square brackets around a passage ID is removed in `rule_ids` and passage sources (`stripped_ids`). The prompt's rulebook shows IDs as `[ID]`, and MedGemma copied the brackets into 3,321 of its 4,578 IDs. With them removed, all but one name a rulebook passage or `OWN-KNOWLEDGE`.
+- **MedGemma:** 25 of its 295 answers hit the 8,000-token output limit (the server's 16k context with a prompt of about 7.5k) and are format failures. Gemma had none.
+- **Spend so far (estimates from the run's token counts, batch prices):**
+  - Anthropic about $18.40, including the $2.67 for the invalid Qwen pass. The whole run is projected at about $25, against the $37–53 estimate.
+  - OpenRouter about $2.95.
+  - Colab about 2 A100 hours.
+- pytest: 731 passed.
+- **Notion sync:** Experiments: EXP-37 (in progress), with the Qwen set-aside and the two metric rules.
+
 ## 2026-11-16 — Claude Code session (v2's critical flags checked; EXP-39: prompt v3)
 - **v2's 9 critical flags (EXP-38) checked: all 9 are verifier mis-scores, not reasoner errors.** The judge was re-asked for each flagged claim with the same inputs to get its reasons ($0.008).
   - **3 come from a clash between v2 and the citation rule (§1).** v2 told the model to list limit-setting passages under a decision against a treatment, "under either treatment". The model listed thrombectomy passages (6–24 h ASPECTS 6–10 on fx02, the two DAWN passages on fx05) under thrombolysis's `rule_ids`. Those become citation claims "Passage X is a rule about thrombolysis", flagged as wrong rule. The reasoning is right, and blocking factors are already checked against both decisions' `rule_ids` (metric point 8).

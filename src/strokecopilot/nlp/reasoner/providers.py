@@ -46,6 +46,29 @@ def cost_usd(model, usage):
             + usage.get("cache_creation_input_tokens", 0) * p["input"] * 1.25) / 1e6
 
 
+class ProviderError(Exception):
+    """The provider sent back no answer at all (a reply with no choices, as OpenRouter does when its upstream provider
+    fails). Not the model's reply, so it is never scored: not a RuntimeError, which run.py and batched.gather record as
+    a format failure, so a run stops loudly instead, and resumes from its saved answers."""
+
+
+# An answerless reply is asked again after these waits (seconds) before VLLMJSON raises ProviderError (EXP-37: one
+# OpenRouter reply with no choices stopped the Qwen pass).
+PROVIDER_RETRY_WAITS_S = (10, 30, 90)
+
+
+# Text runs about 3 to 4.5 characters per token in these tokenizers. A prompt billed at fewer than one token per
+# MIN_CHARS_PER_BILLED_TOKEN characters sent was cut by the provider: VLLMJSON stops rather than score the answer.
+MIN_CHARS_PER_BILLED_TOKEN = 8
+
+
+def _provider_error(response):
+    """The error a provider put in an answerless reply, shortened; no request content and no key."""
+    extra = getattr(response, "model_extra", None) or {}
+    error = extra.get("error") if isinstance(extra, dict) else None
+    return str(error if error is not None else getattr(response, "error", None))[:300]
+
+
 class RefusalError(RuntimeError):
     """The model declined the request (stop_reason "refusal")."""
 
@@ -233,6 +256,11 @@ class VLLMJSON:
       tokenizers; answers ran about 3.1k to 3.4k (EXP-8, EXP-9). So the default is VLLM_MAX_TOKENS (8000): prompt plus
       answer budget stays near 15k, which a 16k context holds on a 24 GB card at 4-bit. A thinking model spends its
       reasoning from the same budget. The 20000 used for Claude (run.REASONER_MAX_TOKENS) would need about 27k.
+    - A reply whose billed prompt tokens are far below the text sent (under one per MIN_CHARS_PER_BILLED_TOKEN
+      characters) raises ProviderError: the provider dropped part of the prompt, as OpenRouter's Qwen route dropped the
+      system message in EXP-37.
+    - A reply with no choices (an API provider's upstream error, sent as a normal reply) is asked again after each of
+      retry_waits_s, counted in usage["provider_errors"], and then raises ProviderError, which stops the run.
     - Errors from the server itself (unreachable, or a 4xx such as a request over --max-model-len or a schema it
       rejects) are not caught here, as in ClaudeJSON: a run stops loudly instead of recording every case as a format
       failure.
@@ -253,7 +281,8 @@ class VLLMJSON:
         self.quantization, self.merge_system, self.extra_body = quantization, merge_system, extra_body
         self.provider, self.billing = provider, billing  # an OpenAI-compatible API (open_models.api_llm) says so
         self.usage = {"requests": 0, "input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0,
-                      "cache_creation_input_tokens": 0, "reasoning_tokens": 0, "seconds": 0.0}
+                      "cache_creation_input_tokens": 0, "reasoning_tokens": 0, "seconds": 0.0, "provider_errors": 0}
+        self.retry_waits_s = PROVIDER_RETRY_WAITS_S
         self._lock = threading.Lock()  # batched.gather may call from several threads (workers > 1)
 
     def describe(self):
@@ -279,8 +308,23 @@ class VLLMJSON:
         }
         if self.extra_body:
             request["extra_body"] = self.extra_body
-        response = self.client.chat.completions.create(**request)
+        for attempt in range(len(self.retry_waits_s) + 1):
+            response = self.client.chat.completions.create(**request)
+            if getattr(response, "choices", None):
+                break
+            with self._lock:
+                self.usage["provider_errors"] += 1
+            if attempt == len(self.retry_waits_s):
+                raise ProviderError(f"{self.model}: the provider sent no answer {attempt + 1} times; last error: "
+                                    f"{_provider_error(response)}")
+            time.sleep(self.retry_waits_s[attempt])
         usage = getattr(response, "usage", None)
+        billed = getattr(usage, "prompt_tokens", None) if usage is not None else None
+        sent = len(system) + len(user)
+        if billed is not None and billed * MIN_CHARS_PER_BILLED_TOKEN < sent:
+            # Far fewer prompt tokens billed than the text sent: the provider dropped part of the prompt (EXP-37).
+            raise ProviderError(f"{self.model}: {billed} prompt tokens billed for {sent} characters sent; the provider "
+                                "dropped part of the prompt. Nothing is scored; the run stops.")
         with self._lock:
             self.usage["requests"] += 1
             self.usage["seconds"] += time.perf_counter() - started

@@ -117,3 +117,39 @@ def test_cost_estimate():
     usage = {"input_tokens": 1_000_000, "output_tokens": 100_000, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
     assert cost_usd("claude-sonnet-5-5", usage) == pytest.approx(3.0)
     assert cost_usd("unknown-model", usage) is None
+
+
+def test_a_one_object_list_is_unwrapped_and_counted():
+    """Parsa, 16 Nov 2026 (EXP-37): Qwen through OpenRouter wraps answers in a list, [ {...} ]. A list holding exactly
+    one object is scored as that object, for every model, and the call record says so."""
+    rec, record = rr.recommend(_vision(), "note", FakeLLM([copy.deepcopy(REPLY)]))
+    assert rec is not None and record["error"] is None and record["unwrapped_list"] is True
+    assert rec["thrombolysis"] == REPLY["thrombolysis"]
+    _, plain = rr.recommend(_vision(), "note", FakeLLM())
+    assert "unwrapped_list" not in plain
+
+
+def test_a_reply_that_is_not_an_object_is_a_format_failure():
+    """Anything else that is not an object (an empty list, two objects, text, a number) is a format failure."""
+    for reply in ([], [copy.deepcopy(REPLY), copy.deepcopy(REPLY)], ["text"], "text", 3):
+        rec, record = rr.recommend(_vision(), "note", FakeLLM(reply))
+        assert rec is None and record["error"].startswith("format failure: the reply is a JSON")
+        assert record["reply"] == reply  # the raw reply is kept for the calls/ record
+
+
+def test_bracketed_passage_ids_are_stripped_and_counted():
+    """Parsa, 16 Nov 2026 (EXP-37): MedGemma copied the rulebook's [ID] display into its citations. One pair of
+    brackets is removed from rule_ids and passage sources, for every model, and counted; uncertainties are untouched."""
+    reply = copy.deepcopy(REPLY)
+    pid = reply["thrombolysis"]["rule_ids"][0] if reply["thrombolysis"]["rule_ids"] else ingest.read()[0].id
+    reply["thrombolysis"]["rule_ids"] = [f"[{pid}]", pid]
+    reply["rationale"] = [{"claim": "x", "sources": [{"type": "passage", "id": f"[{pid}]"}, {"type": "note", "quote": "[a]"}],
+                           "derived": False}]
+    reply["uncertainties"] = [f"ASPECTS is unknown; it matters for [{pid}]."]
+    rec, record = rr.recommend(_vision(), "note", FakeLLM(reply))
+    assert rec["thrombolysis"]["rule_ids"] == [pid, pid] and rec["rationale"][0]["sources"][0]["id"] == pid
+    assert rec["rationale"][0]["sources"][1]["quote"] == "[a]" and rec["uncertainties"] == reply["uncertainties"]
+    assert record["stripped_ids"] == 2
+    assert rr._bare_id("[[x]]") == "[[x]]" and rr._bare_id("[]") == "[]" and rr._bare_id("A") == "A"
+    _, plain = rr.recommend(_vision(), "note", FakeLLM())
+    assert "stripped_ids" not in plain

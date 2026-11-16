@@ -154,7 +154,8 @@ def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU,
     for case in cases:
         rec, call = rr.recommend(case["vision"], case["note"], reasoner, version=version, system=system)
         (out / "calls" / f"{case['id']}.json").write_text(json.dumps(call, indent=1, ensure_ascii=False))
-        row = {"case": case["id"], "error": call["error"]}
+        row = {"case": case["id"], "error": call["error"], "unwrapped_list": bool(call.get("unwrapped_list")),
+               "stripped_ids": call.get("stripped_ids", 0)}
         if rec is None:
             records.append({"case_id": case["vision"]["case_id"], "format_failure": True, "traces": []})
             rows.append(row)
@@ -188,7 +189,9 @@ def run_cases(cases, reasoner, extractor, judge, retriever, out_dir, tau=tr.TAU,
              for name, llm in (("reasoner", reasoner), ("extractor", extractor), ("judge", judge))}
     metrics = {"summary": vm.summarise(records) if records else None, "per_case": rows,
                "usage": {"reasoner": _usage(reasoner), "extractor": _usage(extractor), "judge": _usage(judge)},
-               "cost_usd_estimate": costs, "judge_calls": cached_judge.calls, "extractor_calls": cached_extractor.calls}
+               "cost_usd_estimate": costs, "judge_calls": cached_judge.calls, "extractor_calls": cached_extractor.calls,
+               "unwrapped_lists": sum(r["unwrapped_list"] for r in rows),  # answers scored from a one-object list
+               "stripped_ids": sum(r["stripped_ids"] for r in rows)}  # passage IDs with their [brackets] removed
     (out / "metrics.json").write_text(json.dumps(metrics, indent=1, default=str))
     (out / "flagged.json").write_text(json.dumps([f for r in rows for f in r.get("flagged", [])], indent=1, ensure_ascii=False))
     return metrics

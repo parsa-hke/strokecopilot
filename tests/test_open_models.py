@@ -101,3 +101,60 @@ def test_keyscan_watches_the_openrouter_key():
     from strokecopilot.compute import keyscan
 
     assert "OPENROUTER_API_KEY" in keyscan.ENV_KEYS
+
+
+class _FlakyClient(_Client):
+    """Answers with no choices `empty` times (OpenRouter's upstream error in a normal reply), then normally."""
+
+    def __init__(self, empty):
+        from types import SimpleNamespace as NS
+
+        super().__init__()
+        good = self.chat.completions.create
+        bad = NS(choices=None, usage=None, model_extra={"error": {"code": 502, "message": "upstream error"}})
+        self.calls = 0
+
+        def create(**kw):
+            self.calls += 1
+            return bad if self.calls <= empty else good(**kw)
+
+        self.chat = NS(completions=NS(create=create))
+
+
+def test_an_answerless_reply_is_asked_again_and_never_scored():
+    from strokecopilot.nlp.reasoner import providers
+    from strokecopilot.pipeline import batched
+
+    client = _FlakyClient(empty=2)
+    llm = om.api_llm("qwen3.5-27b", client=client)
+    llm.retry_waits_s = (0, 0, 0)
+    assert llm("system", "user", {"type": "object"}) == {"ok": True}
+    assert client.calls == 3 and llm.usage["provider_errors"] == 2 and llm.usage["requests"] == 1
+
+    always = om.api_llm("qwen3.5-27b", client=_FlakyClient(empty=99))
+    always.retry_waits_s = (0, 0, 0)
+    with pytest.raises(providers.ProviderError, match="no answer 4 times; last error: .*upstream error"):
+        always("system", "user", {"type": "object"})
+    assert not isinstance(providers.ProviderError("x"), RuntimeError)  # so a run stops instead of scoring it
+    with pytest.raises(providers.ProviderError):  # batched.gather stops too; nothing is saved as a format failure
+        batched.gather({"k": ("s", "u", {})}, always, log=lambda *_: None, workers=2)
+
+
+def test_qwen_route_merges_the_system_prompt_and_a_dropped_prompt_stops_the_run():
+    """EXP-37: OpenRouter's Qwen route dropped the system message. The route now merges it into the user message, and
+    a reply billed far fewer prompt tokens than the text sent raises ProviderError instead of being scored."""
+    from types import SimpleNamespace as NS
+
+    from strokecopilot.nlp.reasoner import providers
+
+    client = _Client()
+    llm = om.api_llm("qwen3.5-27b", client=client)
+    assert llm("SYSTEM TEXT", "user", {"type": "object"}) == {"ok": True}  # 100 tokens billed for 15 characters
+    messages = client.sent[0]["messages"]
+    assert len(messages) == 1 and messages[0]["role"] == "user" and messages[0]["content"].startswith("SYSTEM TEXT")
+    assert llm.describe()["merge_system"] is True
+    short = NS(choices=[NS(finish_reason="stop", message=NS(content='{"ok": true}', refusal=None))],
+               usage=NS(prompt_tokens=95, completion_tokens=5, prompt_tokens_details=None, completion_tokens_details=None))
+    dropped = om.api_llm("qwen3.5-27b", client=NS(chat=NS(completions=NS(create=lambda **kw: short))))
+    with pytest.raises(providers.ProviderError, match="dropped part of the prompt"):
+        dropped("x" * 11000, "user", {"type": "object"})

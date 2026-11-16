@@ -93,7 +93,9 @@ def _vllm_client(content='{"ok": true}', finish_reason="stop", refusal=None, sen
         def create(self, **kwargs):
             if sent is not None:
                 sent.update(kwargs)
-            usage = NS(prompt_tokens=100, completion_tokens=7, prompt_tokens_details=NS(cached_tokens=cached),
+            chars = sum(len(m["content"]) for m in kwargs["messages"])
+            usage = NS(prompt_tokens=max(100, chars // 4), completion_tokens=7,  # about 4 characters a token
+                       prompt_tokens_details=NS(cached_tokens=cached),
                        completion_tokens_details=NS(reasoning_tokens=reasoning))
             message = NS(content=content, refusal=refusal)
             if thinking is not None:
