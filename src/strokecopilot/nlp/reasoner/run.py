@@ -6,6 +6,7 @@ object against schemas/recommendation.json. An output that fails validation is a
 never repaired.
 """
 
+import copy
 import hashlib
 import json
 import time
@@ -73,6 +74,8 @@ def recommend(vision, note, llm, version=rp.REASONER_PROMPT, system=None):
     finally:
         record["seconds"] = round(time.perf_counter() - started, 2)
     record["reply"] = reply
+    reply = copy.deepcopy(reply)  # never change the caller's reply in place (EXP-37: a shared saved answer was stripped
+    # by the first pass, so the scoring pass counted 0 stripped IDs)
     if isinstance(reply, list) and len(reply) == 1 and isinstance(reply[0], dict):
         # Parsa, 16 Nov 2026 (EXP-37): a list holding exactly one object is scored as that object, for every model,
         # and counted (record["unwrapped_list"], metrics "unwrapped_lists"). Qwen through OpenRouter (Alibaba) wraps

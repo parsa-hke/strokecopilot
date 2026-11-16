@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## 2026-11-16 — Claude Code session (EXP-37 finished; Item 4 steps 1–2: the gold-answer builder, EXP-40)
+- **EXP-37 finished:** 4 models × 7 arms, plus Sonnet's two repeats, all verified. Pooled verifier numbers, not adjudicated and without intervals (C9 builds the table):
+
+  | Model | With rulebook | Without | Critical (with) | Format failures |
+  |---|---|---|---|---|
+  | Sonnet 5.5 | 4.5% (294 / 6,493) | 19.0% | 0.7% | 1 / 295 |
+  | Qwen3.5-27B | 6.2% (332 / 5,377) | 18.2% | 0.9% | 55 / 295 |
+  | Gemma 3 27B | 18.4% (761 / 4,137) | 29.7% | 4.6% | 5 / 295 |
+  | MedGemma 27B | 17.1% (1,241 / 7,238) | 22.8% | 4.0% | 35 / 295 |
+
+  - Sonnet's three runs on the same 20 real cases: 4.8%, 7.6%, 4.9%.
+  - **Correction to the entry below:** Qwen's 47 one-item lists in the redo were not answers. 44 are the JSON schema itself, echoed back, and 3 are broken otherwise. Point 17 unwrapped them, and each still failed validation, so they count as format failures. Point 17 rescued no Qwen answer.
+  - **Fix:** `run.recommend` changed a shared saved answer in place, so the scoring pass counted 0 stripped IDs. It now works on a copy. Every cell's `unwrapped_lists` and `stripped_ids` were recounted from `reasoner_answers.jsonl`, with no API calls (MedGemma 3,321, others 0); scores are unchanged.
+  - **Cost (estimates at batch prices):** Anthropic $26.91, including $2.67 for the invalid Qwen pass; OpenRouter about $2.95; Colab about 2 A100 hours.
+- **Item 4, step 1: `nlp/reasoner/gold.py`**, the gold-answer builder. A scenario's inputs and `rules.decide` give the reply prompt v3 asks for:
+  - `recommend` is true only for a "yes" verdict;
+  - `rule_ids` are about the decision's own treatment, plus the passages the blocking factors rest on;
+  - each deciding condition is stated as one comparison citing its input and passage;
+  - unknowns go in `uncertainties` with the passage ID in brackets.
+
+  `gold.check()` runs the code checks (schema, decisions, own-treatment IDs, verbatim quotes, omissions). All 150 scenarios and 5 fixtures pass. Tests: `tests/test_gold.py`.
+- **Item 4, step 2: EXP-40, the live verifier check of 30 gold answers** (`runs/EXP-40_gold_check/run.py`), one or more from each pair of decision routes:
+  - **Round 1:** 500 claims, 15 flagged (3.0%), 4 critical, all from three template faults: over-citing, blocking factors resting on passages not in `rule_ids`, and a computed sleep-midpoint time.
+  - **Round 2, after the fixes:** 507 claims, **0 flagged**, 45 of 45 decisions right. It reused round 1's judge cache for unchanged claims, so it does not measure the judge's run-to-run variance.
+  - Cost $0.56.
+- pytest: 739 passed.
+- **Notion sync:** Experiments: EXP-37 (results), EXP-40. DEC-30 (the fine-tuned reasoner) is still awaiting Parsa's approval.
+
 ## 2026-11-16 — Claude Code session (EXP-37, the main paid run: fixes made while it ran)
 - **EXP-37 started** (C8, the go given 16 Nov 2026): prompt v3, commit `6162cd2` on Colab.
   - **Colab A100**, notebook 53 in `run` mode, about 2 h: Gemma 3 27B and MedGemma 27B text answered all 295 requests each.

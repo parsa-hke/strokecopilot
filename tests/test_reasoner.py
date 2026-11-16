@@ -153,3 +153,15 @@ def test_bracketed_passage_ids_are_stripped_and_counted():
     assert rr._bare_id("[[x]]") == "[[x]]" and rr._bare_id("[]") == "[]" and rr._bare_id("A") == "A"
     _, plain = rr.recommend(_vision(), "note", FakeLLM())
     assert "stripped_ids" not in plain
+
+
+def test_recommend_leaves_the_reply_it_was_given_unchanged():
+    """EXP-37: a saved answer is shared by two passes; stripping must work on a copy, so each pass counts it."""
+    reply = copy.deepcopy(REPLY)
+    pid = ingest.read()[0].id
+    reply["thrombolysis"]["rule_ids"] = [f"[{pid}]"]
+    llm = FakeLLM(reply)
+    for _ in range(2):
+        _, record = rr.recommend(_vision(), "note", llm)
+        assert record["stripped_ids"] == 1
+    assert llm.reply["thrombolysis"]["rule_ids"] == [f"[{pid}]"]
