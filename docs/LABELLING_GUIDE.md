@@ -1,34 +1,37 @@
 # Labelling guide — verifier adjudication (Phase 3)
 
-This is the one-page guide for the two human labellers (Lorna and Mohamed)
+This is the one-page guide for the four human labellers (Lorna, Mohamed, Benny and Hana)
 checking the verifier. You are not being tested; the verifier is.
 Your job is to give an independent human reading so we can measure how often
 the verifier is right, both when it flags a claim and when it lets one pass.
 
 ## What you will do
 
-You will receive a CSV and a folder `cases/`. Each row is one atomic claim
-from a reasoner's output: about 100 rows, some flagged by the verifier and
-most not, sampled across models (`nlp/verifier/adjudicate.py`). The sheet
-shows the claim, the field it came from, the sources the model declared, and
-a case alias (`C001`, ...). It does not show which model wrote it or whether
-the verifier flagged it, so your reading stays independent. You decide, on
+You work in two pairs, **Lorna with Benny and Mohamed with Hana** (Parsa, 17 Nov 2026). The sample is 100 atomic
+claims; each pair labels one half of 50, split evenly by model and verifier verdict, so every claim gets two
+independent labels and each of you labels 50.
+
+You will each get a webpage (EXP-41, built by `nlp/verifier/label_page.py`; step-by-step guides in
+`docs/team/labelling_<your name>.md`). It holds your 50 atomic claims from the
+reasoners' outputs, some flagged by the verifier and most not, sampled across models (`nlp/verifier/adjudicate.py`).
+For each claim it shows the claim, the field it came from, the full answer entry it was taken from, the sources the
+model declared, the case's imaging findings and triage note (by an alias, `C001`, ...) and the whole rulebook. It does
+not show which model wrote it or whether the verifier flagged it, so your reading stays independent. You decide, on
 your own, whether the claim is an error.
 
-You will see these columns:
+The page downloads your labels as a sheet with these columns (the same sheet `adjudicate.py` writes as a CSV):
 
 - `sample_id`: an anonymous ID (S001, S002, ...). Does not reveal the model.
-- `case_alias`: the case, as `cases/<case_alias>.md`.
+- `case_alias`: the case.
 - `field`: where the claim came from (`rationale`,
   `thrombolysis.blocking_factors`, `uncertainties`, ...).
 - `claim`: the claim, as the claim extractor wrote it.
 - `declared_sources`: the sources the model declared for it.
-- `label_A`, `label_B`, `note_A`, `note_B`: you fill in your label and note.
+- `label_A`, `label_B`, `note_A`, `note_B`: your label and note (in each pair the first name is A: Lorna and
+  Mohamed are A, Benny and Hana are B).
 - `consensus`, `note_consensus`: filled together afterwards (see below).
 
-Fill only **your columns** (`label_A` and `note_A` if you are labeller A,
-`label_B` and `note_B` if B). Do not look at the other column. Do not look at
-each other's sheets.
+Only **your columns** are filled in your download. Do not look at each other's labels.
 
 ## The two possible labels
 
@@ -54,9 +57,9 @@ rulebook passage states is still an error.
 
 You have two things to check against:
 
-1. `corpus/RULEBOOK.md` — every guideline passage the reasoner can cite.
-2. `cases/<case_alias>.md` — that case's imaging findings and triage note,
-   exactly as the reasoner received them.
+1. The rulebook (the page's **Rulebook** button; `corpus/RULEBOOK.md`) — every guideline passage the
+   reasoner can cite.
+2. The case's imaging findings and triage note, exactly as the reasoner received them (shown next to each claim).
 
 Rules the metric uses (`docs/HALLUCINATION_METRIC.md`):
 
@@ -91,11 +94,11 @@ note column. Whether an error would change a decision is measured separately
 
 ## What happens after
 
-Fill in your own label and note columns only, and return the sheet to Benny.
+Download your labels from the page and send the file to Parsa directly.
 Do not ask for the key file: it maps rows to models and verdicts and stays with
 Benny and Parsa until both of you have finished.
 
-**Consensus.** Where your two labels differ, the two of you meet briefly, look
+**Consensus.** Where your two labels differ, the two of you in a pair meet briefly, look
 at the claim again with this guide, and write the agreed label in `consensus`
 and why in `note_consensus`. Do not change your own columns. Where you agree,
 leave `consensus` empty: your shared label is the consensus.
@@ -114,6 +117,6 @@ We compute:
 
 ## Time estimate
 
-About 3 minutes per row, so 100 rows is roughly 5 hours. Take a break halfway.
+About 3 minutes per row, so your 50 rows take roughly 2.5 hours. Take a break halfway.
 **Do not label more than 10 rows in a row without a break** — fatigue causes
 drift, and drift shows up as a drop in kappa.

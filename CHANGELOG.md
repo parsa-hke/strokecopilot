@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-11-17 — Claude Code session (EXP-41: the human-labelling sample and webpages)
+- **EXP-41** (`runs/EXP-41_labelling/build.py`; no API calls): **100 claims** sampled from the 23,245 the verifier scored in EXP-37's arms with the rulebook (4 models × fixtures, scenarios, real cases with predicted and with ground-truth vision).
+  - Stratified by model × verifier verdict (clean, content error, citation error), 8–9 claims per group, seed 20261109 (`adjudicate.sample_claims`, Benny's kit). They come from 97 cases: 78 scenario, 21 real, 1 fixture.
+  - `sheet.csv` is what labellers may see. `key.csv` maps each claim to its model, run, case and verdict, and stays on Parsa's Mac, not on Drive.
+- **Four labellers in two mixed pairs (Parsa, 17 Nov 2026): Lorna (A) + Benny (B), Mohamed (A) + Hana (B).**
+  - Each pair labels one half of 50, split evenly by model × verdict (`label_page.split_halves`, seed 20261117; `halves.json`). Every claim gets two independent labels, and each person labels 50.
+  - Mixed pairs (vision + NLP) so shared background does not inflate kappa.
+  - Benny's brief said he would not label; he built the sampling code but has not seen this sample's key.
+- **`nlp/verifier/label_page.py`:** one self-contained HTML page per labeller. It runs offline in any browser, with no server and nothing sent anywhere.
+  - **It shows** the claim, the answer entry it came from, the declared sources (imaging values, note quotes highlighted, full passage text), the case's imaging and note as the model received them, and the searchable rulebook.
+  - **It never shows** the model, the run, the case ID or the verdict.
+  - **It flags** a note quote that is not in the note, and a passage that does not exist.
+  - **Saving:** labels save in the browser, with a warning when storage is off. A download writes the sheet's own CSV, and loading it back restores the labels (rows outside the person's half are ignored).
+  - **Merging:** `merge_sheets` (per pair) and `combine_sheets` (both halves) feed `adjudicate.read_labels`; `kappa_by_pair` gives κ per pair. Tests: `tests/test_label_page.py`.
+- **Guides:** `docs/team/labelling_{lorna,benny,mohamed,hana}.md`, one per person (file, partner, letter). `docs/LABELLING_GUIDE.md` is updated for the pairs, and labels go to Parsa directly.
+- **On Drive** in `StrokeCopilot/labelling/`: the four pages, the four guides and the shared guide.
+- **Plan §7 ticked:** `providers.py` (four models) and the model runs (EXP-37). The adjudication line records EXP-41.
+- pytest: 744 passed.
+- **Notion sync:** Experiments: EXP-41; Tasks: the labelling assignment (Lorna, Benny, Mohamed, Hana, 50 each).
+
 ## 2026-11-16 — Claude Code session (EXP-37 finished; Item 4 steps 1–2: the gold-answer builder, EXP-40)
 - **EXP-37 finished:** 4 models × 7 arms, plus Sonnet's two repeats, all verified. Pooled verifier numbers, not adjudicated and without intervals (C9 builds the table):
 
