@@ -1,10 +1,12 @@
 """Tests for pipeline/compare.py: the flat table per run folder, the pivot (models x source x arm) and the figure."""
 
+import csv
 import json
 from pathlib import Path
 
 import pytest
 
+from strokecopilot.pipeline import compare
 from strokecopilot.pipeline.compare import METRICS, build_table, format_pivot, load_run, pivot_table, plot_table
 
 
@@ -140,3 +142,82 @@ def test_pivot_marks_a_missing_cell_and_refuses_duplicates(tmp_path):
     again = _run(tmp_path, "E9", "m-a", "with_rulebook", 0.06)
     with pytest.raises(ValueError, match="E1.*E9"):
         pivot_table(build_table(folders + [again]))
+
+
+# --- C9 (17 Nov 2026): paid-run arms, per-case records, paired comparisons, the report -------------------------
+
+def _cell(root, model, arm, cases, bad=0, fail=(), rulebook=True, source="scenarios", vision=None, repeat_of=None):
+    """A finished paid-run cell: config, metrics.json per_case rows and traces with `bad` flagged claims per case
+    (of 10), critical when flagged; cases in `fail` are format failures."""
+    folder = root / model.replace("/", "_") / arm
+    (folder / "traces").mkdir(parents=True)
+    paid = {"model": model, "arm": arm, "source": source, "rulebook": rulebook}
+    if vision:
+        paid["vision"] = vision
+    if repeat_of:
+        paid["repeat_of"] = repeat_of
+    (folder / "config.json").write_text(json.dumps({"source": source, "rulebook": rulebook, "paid_run": paid,
+                                                    "reasoner": {"model": model}}))
+    rows = []
+    for c in cases:
+        if c in fail:
+            rows.append({"case": c, "error": "format failure: x"})
+            continue
+        traces = [{"claim_id": f"r[{i}]", "subtype": 4 if i < bad else None, "critical": i < bad} for i in range(10)]
+        (folder / "traces" / f"{c}.json").write_text(json.dumps({"claims": [], "traces": traces}))
+        rows.append({"case": c, "error": None, "claims": 10, "hallucinated": bad, "omissions": [],
+                     "uncertainty_omissions": [], "decisions": {"thrombolysis": [True, True, True]}})
+    records = [{"case_id": r["case"], "format_failure": bool(r["error"]), "traces": [] if r["error"] else
+                json.loads((folder / "traces" / f"{r['case']}.json").read_text())["traces"],
+                "omissions": 0, "uncertainty_omissions": 0, "decisions_correct": 1, "decisions_determined": 1}
+               for r in rows]
+    from strokecopilot.nlp.verifier import metrics as vm
+    (folder / "metrics.json").write_text(json.dumps({"summary": vm.summarise(records, n_boot=50), "per_case": rows}))
+    return folder
+
+
+def test_paid_run_arms_are_told_apart():
+    paid = lambda **kw: {"rulebook": kw.pop("rulebook", True), "paid_run": {"source": "real", **kw}}
+    assert compare._arm_label(paid(vision="predicted")) == "with_rulebook/predicted_vision"
+    assert compare._arm_label(paid(vision="groundtruth")) == "with_rulebook/groundtruth_vision"
+    assert compare._arm_label(paid(vision="predicted", rulebook=False)) == "without_rulebook/predicted_vision"
+    assert compare._arm_label(paid(vision="predicted", arm="real_predicted_repeat2", repeat_of="real_predicted")) == \
+        "with_rulebook/predicted_vision/repeat2"
+    assert compare._arm_label({"with_rulebook": False}) == "without_rulebook" and compare._arm_label({}) == "with_rulebook"
+
+
+def test_case_records_rebuild_the_saved_summary_and_paired_compares_matched_cases(tmp_path):
+    cases = [f"scenario-{i:03d}" for i in range(12)]
+    a = _cell(tmp_path, "m", "scenarios_rulebook", cases, bad=1, fail={"scenario-000"})
+    b = _cell(tmp_path, "m", "scenarios_norulebook", cases[:10], bad=3, rulebook=False)
+    records = compare.case_records(a)
+    assert len(records) == 12 and records[0]["format_failure"] and not records[1]["format_failure"]
+    saved = json.loads((a / "metrics.json").read_text())["summary"]
+    from strokecopilot.nlp.verifier import metrics as vm
+    rebuilt = vm.summarise(records, n_boot=50)
+    assert all(rebuilt[k]["numerator"] == saved[k]["numerator"] for k in ("hallucination_rate", "format_failure_rate"))
+    d = compare.paired(a, b)  # only the 10 shared cases, one of them a format failure on side a
+    assert d["cases"] == 10 and d["cases_a"] == 12 and d["cases_b"] == 10
+    assert d["a"] == pytest.approx(0.1) and d["b"] == pytest.approx(0.3) and d["difference"] == pytest.approx(-0.2)
+    assert d["ci95"] is not None and d["ci_a"] is not None
+    with pytest.raises(ValueError, match="twice"):
+        compare.paired([a, a], b)
+
+
+def test_c9_report_writes_tables_figures_and_comparisons(tmp_path):
+    pytest.importorskip("matplotlib")
+    from strokecopilot.pipeline import paid_runs as pr
+    fx, sc, real = [f"fx0{i}" for i in range(1, 6)], [f"scenario-{i:03d}" for i in range(12)], [f"case-{i:02d}" for i in range(10)]
+    for model, bad in ((pr.SONNET, 1), ("gemma-3-27b", 3)):
+        for arm, spec in pr.arms_for(model).items():
+            ids = {"fixtures": fx, "scenarios": sc[:6] if spec.get("half") else sc, "real": real}[spec["source"]]
+            _cell(tmp_path / "paid", model, arm, ids, bad=bad + (2 if not spec["rulebook"] else 0),
+                  rulebook=spec["rulebook"], source=spec["source"], vision=spec.get("vision"), repeat_of=spec.get("repeat_of"))
+    report = compare.c9_report(tmp_path / "paid", tmp_path / "out", models=[pr.SONNET, "gemma-3-27b"])
+    assert {p.name for p in (tmp_path / "out").iterdir()} == {"table.csv", "report.json", "report.md", "c9_rates.png", "c9_vs_sonnet.png"}
+    assert report["headline"][pr.SONNET]["hallucination_rate"]["value"] == pytest.approx(0.1)
+    assert report["rulebook"]["gemma-3-27b"]["difference"] == pytest.approx(-0.2) and report["rulebook"]["gemma-3-27b"]["cases"] == 21
+    assert report["vs_sonnet"]["gemma-3-27b"]["hallucination_rate"]["difference"] == pytest.approx(0.2)
+    assert set(report["sonnet_repeats"]) == {"real_predicted", "real_predicted_repeat2", "real_predicted_repeat3"}
+    rows = list(csv.DictReader((tmp_path / "out" / "table.csv").open()))
+    assert len(rows) == 9 + 7 and "Gemma 3 27B" in (tmp_path / "out" / "report.md").read_text()

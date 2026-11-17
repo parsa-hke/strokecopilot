@@ -1,5 +1,38 @@
 # CHANGELOG
 
+## 2026-11-17 — Claude Code session (C9: the hallucination table, EXP-42)
+- **EXP-42: C9, the hallucination table** (`runs/EXP-42_c9_table/`, on Drive; `notebooks/41_nlpB_model_comparison.ipynb`; no API calls). It reads EXP-37's 30 cells.
+  - `compare.case_records` rebuilds each cell's per-case records from its saved traces, and **reproduces all 30 cells' saved counts exactly**.
+  - Intervals are 95% percentile bootstraps over cases (10,000 resamples).
+- **Headline** (with the rulebook, predicted vision, each case once: 5 fixtures + 150 scenarios + 20 real cases):
+
+  | Model | Hallucination rate | Content rate (1–5) | Critical | Decisions right | Format failures |
+  |---|---|---|---|---|---|
+  | Sonnet 5.5 | 4.4% [3.7, 5.2] | 3.6% [2.8, 4.4] | 0.8% [0.4, 1.3] | 231 / 249 | 1 / 175 |
+  | Qwen3.5-27B | 6.2% [5.3, 7.1] | 4.2% [3.5, 5.0] | 1.0% [0.7, 1.5] | 165 / 180 | 50 / 175 |
+  | Gemma 3 27B | 18.6% [17.1, 20.0] | 13.7% [12.3, 15.2] | 5.1% [4.2, 6.1] | 150 / 243 | 5 / 175 |
+  | MedGemma 27B | 18.3% [16.5, 20.1] | 14.0% [12.4, 15.7] | 4.5% [3.6, 5.5] | 156 / 208 | 29 / 175 |
+
+- **Paired comparisons** (same cases on both sides, paired case bootstrap):
+  - **Rulebook effect.** The content rate, with minus without, on 100 matched cases. It uses the content rate because the without-rulebook arm is not charged for citations (DEC-29). The rulebook lowers content errors for every model: Sonnet −14.9 pts [−16.6, −13.2], Qwen −12.9 [−14.7, −11.1], Gemma −13.0 [−15.3, −10.7], MedGemma −8.0 [−10.4, −5.4].
+  - **Vision effect.** Predicted minus ground-truth vision on 20 real cases. No difference except for Gemma: −5.0 pts [−8.9, −1.3], fewer errors with predicted vision.
+  - **Against Sonnet** (hallucination rate): Qwen +1.7 pts [+0.6, +2.9]. On the content rate Qwen is +0.7 [−0.3, +1.7], no clear difference, so its gap is in citations. Gemma +14.2 [+12.6, +15.8]; MedGemma +13.9 [+12.0, +15.9].
+  - **Medical training** (MedGemma against its base, Gemma) shows no lower hallucination rate.
+  - **Sonnet run to run** (same 20 real cases): 4.8%, 7.6%, 4.9%.
+- **Code** (`pipeline/compare.py`):
+  - `_arm_label` tells the paid runs' arms apart: rulebook on or off, predicted or ground-truth vision, repeats.
+  - `case_records`, `paired` (each side's interval too), and `c9_report` (`table.csv`, `report.json`, `report.md`, two figures).
+  - Flat rows also carry the content rate, decisions, format failures, attribution and named unknowns.
+  - Notebook 41 is now a thin wrapper around `c9_report`. Tests: `tests/test_compare.py`, 3 new.
+- **Limits to report:**
+  - These are verifier rates; EXP-41's labels will give the verifier's agreement with people.
+  - Without-rulebook rates count content only.
+  - The real cases number 20, so their intervals are wide.
+- EXP-37's run folders are copied to Drive (`runs/EXP-37_paid_runs/`, logs left out).
+- **Plan §7 ticked:** notebook 41, the hallucination table.
+- pytest: 747 passed.
+- **Notion sync:** Experiments: EXP-42; EXP-37's Drive copy is done.
+
 ## 2026-11-17 — Claude Code session (EXP-41: the human-labelling sample and webpages)
 - **EXP-41** (`runs/EXP-41_labelling/build.py`; no API calls): **100 claims** sampled from the 23,245 the verifier scored in EXP-37's arms with the rulebook (4 models × fixtures, scenarios, real cases with predicted and with ground-truth vision).
   - Stratified by model × verifier verdict (clean, content error, citation error), 8–9 claims per group, seed 20261109 (`adjudicate.sample_claims`, Benny's kit). They come from 97 cases: 78 scenario, 21 real, 1 fixture.
