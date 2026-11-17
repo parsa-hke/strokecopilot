@@ -1,5 +1,47 @@
 # CHANGELOG
 
+## 2026-11-17 — Claude Code session (Item 4 step 4: the fine-tuning code and notebook 54)
+- **`nlp/reasoner/finetune.py`:** bf16 LoRA fine-tuning of Gemma 3 4B instruction-tuned on EXP-43 (DEC-30).
+  - **LoRA targets** only the language model's attention and MLP projections (`TARGET_MODULES` excludes the vision tower and projector): r 16, alpha 32, dropout 0.05.
+  - **Loss on the answer only.** The chat template's prompt render must be a prefix of the full render, or the example is refused. Logits are computed only for the last `answer_len + 1` positions (`logits_to_keep`): Gemma's 262k-token vocabulary would otherwise need several GB for a ~7,500-token request.
+  - **Training loop:** a minimal loop (no Trainer), batch of one with gradient accumulation 8, AdamW at lr 1e-4 with a cosine schedule and 20 warm-up steps, 2 epochs. Validation loss every 25 steps, early stopping after 3 evaluations without improvement; the best adapter is kept.
+  - **Resuming:** a checkpoint after each evaluation (adapter, optimiser, scheduler, step) on Drive lets a disconnected Colab resume.
+  - **`merge()`** writes base + best adapter as one full bf16 model for vLLM, served with the same settings as the base.
+  - **`dummy()`** reports peak GPU memory, tokens per second and validation loss, and checks that one generated answer is valid schema JSON.
+- **`notebooks/54_finetune_colab.ipynb`**, a thin Colab A100 notebook:
+  - `MODE='dummy'` (EXP-44): 30 steps on 20 examples, then one generated answer, and the projected full-run time.
+  - `MODE='run'` (EXP-45): the full fine-tune, then the merge.
+  - It checks the training set is EXP-43, built against the unchanged evaluation set.
+  - It needs `HF_TOKEN` with access to `google/gemma-3-4b-it`, whose terms must be accepted on Hugging Face.
+- **`pyproject.toml`:** a `finetune` extra (transformers 5.22.1, peft 0.21.3, accelerate 1.16.0: the versions the CPU tests ran).
+- **Tests:** `tests/test_finetune.py` (7) on CPU, with a tiny random Gemma 3 text model and a character tokenizer with a Gemma-style chat template.
+  - The answer-only loss equals cross-entropy on full logits.
+  - Training lowers the validation loss, keeps the best adapter and resumes.
+  - LoRA never targets the vision tower.
+  - The merged model loads.
+  - `dummy()` reports.
+- **Not yet measured:** memory and speed on the A100. The dummy run measures them. A rough estimate (unmeasured) is 30–40 minutes per epoch at about 7,500 tokens per example.
+- pytest: 761 passed.
+- **Notion sync:** Experiments: EXP-44 (planned).
+
+## 2026-11-17 — Claude Code session (DEC-30 approved; Item 4 step 3: training scenarios and the fine-tuning dataset, EXP-43)
+- **DEC-30 approved by Parsa:** the fine-tuned small reasoner (Gemma 3 4B, prompted and LoRA-tuned). Recorded in plan §2 and in Notion's Decisions.
+  - **Amended the same day:** the 4 held-out routes are drawn by seed from the 14 routes other than "within 4.5 h with a disabling deficit" and "acute intracranial haemorrhage", which training always keeps.
+  - Drawn from all 16, the seed held out both. That left extended-window thrombolysis as the only "yes" in training.
+  - **Held out:** beyond 4.5 h and eligible for thrombectomy; LVO 4.5–24 h without thrombectomy; INR above 1.7; no occlusion identified.
+- **`scenarios.py`:**
+  - The value grids are a parameter of `_draw`. `TEST_GRIDS` keeps the 150 evaluation scenarios byte-identical (sha256 `ea5b5977…`, checked by a test).
+  - `TRAIN_GRIDS` shares no decision value with them and puts values just either side of the rules' cut-offs.
+  - `generate_training`: new seed (20261117), held-out routes skipped, no case repeating an evaluation or training case (`signature`), caps per decision path and per route.
+  - The route cap rejects a draw only when every route it takes is full. A first version rejected a draw when any route was full, and left 4 DAWN and 2 DEFUSE-3 scenarios in 1,200, because a late thrombectomy "yes" mostly comes paired with a thrombolysis contraindication.
+- **`nlp/reasoner/train_data.py`:** each training scenario's gold answer in prompt v3's request format (system prompt with the rulebook, user message as in evaluation). A gold answer that fails `gold.check()` stops the build. The validation slice is every tenth example of a fixed shuffle.
+- **EXP-43** (`runs/EXP-43_train_set/`, on Drive; no API, no patient data): **1,200 examples, 1,080 train and 120 validation**, every gold answer passing its checks.
+  - Thrombolysis yes / no / undetermined: 280 / 393 / 527. Thrombectomy: 246 / 570 / 384.
+  - Routes: DAWN 36, DEFUSE-3 15, 6–24 h 67 and 59, basilar 113, M2 58, haemorrhage 40, within 4.5 h 160; the held-out routes 0.
+  - About 27,700 characters per example (the system prompt is about 25,200 of them); answers about 1,600 characters.
+- Tests: `tests/test_train_data.py` (7). pytest: 754 passed.
+- **Notion sync:** Decisions: DEC-30 (with the amendment); Experiments: EXP-43.
+
 ## 2026-11-17 — Claude Code session (C9: the hallucination table, EXP-42)
 - **EXP-42: C9, the hallucination table** (`runs/EXP-42_c9_table/`, on Drive; `notebooks/41_nlpB_model_comparison.ipynb`; no API calls). It reads EXP-37's 30 cells.
   - `compare.case_records` rebuilds each cell's per-case records from its saved traces, and **reproduces all 30 cells' saved counts exactly**.
