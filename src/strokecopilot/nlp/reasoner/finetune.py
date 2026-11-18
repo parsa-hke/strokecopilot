@@ -253,16 +253,33 @@ def merge(model_id, adapter_dir, out_dir, token=None):
     return Path(out_dir)
 
 
-def generate_answer(model, tokenizer, system, example, max_new_tokens=3000, device="cuda"):
-    """Greedy answer for one example, decoded: the dummy run's check that the tuned model writes schema JSON."""
+def stop_ids(tokenizer):
+    """The token IDs that end an answer: the tokenizer's end-of-sequence and, for Gemma, <end_of_turn> (the token the
+    chat template puts after every answer, so the one training teaches). Passed to generate() explicitly rather than
+    trusting the model's generation config."""
+    ids = [tokenizer.eos_token_id]
+    vocab = tokenizer.get_vocab()
+    if "<end_of_turn>" in vocab:
+        ids.append(vocab["<end_of_turn>"])
+    return [i for i in dict.fromkeys(ids) if i is not None]
+
+
+def generate_answer(model, tokenizer, system, example, max_new_tokens=3000, device="cuda", return_info=False):
+    """Greedy answer for one example, decoded: the dummy run's check that the tuned model writes schema JSON. With
+    return_info, (text, {"new_tokens", "stopped"}): stopped is False when the answer ran into max_new_tokens."""
     import torch
 
     prompt = _ids(tokenizer, messages(system, example, False), add_generation_prompt=True)
+    stops = stop_ids(tokenizer)
     model.eval()
     with torch.no_grad():
         out = model.generate(input_ids=torch.tensor([prompt], device=device), max_new_tokens=max_new_tokens,
-                             do_sample=False)
-    return tokenizer.decode(out[0][len(prompt):], skip_special_tokens=True)
+                             do_sample=False, eos_token_id=stops, pad_token_id=tokenizer.pad_token_id or stops[0])
+    new = out[0][len(prompt):].tolist()
+    text = tokenizer.decode(new, skip_special_tokens=True)
+    if not return_info:
+        return text
+    return text, {"new_tokens": len(new), "stopped": bool(new) and new[-1] in stops}
 
 
 def check_generated(text, vision_case_id="dummy"):
@@ -280,6 +297,29 @@ def check_generated(text, vision_case_id="dummy"):
     return True, None
 
 
+def generation_check(model, tokenizer, system, rows, out_dir, n=3, max_new_tokens=1500, device="cuda"):
+    """After the full run: the tuned model answers the first n validation rows. Validation loss cannot see a model that
+    loops (the dummy run's 30-step model repeated one claim until the token cap), so this checks each answer stops by
+    itself, validates against the schema and gives the gold verdicts. The longest gold answer is about 900 tokens, so
+    max_new_tokens 1500 cuts only a loop. Writes generation_check.json and each answer as generated_<id>.txt."""
+    out = Path(out_dir)
+    results = []
+    for row in rows[:n]:
+        text, info = generate_answer(model, tokenizer, system, row, max_new_tokens, device, return_info=True)
+        (out / f"generated_{row['id']}.txt").write_text(text, encoding="utf-8")
+        valid, problem = check_generated(text)
+        verdicts = None
+        if valid:
+            reply, gold_reply = json.loads(text.strip().removeprefix("```json").removesuffix("```").strip()), json.loads(row["answer"])
+            verdicts = all(reply[k]["recommend"] == gold_reply[k]["recommend"] for k in ("thrombolysis", "thrombectomy"))
+        results.append({"id": row["id"], "tokens": info["new_tokens"], "stopped": info["stopped"], "valid": valid,
+                        "problem": problem, "verdicts_match_gold": verdicts})
+    summary = {"n": len(results), "stopped": sum(r["stopped"] for r in results), "valid": sum(r["valid"] for r in results),
+               "verdicts_match_gold": sum(bool(r["verdicts_match_gold"]) for r in results), "answers": results}
+    (out / "generation_check.json").write_text(json.dumps(summary, indent=1))
+    return summary
+
+
 def dummy(model, tokenizer, system, train_rows, val_rows, out_dir, config, device="cuda", log=print):
     """Item 4 step 5: a few optimiser steps on a few examples, then one generated answer. Returns a report with peak
     GPU memory, tokens per second and whether the answer validates. Nothing from it is used for training."""
@@ -291,13 +331,15 @@ def dummy(model, tokenizer, system, train_rows, val_rows, out_dir, config, devic
     t = time.time()
     record = train(model, tokenizer, system, train_rows, val_rows, out_dir, config, device, log)
     seconds = time.time() - t
-    text = generate_answer(model, tokenizer, system, val_rows[0], device=device)
+    text, info = generate_answer(model, tokenizer, system, val_rows[0], device=device, return_info=True)
+    (Path(out_dir) / "generated.txt").write_text(text, encoding="utf-8")
     valid, problem = check_generated(text)
     report = {"steps": record["steps"], "examples_seen": record["examples_seen"], "seconds": round(seconds),
               "peak_gpu_gb": round(torch.cuda.max_memory_allocated() / 1e9, 1) if cuda else None,
               "tokens_per_s": record["history"][-1]["tokens_per_s"] if record["history"] else None,
               "tokens_per_example": record["tokens_per_example"], "answer_tokens": record["answer_tokens"],
               "val_loss": [h["val_loss"] for h in record["history"]], "generated_valid": valid,
-              "generated_problem": problem, "generated_start": text[:300]}
+              "generated_problem": problem, "generated_tokens": info["new_tokens"], "generated_stopped": info["stopped"],
+              "generated_start": text[:300], "generated_end": text[-300:]}
     (Path(out_dir) / "dummy_report.json").write_text(json.dumps(report, indent=1))
     return report

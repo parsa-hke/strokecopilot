@@ -104,8 +104,39 @@ def test_check_generated_accepts_schema_json_only():
 def test_dummy_reports_speed_loss_and_whether_the_answer_validates(tok, tmp_path, monkeypatch):
     model = ft.lora_model(_model(tok), ft.FinetuneConfig(lora_r=4, lora_alpha=8, lora_dropout=0.0))
     cfg = ft.FinetuneConfig(max_steps=3, grad_accum=1, eval_every=1, warmup_steps=1, max_len=200, gradient_checkpointing=False)
-    monkeypatch.setattr(ft, "generate_answer", lambda *a, **k: "not json")  # a random tiny model writes no JSON
+    monkeypatch.setattr(ft, "generate_answer", lambda *a, **k: ("not json", {"new_tokens": 3000, "stopped": False}))
     report = ft.dummy(model, tok, SYSTEM, ROWS, ROWS[:2], tmp_path, cfg, device="cpu", log=lambda *_: None)
     assert report["steps"] == 3 and len(report["val_loss"]) == 3 and report["tokens_per_s"] > 0
     assert report["generated_valid"] is False and report["peak_gpu_gb"] is None
+    assert report["generated_stopped"] is False and report["generated_tokens"] == 3000
+    assert (tmp_path / "generated.txt").read_text() == "not json"
     assert json.loads((tmp_path / "dummy_report.json").read_text())["steps"] == 3
+
+
+def test_generation_stops_on_end_of_turn_and_reports_whether_it_stopped(tok):
+    assert ft.stop_ids(tok) == [tok.eos_token_id]  # no <end_of_turn> in this vocabulary
+    gemma_like = transformers.PreTrainedTokenizerFast(tokenizer_object=tok.backend_tokenizer, eos_token="<eos>")
+    gemma_like.add_special_tokens({"additional_special_tokens": ["<end_of_turn>"]})
+    assert ft.stop_ids(gemma_like) == [gemma_like.eos_token_id, gemma_like.convert_tokens_to_ids("<end_of_turn>")]
+    text, info = ft.generate_answer(_model(tok), tok, SYSTEM, ROWS[0], max_new_tokens=5, device="cpu", return_info=True)
+    assert isinstance(text, str) and 1 <= info["new_tokens"] <= 5 and isinstance(info["stopped"], bool)
+    assert info["stopped"] == (info["new_tokens"] < 5)
+
+
+def test_generation_check_reports_stops_validity_and_verdicts(tok, tmp_path, monkeypatch):
+    from strokecopilot.nlp.reasoner import gold
+    from strokecopilot.nlp.verifier import scenarios as sc
+
+    s = sc.generate()[0]
+    good = json.dumps(gold.gold_answer(s.vision, s.facts))
+    flipped = json.loads(good)
+    flipped["thrombolysis"]["recommend"] = not flipped["thrombolysis"]["recommend"]
+    rows = [{"id": "a", "answer": good}, {"id": "b", "answer": good}, {"id": "c", "answer": good}, {"id": "d", "answer": good}]
+    replies = iter([(good, {"new_tokens": 600, "stopped": True}), (json.dumps(flipped), {"new_tokens": 600, "stopped": True}),
+                    ('{"claims": [1, 1, 1', {"new_tokens": 1500, "stopped": False})])
+    monkeypatch.setattr(ft, "generate_answer", lambda *a, **k: next(replies))
+    summary = ft.generation_check(None, tok, SYSTEM, rows, tmp_path, n=3, device="cpu")
+    assert (summary["n"], summary["stopped"], summary["valid"], summary["verdicts_match_gold"]) == (3, 2, 2, 1)
+    assert [r["verdicts_match_gold"] for r in summary["answers"]] == [True, False, None]
+    assert (tmp_path / "generated_c.txt").read_text().startswith('{"claims"')
+    assert json.loads((tmp_path / "generation_check.json").read_text())["stopped"] == 2
