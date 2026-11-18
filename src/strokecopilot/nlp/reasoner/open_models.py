@@ -8,7 +8,8 @@ Hosting under the amendment:
   are unmeasured until the one-request GPU dummy.
 - The fallback pair (Baichuan-M2-32B, Qwen2.5-32B-Instruct) keeps its official 4-bit checkpoints.
 
-MODELS holds Qwen3.5-27B, MedGemma 27B text and Gemma 3 27B, and the fallback pair Baichuan-M2-32B and Qwen2.5-32B.
+MODELS holds Qwen3.5-27B, MedGemma 27B text and Gemma 3 27B, the fallback pair Baichuan-M2-32B and Qwen2.5-32B, and
+DEC-30's small reasoner, Gemma 3 4B prompted and LoRA-tuned (SMALL_MODELS).
 Every Hugging Face id here was checked against its model card on 15 Nov 2026. A field that could not be checked is
 None and named in the entry's `verify`, and serve_command() refuses that entry until someone fills it from the card.
 
@@ -100,7 +101,46 @@ MODELS = {
         notes="Fallback pair (DEC-24): Baichuan-M2-32B's base. DEC-24 names Qwen2.5-32B; the instruct model is used "
               "because the base model is not tuned for chat (Parsa to confirm). Native context 32,768.",
         sources=("https://huggingface.co/Qwen/Qwen2.5-32B-Instruct-AWQ",)),
+    # DEC-30: the small reasoner, prompted and LoRA-tuned. Both are served in bf16 (the precision the adapter was trained
+    # and merged in), with the same settings, so the only difference is the adapter.
+    "gemma-3-4b": OpenModel(
+        name="gemma-3-4b", hf_id="google/gemma-3-4b-it", checkpoint="google/gemma-3-4b-it", quantization="bf16",
+        max_model_len=16384, gated=True, merge_system=False, thinks_by_default=False, thinking_off=None,
+        reasoning_parser=None,
+        notes="DEC-30's prompted small reasoner. Gated (Gemma terms). bf16, no quantization: about 8.6 GB of weights. "
+              "Multimodal; the vision tower is loaded but never used. A request is about 7,600 prompt tokens, so 16,384 "
+              "holds it with VLLM_MAX_TOKENS.",
+        sources=("https://huggingface.co/google/gemma-3-4b-it",)),
+    "gemma-3-4b-tuned": OpenModel(
+        name="gemma-3-4b-tuned", hf_id="google/gemma-3-4b-it", checkpoint="/content/models/EXP-45_merged",
+        quantization="bf16", max_model_len=16384, gated=False, merge_system=False, thinks_by_default=False,
+        thinking_off=None, reasoning_parser=None,
+        notes="DEC-30's tuned small reasoner: gemma-3-4b with EXP-45's best LoRA adapter merged in (finetune.merge), "
+              "served from a local copy of runs/EXP-45_finetune/merged (never through the Drive mount). Local, so no "
+              "token. Files the merge did not write (for example the image preprocessor config) are copied from the "
+              "base snapshot (fill_from_base), so the tokenizer and chat template are the base model's.",
+        sources=("https://huggingface.co/google/gemma-3-4b-it",)),
 }
+
+
+SMALL_MODELS = ("gemma-3-4b", "gemma-3-4b-tuned")
+WEIGHT_FILES = (".safetensors", ".safetensors.index.json", ".bin", ".pt")
+
+
+def fill_from_base(tuned_dir, base_dir):
+    """Copy into tuned_dir every file of the base snapshot that the merge did not write, weights excepted (and
+    config.json, which the merge wrote for the merged weights). Returns the names copied. The tuned model then serves
+    with the base model's tokenizer, chat template and processor files."""
+    import shutil
+    from pathlib import Path
+
+    tuned, base = Path(tuned_dir), Path(base_dir)
+    copied = []
+    for src in sorted(base.iterdir()):
+        if src.is_file() and not src.name.endswith(WEIGHT_FILES) and not (tuned / src.name).exists():
+            shutil.copy2(src, tuned / src.name)
+            copied.append(src.name)
+    return copied
 
 
 class NotServable(ValueError):
@@ -127,6 +167,8 @@ def serve_command(model, port=8000, allow_gated=False, allow_medgemma=False, str
             "--structured-outputs-config.backend", structured_output_backend]
     if entry.quantization == "fp8":
         argv += ["--quantization", "fp8"]
+    if entry.quantization == "bf16":  # stated, not left to the config (the merged config is written by transformers 5)
+        argv += ["--dtype", "bfloat16"]
     if entry.reasoning_parser:
         argv += ["--reasoning-parser", entry.reasoning_parser]
     if kv_cache_dtype:

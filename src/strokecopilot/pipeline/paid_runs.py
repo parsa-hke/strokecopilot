@@ -16,7 +16,8 @@ Arms (DEC-24's matrix, per model):
 - real_predicted_repeat2 and _repeat3: the same 20 cases again, for Claude Sonnet 5.5 only (run-to-run variation).
 
 Models: Claude Sonnet 5.5 through the Batch API; Qwen3.5-27B through OpenRouter; Gemma 3 27B and MedGemma 27B text on
-the rented GPU through an SSH tunnel (open_models.py). The claim extractor (Sonnet) and the judge (Haiku) go through the
+the rented GPU through an SSH tunnel (open_models.py), later on Colab. DEC-30's small reasoner (SMALL_MODELS, Gemma 3 4B
+prompted and LoRA-tuned) answers only SMALL_ARMS, on Colab (notebook 55). The claim extractor (Sonnet) and the judge (Haiku) go through the
 Batch API for every model, with the settings every earlier run used.
 """
 
@@ -55,6 +56,10 @@ ARMS = {
 }
 SONNET_REPEATS = {name: {"source": "real", "vision": "predicted", "rulebook": True, "repeat_of": "real_predicted"}
                   for name in ("real_predicted_repeat2", "real_predicted_repeat3")}
+# DEC-30: the small reasoner (Gemma 3 4B, prompted and tuned) is evaluated on the rulebook arms only, with predicted
+# vision: 5 fixtures, 150 scenarios, 20 real cases. 175 requests per model.
+SMALL_MODELS = om.SMALL_MODELS
+SMALL_ARMS = ("fixtures_rulebook", "scenarios_rulebook", "real_predicted")
 
 
 @dataclass(frozen=True)
@@ -66,6 +71,8 @@ class Paths:
 
 
 def arms_for(model):
+    if model in SMALL_MODELS:
+        return {arm: ARMS[arm] for arm in SMALL_ARMS}
     return {**ARMS, **(SONNET_REPEATS if model == SONNET else {})}
 
 

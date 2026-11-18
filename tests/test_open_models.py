@@ -10,7 +10,7 @@ from strokecopilot.nlp.reasoner import open_models as om
 def test_table_holds_the_dec24_models_and_the_fallback_pair():
     ids = {m.hf_id for m in om.MODELS.values()}
     assert ids == {"Qwen/Qwen3.5-27B", "google/medgemma-27b-text-it", "google/gemma-3-27b-it",
-                   "baichuan-inc/Baichuan-M2-32B", "Qwen/Qwen2.5-32B-Instruct"}
+                   "baichuan-inc/Baichuan-M2-32B", "Qwen/Qwen2.5-32B-Instruct", "google/gemma-3-4b-it"}
     for key, m in om.MODELS.items():
         assert m.name == key and m.sources
         assert m.checkpoint is not None or "checkpoint" in m.verify  # nothing missing silently
@@ -158,3 +158,27 @@ def test_qwen_route_merges_the_system_prompt_and_a_dropped_prompt_stops_the_run(
     dropped = om.api_llm("qwen3.5-27b", client=NS(chat=NS(completions=NS(create=lambda **kw: short))))
     with pytest.raises(providers.ProviderError, match="dropped part of the prompt"):
         dropped("x" * 11000, "user", {"type": "object"})
+
+
+def test_the_small_pair_is_served_identically_but_for_the_weights(tmp_path):
+    base, tuned = (om.serve_command(m, port=8000, allow_gated=True) for m in om.SMALL_MODELS)
+    assert base[2] == "google/gemma-3-4b-it" and tuned[2] == om.MODELS["gemma-3-4b-tuned"].checkpoint
+    strip = lambda argv: [a for a in argv[3:] if not a.startswith("gemma-3-4b")]
+    assert strip(base) == strip(tuned)  # only the checkpoint and the served name differ
+    assert base[base.index("--dtype") + 1] == "bfloat16" and "--quantization" not in base
+    with pytest.raises(om.NotServable):
+        om.serve_command("gemma-3-4b")  # gated: needs the token
+    assert om.serve_command("gemma-3-4b-tuned")  # local: no token
+
+
+def test_fill_from_base_copies_what_the_merge_did_not_write(tmp_path):
+    base, tuned = tmp_path / "base", tmp_path / "tuned"
+    base.mkdir(), tuned.mkdir()
+    for name in ("config.json", "model-00001-of-00002.safetensors", "model.safetensors.index.json", "tokenizer.json",
+                 "preprocessor_config.json", "chat_template.json"):
+        (base / name).write_text("base")
+    for name in ("config.json", "model.safetensors", "tokenizer.json"):
+        (tuned / name).write_text("tuned")
+    assert om.fill_from_base(tuned, base) == ["chat_template.json", "preprocessor_config.json"]
+    assert (tuned / "config.json").read_text() == "tuned" and (tuned / "tokenizer.json").read_text() == "tuned"
+    assert not (tuned / "model-00001-of-00002.safetensors").exists()

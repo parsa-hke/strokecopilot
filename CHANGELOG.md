@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 2026-11-18 — Claude Code session (Item 4 step 6: serving the small reasoner pair, notebook 55)
+- **`open_models.py`:** two new entries.
+  - `gemma-3-4b` (DEC-30's prompted small reasoner, `google/gemma-3-4b-it`, gated).
+  - `gemma-3-4b-tuned` (EXP-45's merged model, served from a local copy at `/content/models/EXP-45_merged`, no token).
+  - Both are served in bf16 (`--dtype bfloat16`, stated rather than read from the merged config), max_model_len 16,384, and the same structured-output backend. A test checks the two serve commands differ only in the checkpoint and the served name.
+  - `SMALL_MODELS` and `fill_from_base()`: copies into the tuned folder every base-snapshot file the merge did not write (weights and `config.json` excepted), so the tuned model serves with the base model's tokenizer, chat template and processor files.
+- **`paid_runs.py`:** the small pair answers only DEC-30's arms (`SMALL_ARMS`): fixtures and scenarios with the rulebook, and the 20 development cases with predicted vision. That is 175 requests per model, the same 20 cases as every other model. The paid runs' own matrix is unchanged (tested).
+- **`notebooks/55_small_reasoner_colab.ipynb`** (notebook 53's pattern):
+  - Copies the inputs and EXP-45's merged model to local disk, downloads the base once and fills the tuned folder from it.
+  - Serves each model in turn and saves each answer to Drive as it arrives.
+  - The Hugging Face token goes only to the base model's download and server.
+  - `MODE='test'` (EXP-46): one request per model. `MODE='run'` (EXP-47): all six cells.
+  - The Mac then imports the answers and runs extraction and judge as for EXP-37.
+- **Held-out routes in the evaluation set:** 51 of the 150 scenarios take at least one of the 4 held-out routes, and 99 take only seen routes. The per-route counts are 15, 6, 9 and 22, as `scenarios.routes` matches them by prefix. Step 7 reports the two groups apart.
+- **Not yet run:** whether vLLM loads the merged model (written by transformers 5) and how long each pass takes. EXP-46 checks both.
+- pytest: 766 passed.
+- **Notion sync:** Experiments: EXP-46 (planned).
+
 ## 2026-11-18 — Claude Code session (Item 4 step 5: the dummy run EXP-44 and the fine-tune EXP-45)
 - **Fixes found by the runs:**
   - **torchao:** Colab ships torchao 0.10, and peft 0.21 refuses to build a LoRA adapter alongside it (it needs above 0.16). LoRA here does not use torchao, so notebook 54 uninstalls it after the package install (3de3499). It is removed rather than upgraded because an upgrade could pull in a different torch.

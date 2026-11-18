@@ -24,6 +24,17 @@ def test_cells_follow_the_dec24_matrix():
     assert pr.FALLBACK_PAIR == ("qwen2.5-32b", "baichuan-m2-32b")
 
 
+def test_the_small_reasoner_answers_the_dec30_arms_only():
+    small = pr.cells(pr.SMALL_MODELS)
+    assert small == [(m, a) for m in ("gemma-3-4b", "gemma-3-4b-tuned")
+                     for a in ("fixtures_rulebook", "scenarios_rulebook", "real_predicted")]
+    paths = pr.Paths(Path("x"), Path("x"), Path("x"), Path("x"))
+    assert sum(len(pr.arm_cases(m, a, paths)) for m, a in small if a != "real_predicted") == 2 * (5 + 150)
+    llm = pr.reasoner_llm("gemma-3-4b-tuned", port=8000)
+    assert llm.model == "gemma-3-4b-tuned" and llm.quantization == "bf16"
+    assert pr.cells(pr.MODELS) == pr.cells()  # the paid runs' matrix is unchanged
+
+
 def test_scenario_arms_have_150_and_75_cases():
     paths = pr.Paths(Path("x"), Path("x"), Path("x"), Path("x"))
     full = pr.arm_cases(pr.SONNET, "scenarios_rulebook", paths)
