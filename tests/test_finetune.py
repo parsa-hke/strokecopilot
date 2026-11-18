@@ -86,7 +86,7 @@ def test_merge_writes_a_model_that_loads(tok, tmp_path):
     tok.save_pretrained(tmp_path / "base")
     peft_model = ft.lora_model(_model(tok), ft.FinetuneConfig(lora_r=4, lora_alpha=8))
     peft_model.save_pretrained(tmp_path / "adapter")
-    out = ft.merge(str(tmp_path / "base"), tmp_path / "adapter", tmp_path / "merged")
+    out = ft.merge(str(tmp_path / "base"), tmp_path / "adapter", tmp_path / "merged", local_files_only=True)
     merged = transformers.AutoModelForCausalLM.from_pretrained(out)
     assert sum(p.numel() for p in merged.parameters()) == sum(p.numel() for p in base.parameters())
 

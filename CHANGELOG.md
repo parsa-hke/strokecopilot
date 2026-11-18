@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-11-18 — Claude Code session (Item 4 step 5: the dummy run EXP-44 and the fine-tune EXP-45)
+- **Fixes found by the runs:**
+  - **torchao:** Colab ships torchao 0.10, and peft 0.21 refuses to build a LoRA adapter alongside it (it needs above 0.16). LoRA here does not use torchao, so notebook 54 uninstalls it after the package install (3de3499). It is removed rather than upgraded because an upgrade could pull in a different torch.
+  - **Generation stops on `<end_of_turn>` explicitly** (`stop_ids`). The model's generation config already lists it (`[1, 106]`), so this was not the cause of the dummy's long answer.
+  - **The dummy keeps its full answer** (`generated.txt`) and reports whether it stopped by itself (247e892).
+  - **`generation_check()`:** after the full run, the merged (best) model answers 3 validation rows with a 1,500-token cap (the longest gold answer is about 900 tokens). It reports whether each answer stops, validates, and gives the gold verdicts. Validation loss cannot see a looping model. The notebook prints OK only if all 3 stop and validate (247e892).
+  - **The merge needs no token.** EXP-45's first merge failed because Colab would not hand over `HF_TOKEN` three hours into the run (`TimeoutException`; the tab was in the background). The notebook now downloads the whole base repo into the cache when it loads the model (`prefetch`), and `merge(..., local_files_only=True)` reads it from there. This change is not yet run on Colab.
+- **EXP-44** (dummy, A100, at 3de3499): 30 steps on 20 examples in 156 s. Peak GPU 13.7 GB; 1,615 tokens/s; 8,229 tokens per example (mean), answers 646 tokens. Validation loss 0.200, 0.130, 0.119. Projected full run 3.06 h.
+  - The generated answer started as schema JSON with real passage IDs, then repeated one claim ("The occlusion site is basilar.") until the 3,000-token cap: a model trained only 30 steps.
+- **EXP-45** (full run, A100, 247e892): **270 steps** (1,080 examples × 2 epochs ÷ 8), about 40 s per step at about 1,604 tokens/s, so about 3 h of training. Early stopping never triggered.
+  - Validation loss fell at every evaluation, from 0.092 at step 25 to **0.0045 at step 270** (the best). The gold answers are templated, so a low loss is expected and says little by itself.
+  - Merged model on Drive (`runs/EXP-45_finetune/merged`, with `processor_config.json` and the chat template). The merge was rerun by hand in the same session after the token timeout.
+  - **Generation check: 3 of 3 answers stopped by themselves (375, 672 and 668 tokens) and validated; 2 of 3 gave the gold verdicts.** Checked locally against the gold answers and `gold.check()`:
+    - train-0734 (basilar, NIHSS 3) and train-0533 (extended-window thrombolysis, M2): identical to the gold verdicts, `rule_ids` and blocking factors; `gold.check()` finds no problem.
+    - train-0005 (recent head injury; M1, 4 h 25 min, ASPECTS 5, mRS 1): thrombolysis right. **Thrombectomy wrongly not recommended** (gold: recommended, COR 1), with no blocking factor. It also adds two wrong uncertainties: that a COR 1 recommendation "leaves the decision to judgement", and that ASPECTS is not reported, though it cites ASPECTS 5.
+  - These 3 are validation rows from routes seen in training. The real evaluation is step 7, with the held-out routes as the main result.
+- **Cost:** Colab Pro compute only (A100, about 4 h for both runs; compute units not measured). No API.
+- pytest: 763 passed.
+- **Notion sync:** Experiments: EXP-44 (done), EXP-45 (done).
+
 ## 2026-11-17 — Claude Code session (Item 4 step 4: the fine-tuning code and notebook 54)
 - **`nlp/reasoner/finetune.py`:** bf16 LoRA fine-tuning of Gemma 3 4B instruction-tuned on EXP-43 (DEC-30).
   - **LoRA targets** only the language model's attention and MLP projections (`TARGET_MODULES` excludes the vision tower and projector): r 16, alpha 32, dropout 0.05.

@@ -236,21 +236,33 @@ def _checkpoint(model, optimiser, scheduler, state, last):
     (last / "state.json").write_text(json.dumps(asdict(state)))
 
 
-def merge(model_id, adapter_dir, out_dir, token=None):
-    """Base + adapter -> one full bf16 model directory (weights, config, tokenizer) for vLLM."""
+def merge(model_id, adapter_dir, out_dir, token=None, local_files_only=False):
+    """Base + adapter -> one full bf16 model directory (weights, config, tokenizer) for vLLM. local_files_only reads
+    the base from the Hugging Face cache with no token: EXP-45's merge failed when Colab would not hand over HF_TOKEN
+    hours into the run, so the notebook downloads the whole base repo (prefetch) at the start and merges offline."""
     import torch
     from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer
 
-    base = AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.bfloat16, token=token)
+    kw = {"token": token, "local_files_only": local_files_only}
+    base = AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.bfloat16, **kw)
     merged = PeftModel.from_pretrained(base, str(adapter_dir)).merge_and_unload()
     merged.save_pretrained(out_dir, safe_serialization=True)
-    AutoTokenizer.from_pretrained(model_id, token=token).save_pretrained(out_dir)
+    AutoTokenizer.from_pretrained(model_id, **kw).save_pretrained(out_dir)
     try:  # Gemma 3 4B is multimodal: vLLM reads its processor config too
-        AutoProcessor.from_pretrained(model_id, token=token).save_pretrained(out_dir)
+        AutoProcessor.from_pretrained(model_id, **kw).save_pretrained(out_dir)
     except (OSError, ValueError):
-        pass
+        if local_files_only:
+            raise  # a missing processor config offline means the prefetch did not run
     return Path(out_dir)
+
+
+def prefetch(model_id, token=None):
+    """Download the whole base repo (weights, tokenizer, processor config) into the Hugging Face cache, so merge()
+    can run later with local_files_only and no token."""
+    from huggingface_hub import snapshot_download
+
+    return snapshot_download(model_id, token=token)
 
 
 def stop_ids(tokenizer):
