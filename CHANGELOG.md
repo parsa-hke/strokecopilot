@@ -14,9 +14,16 @@
   - `MODE='test'` (EXP-46): one request per model. `MODE='run'` (EXP-47): all six cells.
   - The Mac then imports the answers and runs extraction and judge as for EXP-37.
 - **Held-out routes in the evaluation set:** 51 of the 150 scenarios take at least one of the 4 held-out routes, and 99 take only seen routes. The per-route counts are 15, 6, 9 and 22, as `scenarios.routes` matches them by prefix. Step 7 reports the two groups apart.
-- **Not yet run:** whether vLLM loads the merged model (written by transformers 5) and how long each pass takes. EXP-46 checks both.
+- **EXP-46** (19 Nov, A100, c6594a7): both models valid on fx02, so vLLM loads the merged model (written by transformers 5, filled from the base snapshot).
+  - `gemma-3-4b`: started in 300 s (download and load), answered in 11.6 s with 695 output tokens.
+  - `gemma-3-4b-tuned`: started in 165 s, answered in 8.8 s with 557 output tokens.
+- **EXP-47 estimate** (from EXP-46 and EXP-37's matching cells; unmeasured):
+  - Colab: about 30–40 min of A100.
+  - Anthropic: extraction and judge at batch prices about $3–6. EXP-37's same three cells cost $1.64–2.61 per model. This is below DEC-30's $12–15, which was made before EXP-37 ran.
+- **Notebook 55 accepts a G4** (RTX PRO 6000 Blackwell, 96 GB) as well as an A100. On 19 Nov Colab had no A100 and gave an L4. For serving a 4B model the G4's memory bandwidth (about 1.8 TB/s) is in the A100's range (1.5–2 TB/s), and it runs bf16, so the settings are unchanged. An L4 would be several times slower, and a T4 has no bf16. Both models of a run always share one GPU, recorded in `config_colab.json`.
+- **A vLLM server that exits on start-up now stops the wait at once**, with the end of its log, instead of after 30 minutes.
 - pytest: 766 passed.
-- **Notion sync:** Experiments: EXP-46 (planned).
+- **Notion sync:** Experiments: EXP-46 (done).
 
 ## 2026-11-18 — Claude Code session (Item 4 step 5: the dummy run EXP-44 and the fine-tune EXP-45)
 - **Fixes found by the runs:**
