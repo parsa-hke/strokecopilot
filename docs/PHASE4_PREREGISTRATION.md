@@ -80,6 +80,8 @@ Undetermined decisions are excluded and counted, never guessed.
   - `core_ml` ×0.8 and ×1.2 on each predicted held-out contract; the share of rule-derived decisions that flip
     (`rules.decide` only, free);
   - the same for Sonnet's own answers: 40 extra requests.
+  - **supplementary (amended 19 Nov 2026, before unlocking):** the same rule-level ×0.8 and ×1.2 on the 150 synthetic
+    scenarios, where the core can decide a case, reported apart as "where a core error could matter in principle".
 - **Vision on held-out:**
   - core: ensemble Dice, absolute volume error, and how often the core falls on the wrong side of 21, 31, 51 and
     70 mL, against the reference final infarct;
@@ -117,3 +119,10 @@ Undetermined decisions are excluded and counted, never guessed.
 - **19 Nov 2026, before unlocking (DEC-32, approved by Parsa):** the demo is a public Hugging Face Space instead of a
   Gradio app run from Colab (`docs/DEC-32_PUBLIC_SPACE.md`). §1 item 4, D4 step 9 and §3 are changed to match. No
   analysis, model, arm or freeze-list item changes.
+- **19 Nov 2026, before unlocking (Parsa):** a supplementary sensitivity analysis is added to D3. EXP-63 (D3's code run
+  on development cases) found that core ×0.8 and ×1.2 change none of the 258 rule decisions across the 129 development
+  contracts: on real cases the unknown occlusion site, ASPECTS and the bleed flag decide, not the core. So the
+  pre-registered real-case analysis is kept unchanged (rules on the 20 held-out contracts, and Sonnet's 40 requests,
+  which test whether the model reacts to a change the rules ignore). The same rule-level analysis is added on the 150
+  synthetic scenarios (free, no held-out data), reported apart as where a core error could matter in principle. Nothing
+  else changes.

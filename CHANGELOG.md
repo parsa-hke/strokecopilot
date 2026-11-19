@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Phase 4, Task 3: the D3 analyses, code and development check)
+- **`pipeline/heldout_analysis.py`:** DEC-31 D3, written before unlocking.
+  - **Truth:** `rules.decide` on the ground-truth contract and the fact sheet. Undetermined truths and missing answers are excluded and counted.
+  - **`correctness`:** per decision and pooled, with a case bootstrap (10,000, seed 20261104).
+  - **`c9_side_by_side`:** C9's metrics, held-out next to development, unpaired.
+  - **`error_propagation`:**
+    - a vision error if the rules on the predicted contract already miss the truth, otherwise a reasoning error;
+    - "caught" means a flagged claim in the decision's own fields (`rule_ids`, `blocking_factors`) or in the shared rationale and uncertainties, because the schema ties rationale to neither decision. The own-fields count is reported too;
+    - for each vision error, the contract fields that differ: core across a cut-off, bleed flag, occlusion site.
+  - **`perturb` / `rule_sensitivity`:** core ×0.8 and ×1.2, with mismatch and the near-empty warning rederived and the result schema-validated.
+  - **`perturbed_cases` / `model_sensitivity`:** Sonnet's 40 requests.
+  - **`vision_summary`:** Dice, volume error, cut-off crossings, bleed flags.
+  - **`report` / `markdown`:** the whole report, aliases only (`check_no_ids` before saving).
+- **Tests:** `tests/test_heldout_analysis.py` (11), on the five fixtures with hand-made answers and traces. pytest: 828 passed.
+- **EXP-63 (Mac, free; `runs/EXP-63_d3_dev_check/`, Mac and Drive, counts and aliases only):** D3 on EXP-37's and EXP-47's 20 development real cases, plus all 129 development contracts for rule sensitivity and vision. This is a code check, not a result.
+  - **Reproduces the development numbers exactly:** Dice 0.215, absolute volume error 23.5 mL, wrong side of 21/31/51/70 mL in 30/28/20/17 cases (EXP-25), and 68/129 bleed flags (EXP-16).
+  - **Truth on real cases is mostly undetermined or "no":**
+    - thrombolysis is undetermined in 18 of 20 cases (no ASPECTS, mostly unknown occlusion site);
+    - thrombectomy is "no" in 17 of 20.
+
+    Held-out cases will look the same, so correctness will rest on few decisions, and on thrombectomy "no".
+  - **Rule sensitivity:** ×0.8 and ×1.2 change **0 of 258** rule decisions across the 129 development contracts. The core does not decide any of them; the unknown occlusion site, ASPECTS and the bleed flag do. The pre-registered ±20% analysis is therefore likely to show no flips on held-out cases either, and Sonnet's 40 extra requests (about $1.2) would probably add little.
+  - **Error propagation on development (predicted arm):**
+    - Sonnet, Qwen and the tuned 4B each make 1 wrong decision. Each is a vision error (a false bleed flag), and the verifier misses all three, as expected: the claims are faithful to a wrong contract.
+    - The base Gemma 3 4B makes 16 reasoning errors (thrombectomy 1/17), all caught.
+  - Qwen's predicted arm has 11 of 20 format failures (schema: extra properties), as already in C9 (0.55). This is likely to recur on held-out cases.
+- **DEC-31 amended before unlocking (Parsa, 19 Nov):** the pre-registered real-case ±20% analysis is kept unchanged: the rules on the 20 held-out contracts, and Sonnet's 40 requests, which test whether the model reacts to a change the rules ignore. A supplementary rule-level ±20% on the 150 synthetic scenarios is added, reported apart (`docs/PHASE4_PREREGISTRATION.md` D3 and §4; `heldout_analysis.scenario_sensitivity`, one test).
+  - **Result (free, in EXP-63's report):**
+
+    | Core | Decisions changed | Yes/no flips | Details |
+    |---|---|---|---|
+    | ×0.8 | 9 of 300 (3.0%) | 4, all thrombolysis no → yes | 3 to undetermined, 2 from it |
+    | ×1.2 | 10 of 300 (3.3%) | 0 | 5 to undetermined, 5 from it; 3 of them thrombectomy yes → undetermined |
+
+  - The share depends on the scenario grid, which has only six core/penumbra profiles, so it shows *that* a core error can decide a case, not how often in practice.
+- **Notion sync:**
+  - Experiments: EXP-63 (done: D3 code check on development cases, with the scenario supplement).
+  - Decisions: DEC-31 note (supplementary scenario sensitivity, added before unlocking).
+
 ## 2026-11-19 — Claude Code session (Phase 4, Task 2: the held-out contract path, D1, code)
 - **Plans from the checkpoints (Parsa, 19 Nov):** each fold's `checkpoint_final.pth` carries the plans and `dataset.json` it was trained with. These are the authority, and DEC-31's rebuild is a cross-check.
   - **Checked on the Mac from Drive (no data, no IDs):** all five agree (plans and `dataset.json` hashes identical; trainer `nnUNetTrainer_StrokeCopilot`; epoch 300; mirroring on all three axes).
