@@ -36,7 +36,7 @@ def _cell(root, model, arm, bad_by_case, wrong=()):
         (folder / "traces" / f"{c}.json").write_text(json.dumps({"claims": [], "traces": traces}))
         ok = c not in wrong
         rows.append({"case": c, "error": None, "omissions": [], "uncertainty_omissions": [],
-                     "decisions": {"thrombolysis": [True, True, ok]}})
+                     "decisions": {"thrombolysis": [ok, True, ok]}})
         records.append({"case_id": c, "traces": traces, "omissions": 0, "uncertainty_omissions": 0,
                         "decisions_correct": int(ok), "decisions_determined": 1})
     (folder / "metrics.json").write_text(json.dumps({"summary": vm.summarise(records, n_boot=50), "per_case": rows}))
@@ -65,6 +65,9 @@ def test_report_splits_seen_and_held_out_and_pairs_tuned_with_base(tmp_path):
     assert d["held_out"]["recommendation_correctness"]["difference"] == pytest.approx(-1.0)
     assert d["all"]["hallucination_rate"]["cases"] == 175
     assert rep["tuned_minus"]["claude-sonnet-5-5"]["seen"]["hallucination_rate"]["difference"] == pytest.approx(-0.1)
+    held_dec = rep["decisions"][srr.TUNED]["held_out"]["thrombolysis"]
+    assert held_dec == {"yes_caught": 0, "yes": 51, "no_kept": 0, "no": 0}  # the fake expects yes, the tuned one says no
+    assert rep["decisions"][srr.BASE]["all"]["thrombolysis"]["yes_caught"] == 175
     inr = rep["per_route"]["INR above 1.7"]
     assert inr["held_out"] and inr["scenarios"] == 9 and inr[srr.TUNED]["recommendation_correctness"]["numerator"] == 0
     text = (tmp_path / "out" / "report.md").read_text()

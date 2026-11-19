@@ -62,6 +62,29 @@ def _keep(group, routes):
     return None
 
 
+def decision_counts(folders, keep=None):
+    """{decision: {"yes_caught", "yes", "no_kept", "no"}} over the cases of `folders` (one cell or several): how often
+    a treatment the rulebook says yes to is recommended, and one it says no to is withheld. Cases whose expected
+    answer is open (None) and format failures (no decision) are left out of the first; a format failure counts as not
+    recommending."""
+    out = {d: {"yes_caught": 0, "yes": 0, "no_kept": 0, "no": 0} for d in ("thrombolysis", "thrombectomy")}
+    for folder in folders:
+        rows = json.loads(cp._metrics_file(Path(folder)).read_text()).get("per_case") or []
+        for row in rows:
+            if keep is not None and not keep(row["case"]):
+                continue
+            for d, (got, want, _) in (row.get("decisions") or {}).items():
+                if want is None or d not in out:
+                    continue
+                if want:
+                    out[d]["yes"] += 1
+                    out[d]["yes_caught"] += got is True
+                else:
+                    out[d]["no"] += 1
+                    out[d]["no_kept"] += got is False
+    return out
+
+
 def report(small_root, paid_root, out_dir, comparators=COMPARATORS, held_out=None):
     """Write report.json, report.md and small_reasoner.png to out_dir; returns the report."""
     routes = scenario_routes(held_out)
@@ -81,6 +104,8 @@ def report(small_root, paid_root, out_dir, comparators=COMPARATORS, held_out=Non
     for c in comparators:
         rep["tuned_minus"][c] = {g: {k: pair(TUNED, c, g, k) for k in VS_METRICS} for g in ("held_out", "seen", "all")}
         rep["base_minus"][c] = {g: {k: pair(BASE, c, g, k) for k in VS_METRICS} for g in ("held_out", "seen", "all")}
+    rep["decisions"] = {m: {g: decision_counts(_cells(root_of(m), m, g), _keep(g, routes)) for g in GROUPS}
+                        for m in models}
     for route in sc.KEY_ROUTES:  # small groups: counts, no intervals below metrics.MIN_CASES_FOR_CI cases
         ids = {cid for cid, r in routes.items() if route in r["routes"]}
         keep = lambda case_id, ids=ids: case_id in ids
@@ -131,7 +156,18 @@ def _markdown(rep):
     for m in rep["models"]:
         L.append(f"| {name(m)} | " + " | ".join(cp._pct(s[m][g]["hallucination_rate"]) for g in GROUPS)
                  + f" | {_count(s[m]['all']['format_failure_rate'])} |")
-    L += ["", "## 4. The small pair against each EXP-37 model (paired, same cases)", "",
+    L += ["", "## 4. Treatment recommended when the rulebook says yes, withheld when it says no", "",
+          "Decisions right (section 1) pools both directions. Here they are apart: a missed treatment (yes not caught) "
+          "and a treatment offered against the rulebook (no not kept) are different failures.", "",
+          "| Model | Group | Thrombolysis: yes caught | No kept | Thrombectomy: yes caught | No kept |",
+          "|---|---|---|---|---|---|"]
+    for m in rep["models"]:
+        for g in ("held_out", "seen", "all"):
+            d = rep["decisions"][m][g]
+            L.append(f"| {name(m)} | {GROUP_LABELS[g]} | " + " | ".join(
+                f"{d[k]['yes_caught']} / {d[k]['yes']} | {d[k]['no_kept']} / {d[k]['no']}"
+                for k in ("thrombolysis", "thrombectomy")) + " |")
+    L += ["", "## 5. The small pair against each EXP-37 model (paired, same cases)", "",
           "| Against | Tuned: held-out | Tuned: seen | Tuned: all | Base: held-out | Base: seen | Base: all |",
           "|---|---|---|---|---|---|---|"]
     for c in rep["tuned_minus"]:
@@ -139,7 +175,7 @@ def _markdown(rep):
         L.append(f"| {name(c)} | " + " | ".join(cp._diff(x[g]["hallucination_rate"]) for x in (t, b)
                                                   for g in ("held_out", "seen", "all")) + " |")
     L += ["", "Hallucination rate minus the other model, percentage points; negative means fewer hallucinations than it.",
-          "", "## 5. Per key route (scenarios; small groups, counts only)", "",
+          "", "## 6. Per key route (scenarios; small groups, counts only)", "",
           "| Route | Held out | Scenarios | Decisions right, base | Tuned | Hallucination rate, base | Tuned |",
           "|---|---|---|---|---|---|---|"]
     for route, r in rep["per_route"].items():

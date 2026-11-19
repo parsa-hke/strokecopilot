@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Item 4 step 7: EXP-47 scored, EXP-48 the DEC-30 report)
+- **EXP-47 scored.** All 6 cells' extraction and judge batches finished, from 13:53 to 14:24 (the auto-collector stopped itself). **Cost $3.15 at batch prices** ($1.90 for the base, $1.25 for the tuned model), worked out from the logged token usage. The estimate was $3–6. Scored cells copied to Drive.
+- **EXP-48** (`small_reasoner_report`, no API): `runs/EXP-48_small_reasoner_report/` on the Mac and Drive. Verifier rates, not yet checked against the human labels.
+  - **Hallucination rate, tuned against base** (paired):
+    - all 175: 41.6% → **14.3%** (−27.2 pts [−29.5, −25.0]);
+    - held-out routes (51): 42.0% → **17.4%** (−24.6 [−28.6, −20.7]);
+    - seen routes (99): 42.7% → 12.3% (−30.4);
+    - real development cases (20): 36.3% → 15.5% (−20.8).
+    - The content rate falls by about the same amount (−21.9 pts over all 175).
+  - **Against the EXP-37 models (paired):**
+    - The tuned 4B is lower than Gemma 3 27B and MedGemma 27B over all 175 (−4.3 and −4.0 pts) and on seen routes (−9.1 and −9.4).
+    - On held-out routes it is level with both (+0.6 and +0.9, intervals spanning 0).
+    - It stays above Sonnet (+9.9) and Qwen (+8.2).
+  - **Decisions right:** 83 of 249 for the base, 193 of 251 tuned.
+  - **But the tuned model under-recommends treatment.**
+    - The base model says yes to nearly everything: thrombolysis yes caught 42/42 but no kept 0/68; thrombectomy 33/34 and 8/105.
+    - The tuned model swung the other way. Thrombolysis yes caught **24/42**, no kept 57/69. Thrombectomy yes caught **10/35**, no kept 102/105.
+    - On held-out routes it catches thrombectomy yes **3/18**. The held-out "beyond 4.5 h and eligible for thrombectomy" route is a thrombectomy-yes route, and it got 8 of 30 decisions right against the base's 15.
+    - On seen routes it catches 7/14.
+    - Sonnet catches 34/35, and Gemma 3 27B 33/33.
+    - Its **critical rate rose**: +1.9 pts over all 175 [+0.4, +3.4], +3.4 on held-out routes [+0.9, +5.8].
+    - Likely cause, unverified: the training set's thrombectomy answers were 20% yes (246 of 1,200), with the eligible-beyond-4.5 h route held out. The model may have learned the base rate.
+    - The report gives this as its own section ("Treatment recommended when the rulebook says yes, withheld when it says no"), because the pooled "decisions right" hides it.
+  - **Real cases:** decisions right 2/29 for the base against 29/29 tuned. Most real cases carry a bleed flag (DEC-28), so the right answer there is mostly no, which suits the tuned model's bias.
+- **`small_reasoner_report.decision_counts`**: treatment-yes caught and treatment-no kept per model and group, as report section 4. Test extended.
+- **Parsa's decision (19 Nov):** the treatment bias is reported as a finding, and no rebalanced variant is trained. Plan §7 (NLP A) has a ticked line for Item 4 with the result. Item 4 is done, apart from the human-label check of the verifier rates (EXP-41).
+- pytest: 768 passed.
+- **Notion sync:** Experiments: EXP-47 (done), EXP-48 (done).
+
 ## 2026-11-19 — Claude Code session (Item 4 step 7 started: EXP-47, the small reasoner on DEC-30's arms)
 - **EXP-47 reasoner pass** (Colab, notebook 55 at 451556a; Parsa's go at the $3–6 estimate):
   - Colab gave an **A100 80 GB** after all, so the G4 path was not used. vLLM 0.34.0.
