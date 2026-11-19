@@ -1,5 +1,76 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Phase 4, Task 4: the Space's bank and server)
+- **`demo/bank.py`:** the precomputed bank. `python -m strokecopilot.demo.bank --out demo/space/build/bank` builds it from `runs/` and Drive.
+  - **Presets:** the 5 fixtures and the 150 scenarios, each with the saved, verified answers of all six models (EXP-37 rulebook arms rescored with points 19–20; EXP-47), shaped by `live.view`. Each preset carries the builder inputs it corresponds to (all 155 map), and the features used for fallback matching.
+  - **Development cases:** EXP-37's 20 real cases as `D-01`…`D-20`, with the predicted and ground-truth arms. The case ID is replaced everywhere by its alias.
+  - **Leak scan:** case IDs, RSNA IDs and key patterns, run on the whole folder.
+  - **Built locally:** 175 cases, 17 MB, scan clean. Sonnet's answer is available for 154 presets (one scenario has no verified Sonnet answer).
+  - `demo/space/build/` is gitignored: it holds real-case notes by alias.
+- **`demo/server.py`** (FastAPI):
+  - Endpoints: `POST /api/run`; `GET /api/run/{id}/events` (server-sent events with progress per step, then exactly one result); `/api/meta`; `/api/bank/index`; `/api/bank/case/{id}` (IDs whitelisted); `/healthz`; and the static page.
+  - **Flow:** validate the inputs (422 with the field named, never echoing input), then the cache, then a live slot, then the spend reservation, then the visitor's limit, then a live run in a worker thread.
+  - **Every other path ends in the nearest precomputed scenario, with its reason:** live switched off, slots busy, budget spent, visitor limit reached, a failure at any step, or the watchdog (deadline + 30 s).
+  - A failed run's spend is still counted, and the slot is always released.
+  - **Headers:** CSP `default-src 'self'` (no third-party anything), `nosniff`, `no-referrer`, and a not-for-clinical-use header.
+  - Settings come from Space variables: `LIVE_ENABLED`, `DAILY_CAP_USD`, `PER_HOUR`, `PER_DAY`, `MAX_CONCURRENT`.
+- **Bug found and fixed in the smoke test:** features read back from JSON hold lists, so `nearest` reported the decisions as "different" for a correct match. It now normalises both sides; a test covers it.
+- **Smoke test (local, live off, no key):** `/healthz` lists 175 cases and 154 fallback cases; a builder run streams note → rules → result and falls back to a preset with the same decisions (yes/yes).
+- `pyproject.toml` gains a `space` extra (fastapi, uvicorn, anthropic, numpy, sentence-transformers).
+- **Tests:** `tests/test_demo_server.py` (8: live then cached; fallback per failing step with spend and slot handling; switched off; visitor limit per address; spend cap; busy slots; watchdog; refused inputs; bank, meta, health and headers) and `tests/test_demo_bank.py` (4). pytest: 856 passed.
+- **Not done yet:** the page (story, explorer, charts, builder UI), the Dockerfile and Space README, the chart data, ISLES'24 map images, and the load test.
+
+## 2026-11-19 — Claude Code session (Phase 4, Task 1 done: EXP-60, Vision B on the RSNA test split, opened once)
+- **EXP-60** (Kaggle T4 ×2, one GPU used, `63b3390`, 8.8 min, free). Run 1 was a dry run on validation (`689d616`, 8.2 min). Run 2 opened the test split once, after the validation gate passed.
+- **Checks:**
+  - split fingerprint as EXP-6;
+  - 2,180 test scans, as EXP-6 recorded;
+  - test bleed rate 0.4119, as DEC-22;
+  - validation pass: scan AUC 0.9772, sensitivity 0.959, specificity 0.8819.
+
+  Validation sensitivity is one scan short of 0.96 (843 of 879): the threshold sits on a bleed scan's score and is stored rounded (0.174984), so that scan falls just below. The contracts apply the same stored value.
+- **Test figures (DEC-31's pre-registered set; patient bootstrap, 2,000, seed 20261108):**
+
+  | Measure | Test | 95% interval |
+  |---|---|---|
+  | Scan AUC | **0.9805** | 0.9743–0.9859 |
+  | Sensitivity at 0.175 | **0.9621** (864/898) | 0.9476–0.9752 |
+  | Specificity at 0.175 | **0.8853** (1,135/1,282) | 0.8666–0.9038 |
+  | ECE (10 bins) | **0.0151** | |
+
+  - Per 100: 3.8 missed bleeds per 100 bleeds; 11.5 false alarms per 100 non-bleeds.
+  - By subtype (caught / bleeds, bootstrap interval): epidural 27/28 (0.964, 0.88–1.0); intraparenchymal 521/534 (0.976, 0.961–0.988); intraventricular 368/370 (0.995, 0.986–1.0); subarachnoid 341/353 (0.966, 0.940–0.986); subdural 400/409 (0.978, 0.961–0.993).
+  - Extras: slice AUC 0.9776; log loss 0.1655.
+  - The reliability diagram's middle bins hold 28–73 scans each, so they are noisy. The largest gaps are 0.65 → 0.82 (28 scans) and 0.86 → 0.74 (73 scans).
+- **Reading:** the test figures match EXP-17's cross-fitted validation estimate (sensitivity 0.961, specificity 0.878), so DEC-28's operating point holds on unseen patients. Vision B's problem is ISLES'24's domain shift (68 of 129 flagged), not RSNA performance.
+- **Files:** `runs/EXP-60_visionB_rsna_test/` (`config.json`, `metrics.json`, `reliability_test.png`) on the Mac and Drive. Checked: no `ID_` strings. Plan §7 Phase 4 gains a ticked line. **The test split is not to be opened again.**
+- **Notion sync:** Experiments: EXP-60 (done, figures above). Tasks: Phase 4, Vision B RSNA test split (done).
+
+## 2026-11-19 — Claude Code session (Phase 4, Task 4 begins: the Space's live core, DEC-32)
+- **`demo/builder.py`:** the scenario builder.
+  - Structured inputs only: numbers in fixed ranges with fixed steps, and fixed choices. Unknown fields and any text are refused (`InputError` names the field and never echoes input).
+  - Bounds are the evaluated ranges: the scenario grids, the fixtures and the development volumes.
+  - Consistency rules: basilar has no ASPECTS, penumbra ≥ core (DEC-7), INR only with warfarin, sleep time only for a wake-up stroke.
+  - `build` makes the contract and note the way `scenarios._draw` and `notes.render` did. Hidden fields are seeded from the inputs' hash, so the same inputs always give the same case (the cache key).
+  - `nearest` finds the closest precomputed case for a fallback: same rule decisions first, then reasons, then categories, then normalised numbers.
+- **`demo/limits.py`** (in memory; the workspace limit is the hard cap):
+  - per-visitor limits by salted hash: 3 runs an hour, 10 a day;
+  - a $1 daily spend cap, reserving a cold run's estimate of $0.12;
+  - 3 concurrent slots;
+  - an LRU result cache.
+- **`demo/live.py`:** one live run with EXP-37's settings, sent live instead of batched.
+  - Sonnet: effort high, max_tokens 20,000. Extractor: Sonnet, medium. Judge: Haiku `judge_v3`, τ 0.6.
+  - Timeouts per call: reasoner 150 s, extractor 120 s, judge 45 s. A 300 s deadline for the run. The SDK retries twice.
+  - Progress per step goes to a callback. Any failure raises `LiveFailure` naming its step.
+  - `view` is the page's shape for one verified answer, shared by live runs and the precomputed bank.
+- **`demo/dummy.py`:** DEC-32 §7's dummy (EXP-64): five live builder runs covering five routes (late M1 thrombectomy, early thrombolysis with M2 undetermined, a bleed, a large core, a wake-up DAWN case).
+  - Runs 1–4 run back to back (1 cold, 2–4 warm). It then waits 330 s for the prompt cache to expire, and run 5 is cold.
+  - It records the cost and seconds per step. Synthetic inputs, so no IDs.
+  - Not run yet: it needs the Space's dedicated key in Parsa's shell. About $0.50 (estimate).
+- The Gradio stub `demo/app.py` was removed (DEC-32).
+- **Tests:** `tests/test_demo.py` (15), with fake models (gold answers, a supporting judge). They cover bounds, refusals and determinism; that every scenario fits the bounds; matching; the limits with a fake clock; and a live run's steps, failures per step and its deadline. pytest: 844 passed.
+- **Notion sync:** Experiments: EXP-64 (planned: Space live dummy, five runs).
+
 ## 2026-11-19 — Claude Code session (Phase 4, Task 3: the D3 analyses, code and development check)
 - **`pipeline/heldout_analysis.py`:** DEC-31 D3, written before unlocking.
   - **Truth:** `rules.decide` on the ground-truth contract and the fact sheet. Undetermined truths and missing answers are excluded and counted.

@@ -560,6 +560,7 @@ Acceptance: the hallucination table exists with ≥3 models and CIs; vision outp
 
 Goal: end-to-end on held-out cases; error propagation analysis; demo.
 
+- [x] Vision B's RSNA test split, opened once (DEC-22, DEC-31 §1 item 3) — done 19 Nov 2026 as EXP-60 (Kaggle T4, `63b3390`, 8.8 min, free; a dry run on validation first reproduced EXP-6: scan AUC 0.9772). EXP-6 with DEC-28's 0.175, 2,180 test scans of 1,893 patients (bleed rate 0.4119): scan AUC **0.9805** [0.9743, 0.9859], sensitivity **0.962** [0.948, 0.975], specificity **0.885** [0.867, 0.904] (patient bootstrap), 3.8 missed bleeds per 100 bleeds and 11.5 false alarms per 100 non-bleeds, ECE **0.015**. By subtype: epidural 27/28, intraparenchymal 521/534, intraventricular 368/370, subarachnoid 341/353, subdural 400/409. Agrees with EXP-17's cross-fitted validation estimate (0.961, 0.878). The test split is not to be opened again
 - [ ] Unlock held-out cases (`ALLOW_HELDOUT=1` in Phase 4 notebooks only); never retrain after this
 - [ ] `pipeline/end_to_end.py` on all ~20 held-out cases × 3 models, with predicted vision values and with ground-truth (oracle) values — models, arms and analyses fixed by DEC-31 (`docs/PHASE4_PREREGISTRATION.md`, 19 Nov 2026): six models, 20 held-out cases
 - [ ] Error propagation: for each wrong recommendation, was the cause vision error, reasoning error, or verifier miss? Table + examples

@@ -51,3 +51,6 @@ flagged/
 .DS_Store
 .vscode/
 .idea/
+
+# The Space build (DEC-32): generated, holds real-case notes by alias
+demo/space/build/
