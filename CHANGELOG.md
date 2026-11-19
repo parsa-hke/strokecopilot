@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (Phase 4 done: the Space is public)
+- **Public** on Parsa's word: https://huggingface.co/spaces/parsa-hke/stroke-copilot (visibility switched from private; same build, nothing re-uploaded). Checked without a token: health 200 (195 cases, key present, live on, cap $5), page with the banner and CSP, held-out cases served; in the browser, the story images, nine results cards and the held-out tab load with no console errors.
+- **Plan §7 Phase 4:** the Space line and the acceptance line are ticked. Phase 4 is done.
+- **Phase 4 spend (estimates):** Anthropic about $5.29 (EXP-65 $4.73 with Sonnet's $0.61 dummy cell inside it, the Space's dummy EXP-64 $0.45, one live run on the Space $0.11); OpenRouter $0.28; Kaggle free; Colab A100 for notebooks 53, 55 and 60 (compute units not reported).
+- **Still open, not blocking:** the Colab compute units for the spend record; a monthly limit on the key's Anthropic workspace (Parsa, recommended now that the Space is public).
+- **Notion sync:** Tasks: the Space (Done). Decisions: DEC-32 (public, 20 Nov 2026).
+
 ## 2026-11-20 — Claude Code session (the Space's key and daily cap)
 - **Key:** Parsa added `ANTHROPIC_API_KEY` as a secret on the private Space; the health check reports `key_present: true`, `live_enabled: true`, nothing spent.
 - **Daily cap $5** (Parsa's choice, a change to DEC-32 §7, recorded there): Space variable `DAILY_CAP_USD = 5`; the code's default stays $1. The cap is soft (in memory, reset by a restart or sleep); the Anthropic workspace's monthly limit is the hard cap.
