@@ -23,7 +23,7 @@ from strokecopilot.demo import bank
 REPO = Path(__file__).resolve().parents[3]
 SPACE_SRC = REPO / "demo" / "space"
 PACKAGE_DIRS = ("schemas", "fixtures", "prompts", "corpus")
-ALLOWED_SUFFIXES = {".py", ".json", ".jsonl", ".md", ".html", ".css", ".js", ".toml", ".txt", ".typed"}
+ALLOWED_SUFFIXES = {".py", ".json", ".jsonl", ".md", ".html", ".css", ".js", ".toml", ".txt", ".typed", ".png"}
 ALLOWED_NAMES = {"Dockerfile", "LICENSE"}
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 ALLOWED_EMAILS = {"noreply@anthropic.com"}

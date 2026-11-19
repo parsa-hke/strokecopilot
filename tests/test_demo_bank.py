@@ -64,3 +64,15 @@ def test_space_tree_check_catches_every_leak(tmp_path):
     problems = "; ".join(sb.check(tree, ["sub-stroke9901"]))
     for expected in ("split folder", "split file", "e-mail", "case ID", "file type not allowed"):
         assert expected in problems
+
+
+def test_story_slice_is_where_the_mask_is_largest():
+    import numpy as np
+
+    from strokecopilot.demo import images
+
+    a = np.zeros((4, 4, 6), bool)
+    a[:2, :2, 1] = True
+    b = np.zeros_like(a)
+    b[:, :, 4] = True
+    assert images.pick_slice(a) == 1 and images.pick_slice(a, b) == 4

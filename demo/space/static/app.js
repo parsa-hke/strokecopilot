@@ -178,11 +178,20 @@
     return [
       { t: "Perfusion CT", p: ["A CT perfusion scan shows how blood reaches each part of the brain. Where it arrives late (Tmax), tissue is at risk; where flow has collapsed, it is already lost.",
         "We use ISLES'24: 149 real stroke patients, 129 for development and 20 held back until the final test."],
-        stage: () => h("div", {}, h("h4", { text: "Tissue at risk, schematic" }), brainSchematic(),
+        stage: () => state.story ? h("div", {}, h("h4", { text: `Real case ${state.story.alias}: one slice, three maps` }),
+          h("div", { class: "triptych" }, ["story_ncct.png", "story_cbf.png", "story_tmax.png"].map((f) =>
+            h("figure", {}, h("img", { src: `/api/bank/img/${f}`, alt: state.story.panels[f], loading: "lazy", width: 360, height: 360 }),
+              h("figcaption", { text: state.story.panels[f] })))),
+          h("p", { class: "muted small", text: "ISLES'24, CC BY-NC-SA 4.0. The bright area on Tmax is where blood arrives late." }))
+          : h("div", {}, h("h4", { text: "Tissue at risk, schematic" }), brainSchematic(),
           h("p", { class: "muted small", text: "Schematic. Core: tissue already lost. Penumbra: at risk, still salvageable." })) },
       { t: "Core and penumbra", p: ["An nnU-Net model, trained five times on different folds, outlines the core. The penumbra is the guideline's own rule: Tmax over 6 seconds.",
         `On development cases its Dice is ${va.dice.mean.toFixed(2)} and its volume is off by ${va.abs_volume_error_ml.median} mL (median). Volumes matter more than outlines: the rules cut at 21, 31, 51 and 70 mL.`],
-        stage: () => h("div", {}, h("h4", { text: "How often the core lands on the wrong side of a cut-off" }), cutoffBars(va),
+        stage: () => h("div", {}, state.story ? h("figure", { class: "overlay" }, h("img", { src: "/api/bank/img/story_overlay.png",
+            alt: state.story.panels["story_overlay.png"], loading: "lazy", width: 360, height: 360 }),
+            h("figcaption", { text: `Real case ${state.story.alias}: ${state.story.panels["story_overlay.png"]}.` + (state.story.core_ml_predicted != null
+              ? ` Predicted core ${state.story.core_ml_predicted} mL against a final infarct of ${state.story.core_ml_reference} mL.` : "") })) : null,
+          h("h4", { text: "How often the core lands on the wrong side of a cut-off" }), cutoffBars(va),
           h("p", { class: "muted small", text: `${va.cases} development cases, each scored by the fold model that never trained on it.` })) },
       { t: "Bleed check", p: ["A second model reads the plain CT for any bleed, which rules out clot-busting drugs. It was trained on 21,744 RSNA scans and tuned to miss as few bleeds as possible.",
         `On RSNA scans it never saw, it caught ${pct(vb.sensitivity, 1)} of bleeds. But on ISLES'24's presumed bleed-free scans it raised ${vb.isles_flags} false alarms in ${vb.isles_scans}: the new hospitals' scans look different.`],
@@ -245,7 +254,8 @@
       stage.replaceChildren(steps[i].stage());
     };
     steps.forEach((s, i) => list.append(h("li", { class: "step", onclick: () => show(i) },
-      h("div", { class: "n", text: `STEP ${i + 1} OF ${steps.length}` }), h("h3", { text: s.t }), ...s.p.map((p) => h("p", { text: p })))));
+      h("div", { class: "n", text: `STEP ${i + 1} OF ${steps.length}` }), h("h3", { text: s.t }), ...s.p.map((p) => h("p", { text: p })),
+      h("div", { class: "inline-stage" }, s.stage()))));   // shown under its own text on narrow screens (CSS)
     show(0);
     if ("IntersectionObserver" in window) {
       const io = new IntersectionObserver((entries) => entries.forEach((e) => {
@@ -532,6 +542,7 @@
       const [meta, index, charts, passages] = await Promise.all([getJSON("/api/meta"), getJSON("/api/bank/index"), getJSON("/api/bank/charts"), getJSON("/api/bank/passages")]);
       state.meta = meta; state.index = index.cases; state.charts = charts; state.passages = passages;
       state.cases.story = await loadCase("fx02_thrombectomy_large_mismatch");
+      try { state.story = await getJSON("/api/bank/img/story.json"); } catch (e) { state.story = null; /* the schematic stands in */ }
     } catch (e) {
       $("#hero-stats").replaceChildren(h("p", { class: "error", text: "The page could not load its data. Please reload." }));
       return;

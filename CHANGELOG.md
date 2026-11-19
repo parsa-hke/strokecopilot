@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Phase 4: the analysis command, and ISLES'24 images for the Space, while the runs go)
+- **`phase4 analyse`** (EXP-66, once the cells are done): DEC-31 D3 on the finished held-out cells, through EXP-63's tested `heldout_analysis.report`. It covers:
+  - correctness per model and arm;
+  - C9 next to EXP-37's and EXP-47's development real cells;
+  - error propagation;
+  - the ±20% core at rule level, plus Sonnet's two perturbed cells (merged);
+  - held-out Dice, volume and crossings from EXP-62's `per_case.csv` (case column dropped);
+  - the bleed flags;
+  - DEC-31 §4's scenario supplement.
+
+  A model whose cells are unfinished is listed and left out. Output goes to `runs/EXP-66_heldout_analysis/` (`report.json` and `report.md`, aliases `H-01`…, ID-checked). One test.
+- **ISLES'24 images for the story** (`demo/images.py`, `python -m strokecopilot.demo.images --bank …`):
+  - One **development** case, shown as its bank alias **D-10**, never by ID. It is chosen in code: a sizeable reference infarct that nnU-Net also found, and no bleed flag.
+  - Four panels at the slice where the reference infarct is largest: plain CT, CBF, Tmax, and an overlay (predicted core red, Tmax > 6 s amber, reference final infarct outlined white). The caption gives the volumes: predicted core 96.2 mL against a final infarct of 108.5 mL.
+  - Written into the gitignored bank (`img/`). The server serves only `story_*.png` and `story.json`; other names get a 404. The Space build now allows `.png`. Credit on the page: "ISLES'24, CC BY-NC-SA 4.0".
+  - Story steps 1 and 2 show them; the schematic stays as the fallback. On screens under 900 px, each step's visual now sits under its own text.
+  - Checked in the browser: images load, no console errors. Tests: the image route's whitelist; slice choice. pytest: 869 passed.
+
+## 2026-11-19 — Claude Code session (Phase 4, step 3: EXP-65 dummy cell, then the Mac's runs)
+- **Dummy cell** (Sonnet 5.5, `heldout_predicted`, Batch API, `9dd4db0` plus the `--poll` option): 20 of 20 answered; reasoner, extraction and judge batches done in 22 minutes; 0 errors and 0 format failures.
+  - **Cost (estimate, batch prices):** $0.61 (reasoner $0.32, extractor $0.26, judge $0.03; 76 judge calls), as estimated.
+  - **Verifier rates:** hallucination **3.2%** (19/589 claims; development real cases 3.3%), content 3.1%, critical 2/578, omissions 0. Its decisions agree with the rules applied to the contract it was given, 32/32; D3's correctness against the ground-truth rules comes in the analysis.
+- **Started:** Sonnet's other three cells (`heldout_groundtruth`, `heldout_core_x0.8`, `heldout_core_x1.2`) and Qwen's two, polling every 3 minutes.
+- `phase4 advance --poll N` repeats `advance` until every cell is done or waits for Colab (one command, so Parsa's permission rule covers it).
+- **Spend so far in Phase 4:** Anthropic about $1.06 ($0.45 for the dummy on the Space workspace; $0.61 for this on the project workspace).
+
 ## 2026-11-19 — Claude Code session (Phase 4, step 3 prepared: the held-out reasoner runs, EXP-65)
 - **Parsa's go (19 Nov)** for DEC-31 D2's runs at the estimate (Anthropic about $5.5 with contingency, OpenRouter about $0.40, Colab about 1 A100 hour).
 - **`pipeline/phase4.py`, held-out run layer:**

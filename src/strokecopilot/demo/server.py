@@ -229,6 +229,13 @@ def create_app(state, static_dir=None):
     def bank_passages():
         return FileResponse(state.bank_dir / "passages.json", media_type="application/json")
 
+    @app.get("/api/bank/img/{name}")
+    def bank_img(name: str):
+        path = state.bank_dir / "img" / name
+        if not re.match(r"^story(_[a-z]+\.png|\.json)$", name) or not path.is_file():
+            raise HTTPException(404, "No such image.")
+        return FileResponse(path, media_type="application/json" if name.endswith(".json") else "image/png")
+
     @app.get("/api/bank/case/{case_id}")
     def bank_case(case_id: str):
         if not ID_RE.match(case_id) or case_id not in state.ids:

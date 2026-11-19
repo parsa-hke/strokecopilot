@@ -345,7 +345,7 @@ def report(cells, predicted_dir, truth_dir, notes_dir, ids, alias_prefix, develo
     """Every D3 analysis for one case set. cells: {model: {"predicted": folder, "groundtruth": folder or None}};
     development_cells: {model: folder} for C9 side by side (held-out run only); vision_rows / flags / scans for
     vision_summary; rule_contracts: {case: contract} for rule_sensitivity (default: the predicted contracts of ids);
-    sonnet_perturbed: (base cell folder, perturbed cell folder). Returns a dict with counts and aliases only."""
+    sonnet_perturbed: (base cell folder, perturbed cell folder or a list of them). Returns counts and aliases only."""
     ids = sorted(ids)
     predicted, truths = load_contracts(predicted_dir, ids), load_contracts(truth_dir, ids)
     facts = load_facts(notes_dir, ids)
@@ -374,7 +374,11 @@ def report(cells, predicted_dir, truth_dir, notes_dir, ids, alias_prefix, develo
     rule_facts = facts if rule_contracts is None else load_facts(notes_dir, sorted(rule_contracts))
     out["rule_sensitivity"] = rule_sensitivity(rule_set, rule_facts)
     if sonnet_perturbed:
-        out["sonnet_sensitivity"] = model_sensitivity(load_cell(sonnet_perturbed[0]), load_cell(sonnet_perturbed[1]))
+        base, perturbed = sonnet_perturbed
+        merged = {}
+        for folder in (perturbed if isinstance(perturbed, (list, tuple)) else [perturbed]):
+            merged.update(load_cell(folder))
+        out["sonnet_sensitivity"] = model_sensitivity(load_cell(base), merged)
     if vision_rows is not None:
         out["vision"] = vision_summary(vision_rows, flags, scans)
     check_no_ids(out, set(ids) | set(rule_set))

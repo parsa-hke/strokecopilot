@@ -148,3 +148,14 @@ def test_bank_meta_health_and_headers(bank_dir):
     assert h.json()["ok"] and h.json()["key_present"] is True and "sk-" not in h.text
     assert "default-src 'self'" in h.headers["content-security-policy"]
     assert client.get("/api/run/unknown/events").status_code == 404
+
+
+def test_story_images_are_whitelisted(bank_dir):
+    _, client = make(bank_dir, None)
+    (bank_dir / "img").mkdir(exist_ok=True)
+    (bank_dir / "img" / "story_ncct.png").write_bytes(b"\x89PNG\r\n")
+    (bank_dir / "img" / "story.json").write_text('{"alias": "D-01"}')
+    assert client.get("/api/bank/img/story_ncct.png").status_code == 200
+    assert client.get("/api/bank/img/story.json").json() == {"alias": "D-01"}
+    for bad in ("..%2Findex.json", "other.png", "story_NCCT.png", "story_x.exe"):
+        assert client.get(f"/api/bank/img/{bad}").status_code == 404

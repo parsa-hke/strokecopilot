@@ -210,15 +210,64 @@ def check(dirs, ids):
     return out
 
 
+# ------------------------------------------------------------------------------------------- D3 on the held-out runs
+
+ANALYSIS = "EXP-66_heldout_analysis"
+DEVELOPMENT_CELLS = {m: f"runs/EXP-37_paid_runs/{m}/real_predicted" for m in pr.MODELS}
+DEVELOPMENT_CELLS.update({m: f"runs/EXP-47_small_reasoner/{m}/real_predicted" for m in pr.SMALL_MODELS})
+
+
+def vision_rows(per_case_csv):
+    """EXP-62's per-case vision scores (Drive), without the case column: D3's held-out Dice, volume and crossings."""
+    import pandas as pd
+
+    table = pd.read_csv(per_case_csv)
+    keep = [c for c in table.columns if c in ("dice", "pred_ml", "ref_ml", "abs_error_ml") or c.startswith("crosses_")]
+    return table[keep].to_dict("records")
+
+
+def analyse(dirs, ids, out_root, drive_runs, models=MODELS, development_cells=None):
+    """Every D3 analysis on the finished held-out cells (heldout_analysis.report), plus DEC-31 §4's supplement.
+    A model whose cells are not finished is listed under "not_finished" and left out. Counts and aliases only."""
+    development_cells = development_cells or DEVELOPMENT_CELLS
+    cells, unfinished = {}, []
+    for model in models:
+        arms = {}
+        for key, arm in (("predicted", "heldout_predicted"), ("groundtruth", "heldout_groundtruth")):
+            folder = cell_dir(out_root, model, arm)
+            arms[key] = folder if (folder / "metrics.json").exists() else None
+        if arms["predicted"] is None:
+            unfinished.append(model)
+            continue
+        cells[model] = arms
+    sens = None
+    if pr.SONNET in cells and all((cell_dir(out_root, pr.SONNET, a) / "metrics.json").exists() for a in SONNET_SENSITIVITY):
+        sens = (cell_dir(out_root, pr.SONNET, "heldout_predicted"), [cell_dir(out_root, pr.SONNET, a) for a in SONNET_SENSITIVITY])
+    dev = {m: f for m, f in development_cells.items() if m in cells and (Path(f) / "config.json").exists()}
+    predicted = ha.load_contracts(dirs["predicted"], ids)
+    per_case = Path(drive_runs) / "EXP-62_heldout_contracts" / "per_case.csv"
+    rep = ha.report(cells, dirs["predicted"], dirs["groundtruth"], dirs["notes"], ids, "H", development_cells=dev,
+                    vision_rows=vision_rows(per_case) if per_case.exists() else None,
+                    flags=sum(c["haemorrhage"]["present"] for c in predicted.values()), scans=len(predicted),
+                    sonnet_perturbed=sens)
+    rep["not_finished"] = unfinished
+    rep["scenario_sensitivity"] = ha.scenario_sensitivity()
+    rep["experiment"] = ANALYSIS.split("_")[0]
+    ha.check_no_ids(rep, ids)
+    return rep
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Phase 4's held-out commands (DEC-31 §4). Counts only.")
-    parser.add_argument("command", choices=("check", "status", "advance", "import"))
+    parser.add_argument("command", choices=("check", "status", "advance", "import", "analyse"))
     parser.add_argument("--drive", help="the StrokeCopilot folder on Drive (default: config.local_drive_root)")
     parser.add_argument("--out", default=f"runs/{RUN}")
     parser.add_argument("--models", default=",".join(MODELS))
     parser.add_argument("--arms", help="advance: only these arms (comma-separated)")
     parser.add_argument("--from", dest="src", help="import: the run folder Colab wrote on Drive (default: Drive runs/RUN)")
     parser.add_argument("--wait", action="store_true")
+    parser.add_argument("--poll", type=float, default=0, help="advance: repeat every N seconds until every cell is done")
+    parser.add_argument("--max-hours", type=float, default=12.0, help="advance --poll: give up after this long")
     args = parser.parse_args(argv)
     ids = heldout_cases()
     dirs = artifact_dirs(args.drive)
@@ -228,8 +277,31 @@ def main(argv=None):
     elif args.command == "status":
         result = status(models, dirs, ids, args.out)
     elif args.command == "advance":
-        result = advance_all(models, dirs, ids, args.out, wait=args.wait,
-                             only_arms=set(args.arms.split(",")) if args.arms else None, log=lambda *_: None)
+        import time
+
+        only = set(args.arms.split(",")) if args.arms else None
+        started = time.time()
+        while True:
+            result = advance_all(models, dirs, ids, args.out, wait=args.wait, only_arms=only, log=lambda *_: None)
+            states = [r["state"] for r in result]
+            ha.check_no_ids(result, ids)
+            print(time.strftime("%H:%M:%S"), json.dumps({s: states.count(s) for s in sorted(set(states))}), flush=True)
+            if not args.poll or all(s == "done" or s.startswith("needs Colab") for s in states):
+                break
+            if time.time() - started > args.max_hours * 3600:
+                print("Stopped polling after --max-hours; run advance again to carry on.", flush=True)
+                break
+            time.sleep(args.poll)
+    elif args.command == "analyse":
+        runs = dirs["notes"].parent.parent / "runs"
+        result = analyse(dirs, ids, args.out, runs, models)
+        dest = Path("runs") / ANALYSIS
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "report.json").write_text(json.dumps(result, indent=1, default=str))
+        md = ha.markdown(result, "EXP-66: DEC-31 D3 on the 20 held-out cases")
+        (dest / "report.md").write_text(md)
+        print(md)
+        result = {"written": str(dest), "not_finished": result["not_finished"]}
     else:
         src = args.src or str(dirs["notes"].parent.parent / "runs" / RUN)
         result = [{"model": m, "arm": a, "added": n} for (m, a), n in import_answers(src, args.out, models).items()]

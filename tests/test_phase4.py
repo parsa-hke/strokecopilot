@@ -109,3 +109,18 @@ def test_open_models_wait_for_colab(tmp_path):
     rows = phase4.advance_all(["medgemma-27b-text"], dirs, STEMS, tmp_path / "run", llm_for=lambda m: None,
                               verifier=(None, None))
     assert all(r["state"].startswith("needs Colab (0/5") for r in rows)
+
+
+def test_analyse_on_finished_cells_only(tmp_path):
+    dirs = fake_dirs(tmp_path)
+    run = tmp_path / "run"
+    model = "gemma-3-4b"
+    phase4.reasoner_pass([model], dirs, STEMS, run, lambda m: FakeLLM("reasoner", m), workers=2, log=lambda *_: None)
+    phase4.advance_all([model], dirs, STEMS, run, wait=True, log=lambda *_: None, llm_for=lambda m: FakeLLM("reasoner", m),
+                       verifier=(FakeLLM("extractor", "claude-sonnet-5-5"), FakeLLM("judge", "claude-haiku-5-5")))
+    rep = phase4.analyse(dirs, STEMS, run, tmp_path / "no_drive_runs", models=[model, "medgemma-27b-text"],
+                         development_cells={})
+    assert rep["not_finished"] == ["medgemma-27b-text"] and list(rep["models"]) == [model]
+    assert rep["models"][model]["predicted"]["correctness"]["cases"] == 5
+    assert "vision" not in rep and rep["scenario_sensitivity"]["cases"] == 150
+    assert not any(s in json.dumps(rep) for s in STEMS)
