@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Item 2 started: Vision B's ISLES'24 false alarms, code and pre-registration)
+- **`vision/haemorrhage/explain.py`:**
+  - Grad-CAM on the last convolutional block (ResNet-50's `layer4`, EfficientNet's `conv_head`) for the single logit, in batches (`grad_cam`, `explain_slices`).
+  - Density masks from the windowed uint8 image both datasets share (`tissue_masks`): head above −500 HU, bone above 300 HU, and brain-density tissue (HU 0–80) at least 8 px inside the head and 2 px from bone.
+  - Heat shares in brain, bone, other head tissue and outside (`heat_shares`).
+  - Per slice, the brain fraction and the height in the head (`slice_measures`).
+  - The masks are density rules, not a segmentation: they are measured the same way on both datasets.
+- **`vision/haemorrhage/slab_rules.py`:** the candidate scan-score rules, fixed before any result: "none" (EXP-6's top-2 mean), "gate" (slices below `ratio` × the scan's largest brain fraction left out, falling back to "none"), "adjacent" (top 2 must be neighbours), and "both" (falling back to "adjacent"). The grid is ratio ∈ {0.25, 0.40, 0.55, 0.70}, 10 candidates. `scan_table` orders slices by `z_mm`.
+- **`docs/ITEM2_FALSE_ALARMS.md`:** the pre-registration, approved by Parsa on 19 Nov.
+  - Selection on RSNA validation only, as in EXP-17: 96% target cross-fitted on patient halves, 20 seeds.
+  - **Eligibility:** sensitivity no more than 1 point below "none", and no subtype more than 3 points below.
+  - **Proposal:** the eligible candidate with the highest specificity.
+  - **Adoption** needs the specificity gain's paired interval above 0, and Parsa's decision (it amends DEC-28 and rebuilds the contracts before Phase 4).
+  - ISLES'24 flags are read out, never optimised.
+  - Runs planned: EXP-49 (Kaggle, RSNA) and EXP-50 (Mac, ISLES'24).
+- **Tests:** `tests/test_explain.py` (6), on a synthetic head phantom (air, scalp, skull ring, brain) windowed as in training, and a small random ResNet-18 on CPU.
+  - The masks find the brain, bone and outside; no brain is found in or beyond the skull.
+  - The heat shares follow the map and sum to 1.
+  - A skull-base phantom slice has a low brain fraction; heights run 0 to 1.
+  - The Grad-CAM maps are in [0, 1], and its probabilities equal `infer.slice_probs`.
+  - Each rule gives its hand-worked score, including both fallbacks.
+- pytest: 774 passed.
+- **Notion sync:** none yet (EXP-49 and EXP-50 rows when they are set up).
+
 ## 2026-11-19 — Claude Code session (Item 4 step 7: EXP-47 scored, EXP-48 the DEC-30 report)
 - **EXP-47 scored.** All 6 cells' extraction and judge batches finished, from 13:53 to 14:24 (the auto-collector stopped itself). **Cost $3.15 at batch prices** ($1.90 for the base, $1.25 for the tuned model), worked out from the logged token usage. The estimate was $3–6. Scored cells copied to Drive.
 - **EXP-48** (`small_reasoner_report`, no API): `runs/EXP-48_small_reasoner_report/` on the Mac and Drive. Verifier rates, not yet checked against the human labels.
