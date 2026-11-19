@@ -76,3 +76,58 @@ def test_story_slice_is_where_the_mask_is_largest():
     b = np.zeros_like(a)
     b[:, :, 4] = True
     assert images.pick_slice(a) == 1 and images.pick_slice(a, b) == 4
+
+
+def test_heldout_cases_are_aliased_with_their_own_kind(tmp_path, monkeypatch):
+    fixture = e2e.load_cases("fixtures")[0]
+
+    def fake_real_case(case_id, vision_dir, notes_dir):
+        return {**fixture, "id": case_id, "vision": {**fixture["vision"], "case_id": case_id}, "note": f"Note for {case_id}."}
+
+    monkeypatch.setattr(e2e, "real_case", fake_real_case)
+    monkeypatch.setattr(bank, "_arm_view", lambda case, folder: {"available": True, "seen": case["id"], "folder": folder.name})
+    run = tmp_path / "EXP-65"
+    for arm in bank.HELDOUT_ARMS.values():
+        (run / "claude-sonnet-5-5" / arm).mkdir(parents=True)
+        (run / "claude-sonnet-5-5" / arm / "config.json").write_text("{}")
+    ids = ["sub-stroke9902", "sub-stroke9901"]
+    out = bank.heldout_cases(run, {"predicted": "p", "groundtruth": "g"}, "n", ids)
+    assert [r["id"] for r, _ in out] == ["H-01", "H-02"]
+    row, file = out[0]
+    assert row["kind"] == file["kind"] == "heldout" and row["title"] == "Held-out case H-01"
+    assert row["models"] == ["claude-sonnet-5-5"]
+    assert file["arms"]["predicted"]["answers"]["claude-sonnet-5-5"]["folder"] == "heldout_predicted"
+    assert file["arms"]["groundtruth"]["answers"]["claude-sonnet-5-5"]["folder"] == "heldout_groundtruth"
+    assert not any(i in json.dumps(out) for i in ids)
+
+
+def test_heldout_chart_data_keeps_numbers_and_aliases_only():
+    from strokecopilot.demo import charts
+
+    rate = {"value": 0.05, "ci95": [0.02, 0.08], "numerator": 5, "denominator": 100}
+    corr = {"cases": 20, "no_answer": 1, "pooled": {"correct": 22, "scored": 23, "rate": 0.9565, "ci95": [0.87, 1.0]}}
+    model = {"predicted": {"correctness": corr, "error_propagation": {"table": {"vision": {"wrong": 1, "caught": 0}, "reasoning": {"wrong": 0, "caught": 0}},
+                                                                       "examples": [{"alias": "H-07", "decision": "thrombolysis", "cause": "vision", "caught": False,
+                                                                                     "contract_differences": ["bleed flag"]}]}},
+             "groundtruth": {"correctness": corr},
+             "c9": {"heldout": {"hallucination_rate": rate, "format_failure_rate": {**rate, "numerator": 1}}, "development": {"hallucination_rate": rate}}}
+    sens = {"decisions": 40, "changed": 0}
+    report = {"experiment": "EXP-66", "cases": 20, "truth": {"thrombolysis": {"undetermined": 17}, "thrombectomy": {"no": 20}},
+              "rules_on_predicted_correct": {"pooled": corr["pooled"]}, "models": {"claude-sonnet-5-5": model},
+              "rule_sensitivity": {"x0.8": sens, "x1.2": sens, "cases": 20}, "sonnet_sensitivity": None,
+              "vision": {"dice": {"mean": 0.18}}}
+    out = charts.heldout(report)
+    assert [r["model"] for r in out["rows"]] == ["claude-sonnet-5-5"]
+    r = out["rows"][0]
+    assert r["predicted"]["correct"] == 22 and r["format_failures"] == 1 and r["errors"]["vision"]["wrong"] == 1
+    assert r["examples"] == [{"alias": "H-07", "decision": "thrombolysis", "cause": "vision", "caught": False}]
+    assert set(out["rule_sensitivity"]) == {"x0.8", "x1.2"} and out["source"].startswith("EXP-66")
+
+
+def test_space_readme_metadata_passes_hugging_face_limits():
+    from strokecopilot.demo import space_build
+
+    head = (space_build.SPACE_SRC / "README.md").read_text().split("---")[1]
+    meta = dict(line.split(": ", 1) for line in head.strip().splitlines())
+    assert meta["sdk"] == "docker" and meta["app_port"] == "7860"
+    assert len(meta["short_description"]) <= 60  # Hugging Face refuses the upload otherwise

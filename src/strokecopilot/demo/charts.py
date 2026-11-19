@@ -92,3 +92,32 @@ def charts(sources):
                                  "train on it", **e63["vision"]}
     out["scenario_sensitivity"] = {k: e63["scenario_sensitivity"][k] for k in ("x0.8", "x1.2")}
     return out
+
+
+def heldout(report):
+    """DEC-32 §3's "after Phase 4" results from EXP-66's report (aliases only, no IDs): correctness against the rules on
+    the ground-truth contract, error propagation, the ±20% core check, held-out vision, and the realism check."""
+    def pooled(c):
+        return {"correct": c["pooled"]["correct"], "scored": c["pooled"]["scored"], "rate": c["pooled"]["rate"],
+                "ci95": c["pooled"]["ci95"], "no_answer": c["no_answer"]}
+
+    rows = []
+    for m in MODEL_ORDER:
+        r = report["models"].get(m)
+        if r is None:
+            continue
+        ep = r["predicted"]["error_propagation"]
+        rows.append({"model": m, "predicted": pooled(r["predicted"]["correctness"]),
+                     "groundtruth": pooled(r["groundtruth"]["correctness"]) if "groundtruth" in r else None,
+                     "errors": ep["table"],
+                     "examples": [{k: e[k] for k in ("alias", "decision", "cause", "caught")} for e in ep.get("examples", [])],
+                     "rate_heldout": _rate(r["c9"]["heldout"]["hallucination_rate"]),
+                     "rate_development": _rate(r["c9"]["development"]["hallucination_rate"]) if r["c9"].get("development") else None,
+                     "format_failures": r["c9"]["heldout"]["format_failure_rate"]["numerator"]})
+    rules = report["rules_on_predicted_correct"]["pooled"]
+    return {"source": f"{report['experiment']}: DEC-31 D3 on the {report['cases']} held-out patients, opened once after "
+                      "every model and threshold was frozen",
+            "cases": report["cases"], "truth": report["truth"],
+            "rules_on_predicted": {k: rules[k] for k in ("correct", "scored", "rate", "ci95")},
+            "rows": rows, "rule_sensitivity": {k: report["rule_sensitivity"][k] for k in ("x0.8", "x1.2")},
+            "sonnet_sensitivity": report.get("sonnet_sensitivity"), "vision": report["vision"]}

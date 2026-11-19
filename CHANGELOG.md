@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (Phase 4, step 5: the Space filled with held-out results, not yet published)
+- **Bank with held-out cases** (`ALLOW_HELDOUT=1 … phase4 bank`, under the existing permission rule): 195 cases (5 fixtures, 150 scenarios, 20 development `D-xx`, 20 held-out `H-xx`, the same aliases as EXP-66's report), each with the six models' saved answers on both vision arms (EXP-65 cells). `demo.bank` now has `real_cases`, `heldout_cases` and `build`; held-out cases enter only through `phase4`.
+- **Chart data:** `charts.heldout(report)` adds EXP-66's numbers (correctness per model and arm, error propagation with case aliases, the ±20% core check, held-out vision, the realism check). Numbers and aliases only.
+- **Page:** a "Held-out cases" tab; three results cards (the final test with a caution note on the all-"no" thrombectomy truth; where wrong decisions came from, with links to the case; development vs held-out hallucination rates); held-out sentences on the core step and the sensitivity card; the case count is read from the bank. Checked in the browser on desktop and at 375 px (no overflow, no console errors).
+- **Server:** `Cache-Control: no-cache` unless a response sets its own, so an update reaches returning visitors (found when the local browser kept an old script).
+- **Space tree** (`phase4 space`): 346 files, 23.3 MB; scan clean for every case ID (held-out included), RSNA IDs, keys, e-mail, file types, no split. Local load test (fake live runner): 50/50 results, 0 errors, median 0.13 s, worst 5.45 s. Space README: 195 cases.
+- **Parsa's choice (20 Nov 2026):** the Space stays **private for now**, under Parsa's own Hugging Face account, named `stroke-copilot`, shared only with invited people. The source names Parsa in code comments and four rulebook pointers ("checked by Parsa"), plus the GitHub username in install links; it ships unchanged. DEC-32 is not changed: going public stays pending, so Phase 4's acceptance line ("the public Space is live") stays open until Parsa says so or amends DEC-32.
+- **Private Space live** on Parsa's word: `parsa-hke/stroke-copilot` (Docker, cpu-basic, private: 404 without a token), created and uploaded from the Mac's Hugging Face sign-in. First upload refused before sending anything (`short_description` over 60 characters); shortened, and a test now checks the README metadata. Built in about 2 minutes; serves 195 cases, the held-out charts, the banner and the cache header.
+- **Load test on the Space** (`loadtest --url … --hf-auth`, live runs off, no key set): 50/50 visitors got a result, 0 errors, all precomputed, median 1.6 s, worst 1.8 s. $0.
+- **Not done:** the key secret (Parsa sets `ANTHROPIC_API_KEY` in the Space's settings; until then the builder falls back to the closest preset); a visual check of the Space in a signed-in browser; making it public (DEC-32, on Parsa's word).
+- **pytest:** 873 passed. **Spend:** $0.
+- **Notion sync:** Tasks: the Space (still in progress; note updated).
+
 ## 2026-11-20 — Claude Code session (Phase 4, steps 3 and 4 done: EXP-65 runs, EXP-66 D3 analyses)
 - **EXP-65, all 14 held-out cells done** (`runs/EXP-65_heldout_runs/` on the Mac; Colab answers on Drive):
   - Sonnet: Batch API, 4 cells;

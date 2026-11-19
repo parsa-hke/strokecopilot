@@ -12,6 +12,9 @@ for case IDs before printing.
   Sonnet, the extractor and the judge through the Batch API; Qwen through OpenRouter; the four open models answered on
   Colab, notebooks 53 and 55 in `heldout` mode, then imported here). Six models x two vision arms x 20 cases, plus
   Sonnet's core x0.8 and x1.2 arms (D3's 40 extra requests). Prompt v3 with the rulebook, as frozen (DEC-31 §1).
+- analyse: DEC-31 D3 (EXP-66).
+- bank / space: the Space's bank with the held-out cases by alias and EXP-66's results (demo.bank.build), and the tree
+  pushed to the Space (demo.space_build), both scanned for every case ID, held-out ones included. Free.
 """
 
 import argparse
@@ -259,12 +262,14 @@ def analyse(dirs, ids, out_root, drive_runs, models=MODELS, development_cells=No
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Phase 4's held-out commands (DEC-31 §4). Counts only.")
-    parser.add_argument("command", choices=("check", "status", "advance", "import", "analyse"))
+    parser.add_argument("command", choices=("check", "status", "advance", "import", "analyse", "bank", "space"))
     parser.add_argument("--drive", help="the StrokeCopilot folder on Drive (default: config.local_drive_root)")
     parser.add_argument("--out", default=f"runs/{RUN}")
     parser.add_argument("--models", default=",".join(MODELS))
     parser.add_argument("--arms", help="advance: only these arms (comma-separated)")
     parser.add_argument("--from", dest="src", help="import: the run folder Colab wrote on Drive (default: Drive runs/RUN)")
+    parser.add_argument("--bank", default="demo/space/build/bank_heldout", help="bank: the folder to build; space: the bank to use")
+    parser.add_argument("--space-out", default="demo/space/build/space_heldout", help="space: the tree to assemble")
     parser.add_argument("--wait", action="store_true")
     parser.add_argument("--poll", type=float, default=0, help="advance: repeat every N seconds until every cell is done")
     parser.add_argument("--max-hours", type=float, default=12.0, help="advance --poll: give up after this long")
@@ -302,6 +307,19 @@ def main(argv=None):
         (dest / "report.md").write_text(md)
         print(md)
         result = {"written": str(dest), "not_finished": result["not_finished"]}
+    elif args.command == "bank":
+        from strokecopilot.demo import bank
+
+        drive = dirs["notes"].parent.parent
+        out, kinds = bank.build(args.bank, drive, heldout={"ids": ids, "dirs": dirs, "run_root": args.out,
+                                                           "report": Path("runs") / ANALYSIS / "report.json"})
+        result = {"bank": str(out), "cases": kinds}
+    elif args.command == "space":
+        from strokecopilot.demo import space_build
+
+        tree, files, size = space_build.build(args.bank, args.space_out, list(splits.development_ids()) + list(ids))
+        result = {"tree": str(tree), "files": files, "mb": round(size, 1),
+                  "scan": "clean (case IDs incl. held-out, RSNA IDs, keys, e-mail, file types, no split)"}
     else:
         src = args.src or str(dirs["notes"].parent.parent / "runs" / RUN)
         result = [{"model": m, "arm": a, "added": n} for (m, a), n in import_answers(src, args.out, models).items()]

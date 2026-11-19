@@ -77,23 +77,30 @@ def check(tree, case_ids):
     return problems
 
 
-def main(argv=None):
-    from strokecopilot.data import splits
-
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--bank", required=True)
-    parser.add_argument("--out", required=True)
-    args = parser.parse_args(argv)
-    tree = assemble(args.bank, args.out)
-    folds = splits.load_folds()
-    ids = splits.development_ids(folds) + list(folds["heldout"])  # compared only; never printed
-    problems = check(tree, ids)
+def build(bank_dir, out_dir, case_ids):
+    """Assemble and scan; removes the tree and raises SystemExit if the scan finds anything. case_ids are compared
+    only, never printed. Returns (tree, files, MB)."""
+    tree = assemble(bank_dir, out_dir)
+    problems = check(tree, case_ids)
     if problems:
         shutil.rmtree(tree)
         raise SystemExit(f"NOT OK: the Space tree failed the scan ({len(problems)} problems; tree removed): "
                          + "; ".join(problems[:10]))
     files = sum(1 for p in tree.rglob("*") if p.is_file())
     size = sum(p.stat().st_size for p in tree.rglob("*") if p.is_file()) / 1e6
+    return tree, files, size
+
+
+def main(argv=None):
+    """A tree for a bank without held-out cases. With held-out cases, use `pipeline.phase4 space`, which scans for
+    the held-out IDs too under the flag."""
+    from strokecopilot.data import splits
+
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--bank", required=True)
+    parser.add_argument("--out", required=True)
+    args = parser.parse_args(argv)
+    tree, files, size = build(args.bank, args.out, splits.development_ids())
     print(f"OK: Space tree at {tree}: {files} files, {size:.1f} MB; scan clean (case IDs, RSNA IDs, keys, e-mail, "
           f"file types, no split).")
 

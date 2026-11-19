@@ -31,8 +31,9 @@
     node.addEventListener("focus", () => { const r = node.getBoundingClientRect(); showTip({ clientX: r.right, clientY: r.top }, lines); });
     node.addEventListener("blur", hideTip);
   }
-  function table(container, head, rows) {
+  function table(container, head, rows, { open = false } = {}) {
     const d = document.createElement("details");
+    d.open = open;
     const s = document.createElement("summary"); s.textContent = "Show the numbers as a table"; d.appendChild(s);
     const t = document.createElement("table"); t.className = "tbl";
     const tr = document.createElement("tr");

@@ -4,7 +4,7 @@ Two modes:
 - `--fake` (default when no --url): starts the real server in this process on a free port, with a fake live runner that
   is slow and fails on a schedule (no API call, no key), and the real bank.
 - `--url https://...`: a running server, e.g. the Space before it is made public, with live runs switched off
-  (LIVE_ENABLED=0), so nothing is spent.
+  (LIVE_ENABLED=0, or no key set), so nothing is spent. `--hf-auth` for a private Space.
 
     python -m strokecopilot.demo.loadtest --bank demo/space/build/bank --visitors 50
 Each visitor posts builder inputs (spread over the bounds) and reads the event stream to its result. The report gives
@@ -36,16 +36,16 @@ def _inputs(rng):
     return raw
 
 
-async def visitor(client, base, rng, i, spread_s=0.0):
+async def visitor(client, base, rng, i, spread_s=0.0, headers=None):
     if spread_s:
         await asyncio.sleep(rng.uniform(0, spread_s))
     started = time.monotonic()
-    r = await client.post(f"{base}/api/run", json={"inputs": _inputs(rng)}, headers={"x-forwarded-for": f"10.0.{i // 250}.{i % 250}"})
+    r = await client.post(f"{base}/api/run", json={"inputs": _inputs(rng)}, headers={**(headers or {}), "x-forwarded-for": f"10.0.{i // 250}.{i % 250}"})
     if r.status_code != 200:
         return {"error": f"POST {r.status_code}"}
     run_id = r.json()["run_id"]
     result = None
-    async with client.stream("GET", f"{base}/api/run/{run_id}/events") as s:
+    async with client.stream("GET", f"{base}/api/run/{run_id}/events", headers=headers) as s:
         if s.status_code != 200:
             return {"error": f"events {s.status_code}"}
         async for line in s.aiter_lines():
@@ -58,13 +58,13 @@ async def visitor(client, base, rng, i, spread_s=0.0):
     return {"source": result["source"], "reason": result.get("reason"), "seconds": round(time.monotonic() - started, 2)}
 
 
-async def run_load(base, visitors, seed=20261119, timeout_s=400, spread_s=0.0):
+async def run_load(base, visitors, seed=20261119, timeout_s=400, spread_s=0.0, headers=None):
     import httpx
 
     rng = random.Random(seed)
     async with httpx.AsyncClient(timeout=timeout_s) as client:
-        health = (await client.get(f"{base}/healthz")).json()
-        results = await asyncio.gather(*(visitor(client, base, random.Random(rng.random()), i, spread_s) for i in range(visitors)))
+        health = (await client.get(f"{base}/healthz", headers=headers)).json()
+        results = await asyncio.gather(*(visitor(client, base, random.Random(rng.random()), i, spread_s, headers) for i in range(visitors)))
     ok = [r for r in results if "error" not in r]
     secs = [r["seconds"] for r in ok]
     by_source = {}
@@ -148,9 +148,16 @@ def main(argv=None):
     parser.add_argument("--url", help="a running server; live runs must be off there")
     parser.add_argument("--visitors", type=int, default=50)
     parser.add_argument("--spread", type=float, default=0.0, help="arrivals spread over this many seconds (0: all at once)")
+    parser.add_argument("--hf-auth", action="store_true", help="--url is a private Space: send the local Hugging Face "
+                                                                 "sign-in's token (never printed)")
     args = parser.parse_args(argv)
     if args.url:
-        report = asyncio.run(run_load(args.url.rstrip("/"), args.visitors, spread_s=args.spread))
+        headers = None
+        if args.hf_auth:
+            from huggingface_hub import get_token
+
+            headers = {"Authorization": f"Bearer {get_token()}"}
+        report = asyncio.run(run_load(args.url.rstrip("/"), args.visitors, spread_s=args.spread, headers=headers))
     else:
         base, srv, state = serve_in_thread(args.bank, fake_runner())
         report = asyncio.run(run_load(base, args.visitors, spread_s=args.spread))

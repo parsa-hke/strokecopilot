@@ -169,6 +169,7 @@
       [pct(sonnet.hallucination_rate.value), "of Sonnet 5.5's claims flagged by the verifier"],
       [pct(c.vision_b.sensitivity, 0), "of bleeds caught on unseen RSNA scans"],
       [`${c.human.flags_confirmed[0]}/${c.human.flags_confirmed[1]}`, "verifier flags that humans confirmed"]];
+    $("#browse-cases").textContent = `Browse ${state.index.length} answered cases`;
     $("#hero-stats").replaceChildren(...tiles.map(([v, l]) => h("div", { class: "stat" }, h("div", { class: "v", text: v }), h("div", { class: "l", text: l }))));
   }
 
@@ -192,7 +193,8 @@
             h("figcaption", { text: `Real case ${state.story.alias}: ${state.story.panels["story_overlay.png"]}.` + (state.story.core_ml_predicted != null
               ? ` Predicted core ${state.story.core_ml_predicted} mL against a final infarct of ${state.story.core_ml_reference} mL.` : "") })) : null,
           h("h4", { text: "How often the core lands on the wrong side of a cut-off" }), cutoffBars(va),
-          h("p", { class: "muted small", text: `${va.cases} development cases, each scored by the fold model that never trained on it.` })) },
+          h("p", { class: "muted small", text: `${va.cases} development cases, each scored by the fold model that never trained on it.` + (c.heldout
+            ? ` On the ${c.heldout.cases} held-out patients, the five-fold ensemble's Dice is ${c.heldout.vision.dice.mean.toFixed(2)} and its volume is off by ${c.heldout.vision.abs_volume_error_ml.median} mL (median).` : "") })) },
       { t: "Bleed check", p: ["A second model reads the plain CT for any bleed, which rules out clot-busting drugs. It was trained on 21,744 RSNA scans and tuned to miss as few bleeds as possible.",
         `On RSNA scans it never saw, it caught ${pct(vb.sensitivity, 1)} of bleeds. But on ISLES'24's presumed bleed-free scans it raised ${vb.isles_flags} false alarms in ${vb.isles_scans}: the new hospitals' scans look different.`],
         stage: () => h("div", { class: "tiles" }, tile(vb.scan_auc.toFixed(3), "AUC, RSNA test"), tile(pct(vb.sensitivity, 1), "bleeds caught"),
@@ -266,7 +268,7 @@
   }
 
   /* ---------------------------------------------------------------- explorer */
-  const KINDS = [["fixture", "Fixtures"], ["scenario", "Scenarios"], ["development", "Real cases"]];
+  const KINDS = [["fixture", "Fixtures"], ["scenario", "Scenarios"], ["development", "Real cases"], ["heldout", "Held-out cases"]];
   let currentKind = "fixture";
   function routeText(row) {
     const names = { thrombolysis: "Thrombolysis", thrombectomy: "Thrombectomy" };
@@ -280,12 +282,24 @@
   }
   function initExplorer() {
     const tabs = $("#case-tabs");
-    KINDS.forEach(([k, label]) => tabs.append(h("button", { type: "button", role: "tab", "aria-selected": String(k === currentKind),
-      onclick: (e) => { currentKind = k; tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b === e.currentTarget))); renderCaseList(); } },
+    KINDS.filter(([k]) => state.index.some((r) => r.kind === k)).forEach(([k, label]) => tabs.append(h("button", { type: "button", role: "tab", "data-kind": k, "aria-selected": String(k === currentKind),
+      onclick: () => selectKind(k) },
       `${label} (${state.index.filter((r) => r.kind === k).length})`)));
     $("#case-filter").addEventListener("input", renderCaseList);
     renderCaseList();
     openCase("fx02_thrombectomy_large_mismatch");
+  }
+  function selectKind(k) {
+    currentKind = k;
+    $("#case-tabs").querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.kind === k)));
+    renderCaseList();
+  }
+  function showCase(id) {   // from a results card: open the case in the explorer and bring it into view
+    const row = state.index.find((r) => r.id === id);
+    if (!row) return;
+    selectKind(row.kind);
+    openCase(id);
+    $("#case-view").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   }
   async function loadCase(id) {
     if (!state.cases[id]) state.cases[id] = await getJSON(`/api/bank/case/${encodeURIComponent(id)}`);
@@ -318,8 +332,9 @@
         return;
       }
       renderAnswer(body, { vision: a.vision, note: a.note, ...ans }, { title: `${MODEL_LABEL[model]}'s answer, claim by claim` });
-      if (file.kind === "development") body.prepend(h("p", { class: "muted small", text: arm === "predicted"
-        ? "Real development case: the contract is what our vision models predicted."
+      if (file.kind === "development" || file.kind === "heldout") body.prepend(h("p", { class: "muted small", text: arm === "predicted"
+        ? (file.kind === "heldout" ? "Held-out case: one of the 20 patients no model or threshold saw until everything was frozen. The contract is what our vision models predicted."
+          : "Real development case: the contract is what our vision models predicted.")
         : "The same patient with the reference final infarct as core and no bleed: what the answer would be if vision were right." }));
     }
     view.replaceChildren(head, body);
@@ -398,7 +413,51 @@
       const s = c.scenario_sensitivity, k = card("Does a 20% core error change decisions?", "Core volume scaled by 0.8 and 1.2, decisions recomputed by the rules.", "EXP-63 (DEC-31 D3 and its supplement)");
       C.bars(k.body, [["Synthetic scenarios, core ×0.8", s["x0.8"]], ["Synthetic scenarios, core ×1.2", s["x1.2"]]].map(([l, r]) => ({ label: l, value: r.changed_share, n: r.decisions,
         tip: [l, `${r.changed} of ${r.decisions} decisions change`, `${r.yes_no_flips} yes/no flips`] })), { left: 220 });
-      k.body.append(h("p", { class: "muted small", text: "On the 129 real development cases, none of 258 decisions changed: there the unknown occlusion site, ASPECTS and the bleed flag decide, not the core." }));
+      const ho = c.heldout ? ` On the ${c.heldout.cases} held-out patients, ${c.heldout.rule_sensitivity["x0.8"].changed + c.heldout.rule_sensitivity["x1.2"].changed} of ${c.heldout.rule_sensitivity["x0.8"].decisions + c.heldout.rule_sensitivity["x1.2"].decisions} rule decisions changed` +
+        (c.heldout.sonnet_sensitivity ? `, and ${c.heldout.sonnet_sensitivity["x0.8"].changed + c.heldout.sonnet_sensitivity["x1.2"].changed} of ${c.heldout.sonnet_sensitivity["x0.8"].decisions_compared + c.heldout.sonnet_sensitivity["x1.2"].decisions_compared} of Sonnet 5.5's own answers.` : ".") : "";
+      k.body.append(h("p", { class: "muted small", text: "On the 129 real development cases, none of 258 decisions changed: there the unknown occlusion site, ASPECTS and the bleed flag decide, not the core." + ho }));
+      k.src(); grid.append(k.root);
+    }
+    if (c.heldout) renderHeldout(c.heldout, grid, C);
+  }
+
+  function renderHeldout(ho, grid, C) {
+    const word = (t) => Object.entries(t).map(([k, n]) => `${k} ${n}`).join(", ");
+    // Correctness
+    {
+      const k = card(`The final test: ${ho.cases} held-out patients`,
+        "Decisions that match the rules applied to the reference contract (true infarct, no bleed), with the vision models' own contract as input. Undetermined truths are not scored.", ho.source);
+      k.body.append(h("div", { class: "notice" }, h("strong", { text: "Read with care. " }),
+        `On these patients the right thrombectomy answer is always no (the occlusion site is unknown), and thrombolysis is undetermined for ${ho.truth.thrombolysis.undetermined || 0} of ${ho.cases}. A model that leans to "no" scores well here without being better.`));
+      k.body.append(h("div", { class: "tiles" }, tile(`${ho.rules_on_predicted.correct}/${ho.rules_on_predicted.scored}`, "the rules themselves, on the predicted contract"),
+        tile(`${ho.vision.dice.mean.toFixed(2)}`, "core Dice, held-out"), tile(`${ho.vision.abs_volume_error_ml.median} mL`, "median core volume error"),
+        tile(`${ho.vision.bleed_flags.flagged}/${ho.vision.bleed_flags.scans}`, "scans flagged for a bleed")));
+      C.dotCI(k.body, ho.rows.map((r) => ({ label: MODEL_LABEL[r.model], value: r.predicted.rate, ci: r.predicted.ci95, color: SLOT[r.model],
+        tip: [MODEL_LABEL[r.model], `${r.predicted.correct} of ${r.predicted.scored} decisions right`, r.predicted.no_answer ? `${r.predicted.no_answer} cases without a valid answer` : "every case answered"] })), { max: 1 });
+      C.table(k.body, ["Model", "Predicted vision", "Ground-truth vision", "No valid answer"], ho.rows.map((r) => [MODEL_LABEL[r.model],
+        `${r.predicted.correct}/${r.predicted.scored}`, r.groundtruth ? `${r.groundtruth.correct}/${r.groundtruth.scored}` : "n/a", String(r.predicted.no_answer)]));
+      k.body.append(h("p", { class: "muted small", text: `Truth by the rules: thrombolysis ${word(ho.truth.thrombolysis)}; thrombectomy ${word(ho.truth.thrombectomy)}.` }));
+      k.src(); grid.append(k.root);
+    }
+    // Error propagation
+    {
+      const k = card("Where wrong decisions came from", "Each wrong decision with predicted vision: did the vision contract mislead the model, or did the model reason wrongly from a correct one? And did the verifier flag it?", ho.source);
+      const cell = (t) => t.wrong ? `${t.wrong} (${t.caught} caught)` : "0";
+      C.table(k.body, ["Model", "From vision", "From reasoning"], ho.rows.map((r) => [MODEL_LABEL[r.model], cell(r.errors.vision), cell(r.errors.reasoning)]), { open: true });
+      const ex = ho.rows.flatMap((r) => r.examples.map((e) => ({ ...e, model: r.model }))).filter((e) => e.cause === "vision");
+      if (ex.length) k.body.append(h("p", { class: "muted small", text: "Vision errors, open the case:" }), h("div", { class: "chips" }, ex.map((e) =>
+        h("button", { type: "button", class: "chip", onclick: () => showCase(e.alias) }, `${e.alias} · ${MODEL_LABEL[e.model]} · ${e.caught ? "caught" : "missed"}`))));
+      k.body.append(h("p", { class: "muted small", text: "The verifier checks claims against the contract it was given. When the contract itself is wrong (a false bleed flag) and the answer restates it faithfully, there is nothing for it to catch." }));
+      k.src(); grid.append(k.root);
+    }
+    // Realism check
+    {
+      const rows = ho.rows.filter((r) => r.rate_development);
+      const k = card("Did the hallucination rates hold on new patients?", "Share of claims flagged by the verifier: development real cases → held-out patients, predicted vision. Unpaired: different patients.", ho.source);
+      C.dumbbell(k.body, rows.map((r) => ({ label: MODEL_LABEL[r.model], from: r.rate_development.value, to: r.rate_heldout.value, color: SLOT[r.model],
+        tip: [MODEL_LABEL[r.model], `${pct(r.rate_development.value)} → ${pct(r.rate_heldout.value)}`, `held-out ${r.rate_heldout.ci95.map((v) => pct(v)).join(" to ")}, ${r.rate_heldout.denominator} claims`] })),
+        { max: 0.5, fromLabel: "development", toLabel: "held-out" });
+      C.table(k.body, ["Model", "Development", "Held-out", "Format failures"], rows.map((r) => [MODEL_LABEL[r.model], pct(r.rate_development.value), pct(r.rate_heldout.value), `${r.format_failures}/${ho.cases}`]));
       k.src(); grid.append(k.root);
     }
   }

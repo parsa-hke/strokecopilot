@@ -207,6 +207,8 @@ def create_app(state, static_dir=None):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Research-Prototype"] = "not for clinical use"
+        if "cache-control" not in response.headers:   # revalidate (ETag, 304) so an update reaches returning visitors
+            response.headers["Cache-Control"] = "no-cache"
         return response
 
     @app.get("/healthz")

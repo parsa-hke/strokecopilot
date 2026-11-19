@@ -5,7 +5,8 @@
   failed live run (`builder.nearest` over the presets' features).
 - Real development cases by alias (`D-01`...): EXP-37's 20 sampled cases, predicted and ground-truth vision arms, with
   the case ID replaced everywhere by the alias. ISLES'24 is CC BY-NC-SA 4.0 (DEC-32 §6); IDs never appear.
-- Held-out cases are added after Phase 4's analyses, the same way (aliases `H-01`...).
+- Held-out cases after Phase 4's analyses, the same way (aliases `H-01`..., as in EXP-66's report): EXP-65's cells,
+  added only through `pipeline.phase4 bank`, which holds the flag (DEC-31 §4), with EXP-66's results in charts.json.
 
 Layout of the output folder (built, never committed: it holds real-case notes):
     index.json            one row per case: id, kind, title, the rules' decisions, the models present, builder inputs
@@ -113,32 +114,53 @@ def _alias_everything(obj, case_id, alias):
     return json.loads(json.dumps(obj).replace(case_id, alias))
 
 
-def development_cases(roots, vision_dirs, notes_dir, ids, models=MODELS):
-    """[(index row, case file)] for real development cases by alias; vision_dirs: {"predicted": dir, "groundtruth": dir}."""
+def real_cases(cell_for, vision_dirs, notes_dir, ids, prefix, kind, models=MODELS):
+    """[(index row, case file)] for real cases by alias, with every case ID replaced by the alias.
+    cell_for(model, arm) -> the model's run folder for that vision arm ("predicted" or "groundtruth"), or None;
+    vision_dirs: {"predicted": dir, "groundtruth": dir}."""
     from strokecopilot.pipeline import heldout_analysis as ha
 
-    aliases = ha.aliases_for(ids, "D")
+    aliases = ha.aliases_for(ids, prefix)
+    label = {"development": "Real case", "heldout": "Held-out case"}[kind]
     out = []
     for case_id in sorted(ids):
         alias = aliases[case_id]
         arms, rules_by_arm = {}, {}
-        for arm, cell_arm in REAL_ARMS.items():
+        for arm in REAL_ARMS:
             case = e2e.real_case(case_id, vision_dirs[arm], notes_dir)
             expected = {d: v.to_dict() for d, v in rules.decide(rules.case_from(case["vision"], case["facts"])).items()}
             case = {**case, "expected_detail": expected}
             answers = {}
             for model in models:
-                folder = _cell(roots, model, cell_arm)
+                folder = cell_for(model, arm)
                 if folder is not None:
                     answers[model] = _arm_view(case, folder)
             arms[arm] = {"vision": case["vision"], "note": case["note"], "rules": expected, "answers": answers}
             rules_by_arm[arm] = _summary(expected)
-        row = {"id": alias, "kind": "development", "title": f"Real case {alias}", "rules": rules_by_arm["groundtruth"],
+        row = {"id": alias, "kind": kind, "title": f"{label} {alias}", "rules": rules_by_arm["groundtruth"],
                "rules_predicted": rules_by_arm["predicted"],
                "models": sorted({m for a in arms.values() for m, x in a["answers"].items() if x["available"]})}
-        file = {"id": alias, "kind": "development", "banner": live.BANNER, "arms": arms}
+        file = {"id": alias, "kind": kind, "banner": live.BANNER, "arms": arms}
         out.append((_alias_everything(row, case_id, alias), _alias_everything(file, case_id, alias)))
     return out
+
+
+def development_cases(roots, vision_dirs, notes_dir, ids, models=MODELS):
+    """Real development cases by alias (`D-01`...): EXP-37's and EXP-47's real_predicted / real_groundtruth cells."""
+    return real_cases(lambda model, arm: _cell(roots, model, REAL_ARMS[arm]), vision_dirs, notes_dir, ids, "D",
+                      "development", models)
+
+
+HELDOUT_ARMS = {"predicted": "heldout_predicted", "groundtruth": "heldout_groundtruth"}
+
+
+def heldout_cases(run_root, vision_dirs, notes_dir, ids, models=MODELS):
+    """Held-out cases by alias (`H-01`..., the same aliases as EXP-66's report): EXP-65's cells. Only Phase 4's
+    command (pipeline.phase4 bank) passes held-out IDs here."""
+    def cell_for(model, arm):
+        folder = Path(run_root) / model / HELDOUT_ARMS[arm]
+        return folder if (folder / "config.json").exists() else None
+    return real_cases(cell_for, vision_dirs, notes_dir, ids, "H", "heldout", models)
 
 
 def write(entries, out_dir):
@@ -185,15 +207,51 @@ def scan(folder, case_ids=()):
     return problems
 
 
+def build(out_dir, drive, exp37="runs/EXP-37_paid_runs", exp47="runs/EXP-47_small_reasoner", heldout=None):
+    """The whole bank: presets, development cases, and, when `heldout` is given (Phase 4 only, through
+    pipeline.phase4 bank), the held-out cases and EXP-66's results. heldout: {"ids", "dirs" (phase4.artifact_dirs),
+    "run_root" (EXP-65), "report" (EXP-66's report.json)}. Refuses to finish if the leak scan finds any case ID."""
+    from strokecopilot.data import splits
+    from strokecopilot.demo import charts
+
+    drive = Path(drive)
+    art = drive / "artifacts"
+    roots = {"EXP-37": exp37, "EXP-47": exp47}
+    entries = presets(roots)
+    real = sorted(r["case"] for r in json.loads((Path(exp37) / FALLBACK_MODEL / "real_predicted" / "metrics_rescore.json")
+                                                .read_text())["per_case"])
+    splits.check_ids(real)
+    entries += development_cases(roots, {"predicted": art / "vision_outputs_v1", "groundtruth": art / "vision_outputs_gt_v1"},
+                                 art / "isles24_notes_v1", real)
+    leak_ids = list(splits.development_ids())
+    if heldout:
+        d = heldout["dirs"]
+        entries += heldout_cases(heldout["run_root"], {"predicted": d["predicted"], "groundtruth": d["groundtruth"]},
+                                 d["notes"], heldout["ids"])
+        leak_ids += list(heldout["ids"])
+    out = write(entries, out_dir)
+    chart_data = charts.charts(charts.default_sources(drive / "runs"))
+    if heldout:
+        chart_data["heldout"] = charts.heldout(json.loads(Path(heldout["report"]).read_text()))
+    write_extras(out, chart_data)
+    problems = scan(out, leak_ids)
+    if problems:
+        raise ValueError(f"The bank failed the leak scan ({len(problems)} files). Delete {out} and check.")
+    kinds = {}
+    for row, _ in entries:
+        kinds[row["kind"]] = kinds.get(row["kind"], 0) + 1
+    return out, kinds
+
+
 def main(argv=None):
-    """Build the bank from the Mac's runs/ and Drive's artifacts (development cases only before Phase 4's results).
+    """Build the bank without held-out cases (those go through pipeline.phase4 bank).
 
     python -m strokecopilot.demo.bank --out demo/space/build/bank --drive "<Drive>/StrokeCopilot"
     """
     import argparse
     import os
 
-    from strokecopilot.data import splits
+    from strokecopilot.config import local_drive_root
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True)
@@ -201,29 +259,11 @@ def main(argv=None):
     parser.add_argument("--exp37", default="runs/EXP-37_paid_runs")
     parser.add_argument("--exp47", default="runs/EXP-47_small_reasoner")
     args = parser.parse_args(argv)
-    from strokecopilot.config import local_drive_root
-
     drive = Path(os.path.expanduser(args.drive)) if args.drive else local_drive_root()
     if drive is None:
         raise ValueError("No Drive folder found; pass --drive or set STROKECOPILOT_DRIVE.")
-    args.drive = str(drive)
-    art = drive / "artifacts"
-    roots = {"EXP-37": args.exp37, "EXP-47": args.exp47}
-    entries = presets(roots)
-    real = sorted(r["case"] for r in json.loads((Path(args.exp37) / FALLBACK_MODEL / "real_predicted" / "metrics_rescore.json")
-                                                .read_text())["per_case"])
-    splits.check_ids(real)
-    entries += development_cases(roots, {"predicted": art / "vision_outputs_v1", "groundtruth": art / "vision_outputs_gt_v1"},
-                                 art / "isles24_notes_v1", real)
-    out = write(entries, args.out)
-    from strokecopilot.demo import charts
-
-    runs = Path(os.path.expanduser(args.drive)) / "runs"
-    write_extras(out, charts.charts(charts.default_sources(runs)))
-    problems = scan(out, splits.development_ids())
-    if problems:
-        raise ValueError(f"The bank failed the leak scan ({len(problems)} files). Delete {out} and check.")
-    print(f"OK: bank with {len(entries)} cases in {out}; leak scan clean.")
+    out, kinds = build(args.out, drive, args.exp37, args.exp47)
+    print(f"OK: bank with {sum(kinds.values())} cases {kinds} in {out}; leak scan clean.")
 
 
 if __name__ == "__main__":

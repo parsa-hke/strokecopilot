@@ -147,6 +147,7 @@ def test_bank_meta_health_and_headers(bank_dir):
     h = client.get("/healthz")
     assert h.json()["ok"] and h.json()["key_present"] is True and "sk-" not in h.text
     assert "default-src 'self'" in h.headers["content-security-policy"]
+    assert h.headers["cache-control"] == "no-cache"  # updates reach returning visitors
     assert client.get("/api/run/unknown/events").status_code == 404
 
 
