@@ -1,5 +1,57 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Phase 4, step 3 prepared: the held-out reasoner runs, EXP-65)
+- **Parsa's go (19 Nov)** for DEC-31 D2's runs at the estimate (Anthropic about $5.5 with contingency, OpenRouter about $0.40, Colab about 1 A100 hour).
+- **`pipeline/phase4.py`, held-out run layer:**
+  - **Cells:** `heldout_predicted` and `heldout_groundtruth` for all six models, plus Sonnet's `heldout_core_x0.8` and `heldout_core_x1.2` (D3's 40 extra requests; contracts perturbed by `heldout_analysis.perturbed_cases`). 14 cells.
+  - **Commands:** `status`, `advance` (EXP-37's `batched.run_batched`: Sonnet, the extractor and the judge through the Batch API; Qwen through OpenRouter; open models wait for their Colab answers), and `import` (Colab's answers from Drive). Output is ID-checked.
+  - **Run folder:** `runs/EXP-65_heldout_runs`. EXP-37's `paid_runs` is unchanged.
+- **Notebooks 53 and 55** gain `MODE = 'heldout'` (EXP-65). It sets `ALLOW_HELDOUT=1` for the notebook only, copies the three held-out folders, answers both arms for the Gemma 27B pair and the 4B pair, saves each answer to Drive as it arrives, and prints counts per cell.
+- **Tests:** `tests/test_phase4.py` (5). They cover: the cells and sensitivity arms; the Colab pass, import (idempotent) and a full advance to `metrics.json` with fake models; and open models waiting for Colab. pytest: 866 passed.
+
+## 2026-11-19 — Claude Code session (Phase 4: where held-out code runs, DEC-31 §4)
+- **Decision (Parsa, Option A):** Phase 4 code paths on the Mac may set `ALLOW_HELDOUT=1` per command, in addition to Phase 4 notebooks. It is recorded as a dated note in `docs/PHASE4_PREREGISTRATION.md` §4, with its reason and conditions, and pointed to from plan §7.
+  - **Reason:** the paid-run pipeline that produced every development result runs from the Mac. Rewriting it as notebook code after unlocking would add untested code where mistakes cost money.
+  - **Conditions:** set per command only; only commands that start with it (Parsa's permission rule); held-out IDs on the Mac only as file names in gitignored `runs/`; summaries ID-checked; nothing retrained or re-tuned. What is measured is unchanged.
+  - **Pros and cons were weighed with Parsa before deciding:** reuse of tested code and robustness to Colab disconnects, against a small widening of the rule and IDs as file names on the laptop.
+- **`pipeline/phase4.py`:** the one module for held-out work, so the permission rule can name exactly it.
+  - It checks the split by sha256 and refuses without the flag.
+  - Its first command, `check`, validates the 20 held-out contracts and ground-truth contracts, fact-checks the notes, and counts what the rules say on each. Counts only, ID-checked.
+  - Tests: `tests/test_phase4.py` (2, fixtures posing as held-out cases).
+- **Permission rule added by Parsa** (`.claude/settings.local.json`, gitignored): only `ALLOW_HELDOUT=1 .venv/bin/python -m strokecopilot.pipeline.phase4 …`.
+- **`phase4 check`** (free, counts only): 20 contracts, 20 ground-truth contracts and 20 notes valid.
+  - **Rules on the ground truth (D3's truth):** thrombolysis undetermined 17, yes 2, no 1; **thrombectomy no in 20/20** (occlusion site unknown in every case, so no large-vessel occlusion is established).
+  - **Rules on the predicted contracts:** thrombolysis no 11, undetermined 8, yes 1; thrombectomy no 20.
+  - **Rules on predicted vs truth:** 22/23 scored decisions right.
+  - So held-out correctness rests on 23 scored decisions (3 thrombolysis, 20 thrombectomy "no"). The report states it plainly; the main held-out result is C9's realism check, which does not depend on it.
+- **Cost estimate given to Parsa** (batch prices, from the development real-case cells): Anthropic about $4.6 (about $5.5 with 20% contingency) for 240 verified requests plus Sonnet's 40 perturbed-core ones; OpenRouter about $0.40; Colab about 1 A100 hour. Waiting for his go.
+
+## 2026-11-19 — Claude Code session (Phase 4, step 2: held-out cases unlocked, EXP-62)
+- **EXP-62** (notebook 60 in `heldout` mode, `UNLOCK = True`; Colab A100; `e9bb941`). **4 of 4 checks passed**, including "the dev check passed with these same plans and checkpoints" (plans `71b6a8cdca4d…`, all five folds at epoch 300).
+  - A first attempt stopped at the guard that refuses to overwrite EXP-61: section 1 had run with `MODE = 'dev_check'`. `ALLOW_HELDOUT` was never set, and nothing was changed.
+- **Written on Drive** (case IDs stay there):
+  - `artifacts/vision_outputs_heldout_v1/` (20 contracts, nnU-Net five-fold ensemble, 2.3 s per case);
+  - `artifacts/vision_outputs_gt_heldout_v1/` (20, the EXP-34 way);
+  - `artifacts/isles24_notes_heldout_v1/` (20 notes, same generator and seed 20261105);
+  - `runs/EXP-62_heldout_contracts/` (ensemble masks, `per_case.csv` with D3's vision scores, and `metrics.json` with counts only).
+- **Counts (from `metrics.json`):**
+
+  | | Predicted contracts | Ground-truth contracts |
+  |---|---|---|
+  | Bleed flagged | **10/20** (development 68/129) | 0/20 |
+  | Occlusion site | **unknown in 20/20** | unknown in 20/20 |
+  | ASPECTS | null in 20/20 | null in 20/20 |
+  | Core, median | **1.85 mL** | 11.0 mL |
+  | Near-empty core (< 1 mL, with the DEC-27 warning) | 7 | none |
+  | Mismatch ratio null | 7 | 2 |
+
+  The Tmax > 6 s median is 157.7 mL in both.
+  - Notes: onset time known in 8, wake-up 6; not recorded: onset 6, last known well 6, pre-stroke mRS 7, INR 7.
+- **What this implies for D3 (expected, not yet computed):** with the occlusion site unknown everywhere and ASPECTS null, thrombectomy truth will be mostly "no" or undetermined, as on development cases. Correctness will rest on few determined decisions, and the bleed flag (10/20) will drive most vision errors.
+- **Not done:** the held-out contracts and notes were not reloaded on the Mac. Setting `ALLOW_HELDOUT=1` in a Mac shell was refused by the session's permission check, and DEC-31's text says "Phase 4 notebooks only". Parsa to decide where Phase 4's held-out code runs.
+- **Plan §7 Phase 4:** the unlock line is ticked.
+- **Notion sync:** Experiments: EXP-62 (done, counts above). Tasks: Phase 4 unlock (done).
+
 ## 2026-11-19 — Claude Code session (Phase 4, Task 4: the Space image checked locally)
 - **Docker image** (`docker build` of `demo/space/build/space`, 2.52 GB, python 3.12-slim, CPU PyTorch).
   - The first build crashed at start-up: `nibabel` and `pandas` were missing (`builder` → `confidence` → `isles24_survey`). Both are now in the `space` extra.

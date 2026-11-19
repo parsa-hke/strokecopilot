@@ -126,3 +126,17 @@ Undetermined decisions are excluded and counted, never guessed.
   which test whether the model reacts to a change the rules ignore). The same rule-level analysis is added on the 150
   synthetic scenarios (free, no held-out data), reported apart as where a core error could matter in principle. Nothing
   else changes.
+- **19 Nov 2026, after unlocking (EXP-62) and before any reasoner run (Parsa, Option A):** where held-out code may run.
+  §1's "`ALLOW_HELDOUT=1` in Phase 4 notebooks only" now also covers Phase 4 code paths run from the Mac. These are the
+  `strokecopilot.pipeline.phase4` commands and the paid-run steps for the held-out arms, as in EXP-37 and EXP-47.
+  - Reason: the paid-run pipeline that produced every development result (batch submit and collect, the billed-token
+    guard, import and rescore) runs from the Mac. Re-writing it as new notebook code after unlocking would add untested
+    code where a mistake costs money.
+  - Conditions:
+    - the flag is set per command, never in the shell profile;
+    - only commands that start with it may use it (Parsa's permission rule);
+    - held-out case IDs exist on the Mac only as file names inside gitignored `runs/` folders, as development IDs did;
+    - every printed or saved summary is ID-checked;
+    - nothing is retrained or re-tuned.
+  - What is measured, the models, the arms and the analyses are unchanged.
+
