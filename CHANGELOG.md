@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Item 2: EXP-49's selection code and Kaggle notebook)
+- **Inputs found:**
+  - EXP-6's `best.pt` (94 MB) and `calibration.json` are on Drive (`runs/EXP-6_visionB_resnet50/`).
+  - No per-slice probabilities were saved for either dataset. EXP-16 kept ISLES'24 scan scores and top-slab positions only. EXP-17 recomputed RSNA validation on Kaggle (75,536 slices in 202 s; 6.4 min in all on the free T4) and kept metrics only.
+  - So EXP-49 and EXP-50 both recompute them.
+- **`vision/haemorrhage/false_alarms.py`:** the pre-registered selection (docs/ITEM2_FALSE_ALARMS.md), numbers only:
+  - `select`: for each of the 10 candidates, scan scores; the 96% threshold cross-fitted on patient halves over EXP-17's 20 seeds; mean sensitivity, specificity and sensitivity per bleed subtype; patient-bootstrap intervals at the main seed.
+  - `eligible`: the 1-point and 3-point margins.
+  - The proposal is the eligible candidate with the highest specificity. `paired_specificity_gain` (a paired patient bootstrap) tests it against "none"; `meets_adoption_rule` says whether it passes.
+  - On Kaggle: `measure` computes brain fraction and head area per slice through the shard readers, on the loader's workers. `heights` gives each slice's height in its scan. `reference_slices` picks the hottest slice of 20 true-positive and 20 false-positive scans at DEC-28's threshold, by seed, and `reference_summary` gives Grad-CAM medians per group.
+- **`notebooks/24_visionB_false_alarms.ipynb`** (EXP-49, Kaggle, free T4).
+  - It reuses notebook 22's install, shard, split and prediction cells unchanged, including its scan-AUC check against EXP-6.
+  - It then measures every validation slice, runs `select`, runs Grad-CAM on the 40 reference slices, and saves `metrics.json` after the ID check.
+  - Dry-run locally on synthetic slices, fake shard readers and a random ResNet-18 (sections 7–9 end to end); not yet run on Kaggle.
+- **Tests:** `tests/test_false_alarms.py` (6), on synthetic validation slices with skull-base false alarms and low subarachnoid bleeds.
+  - A mild gate gains specificity and is proposed, and the gain's interval is above 0.
+  - A gate that drops the subarachnoid slices is ruled out by the subtype rule, even though overall sensitivity holds: at a fixed target the threshold falls to catch them, so the loss shows up per subtype or in specificity, which is why the subtype rule is needed.
+  - Also tested: the margins, the paired bootstrap, heights and the reference sample, and `measure` through fake readers.
+- pytest: 780 passed.
+- **Notion sync:** Experiments: EXP-49 (planned).
+
 ## 2026-11-19 — Claude Code session (Item 2 started: Vision B's ISLES'24 false alarms, code and pre-registration)
 - **`vision/haemorrhage/explain.py`:**
   - Grad-CAM on the last convolutional block (ResNet-50's `layer4`, EfficientNet's `conv_head`) for the single logit, in batches (`grad_cam`, `explain_slices`).
