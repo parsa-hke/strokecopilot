@@ -219,14 +219,7 @@ def main(argv=None):
     from strokecopilot.demo import charts
 
     runs = Path(os.path.expanduser(args.drive)) / "runs"
-    write_extras(out, charts.charts({
-        "exp48": "runs/EXP-48_small_reasoner_report/rescore_points_19_20/report.json",
-        "exp42": "runs/EXP-42_c9_table/rescore_points_19_20/report.json",
-        "exp41": "runs/EXP-41_labelling/labels/agreement_final.json",
-        "exp49": "runs/EXP-49_visionB_false_alarms/metrics.json",
-        "exp50": runs / "EXP-50_visionB_isles_false_alarms" / "metrics.json",
-        "exp60": "runs/EXP-60_visionB_rsna_test/metrics.json",
-        "exp63": "runs/EXP-63_d3_dev_check/report.json"}))
+    write_extras(out, charts.charts(charts.default_sources(runs)))
     problems = scan(out, splits.development_ids())
     if problems:
         raise ValueError(f"The bank failed the leak scan ({len(problems)} files). Delete {out} and check.")

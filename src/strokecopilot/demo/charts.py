@@ -22,6 +22,18 @@ def _rate(r):
     return {"value": r["value"], "ci95": r["ci95"], "numerator": r["numerator"], "denominator": r["denominator"]}
 
 
+def default_sources(drive_runs, repo_runs="runs"):
+    """Where each finished report lives: the Mac's runs/ for most, Drive for EXP-50 (its per-case table holds IDs)."""
+    r = Path(repo_runs)
+    return {"exp48": r / "EXP-48_small_reasoner_report/rescore_points_19_20/report.json",
+            "exp42": r / "EXP-42_c9_table/rescore_points_19_20/report.json",
+            "exp41": r / "EXP-41_labelling/labels/agreement_final.json",
+            "exp49": r / "EXP-49_visionB_false_alarms/metrics.json",
+            "exp50": Path(drive_runs) / "EXP-50_visionB_isles_false_alarms" / "metrics.json",
+            "exp60": r / "EXP-60_visionB_rsna_test/metrics.json",
+            "exp63": r / "EXP-63_d3_dev_check/report.json"}
+
+
 def charts(sources):
     """sources: {"exp48": report.json (rescored), "exp42": report.json (rescored), "exp41": agreement_final.json,
     "exp49": metrics.json, "exp50": metrics.json, "exp60": metrics.json, "exp63": report.json}."""

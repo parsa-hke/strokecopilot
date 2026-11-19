@@ -165,3 +165,26 @@ def test_scenario_sensitivity_is_consistent_and_finds_core_sensitive_decisions()
         assert r["decisions"] == 300 and sum(r["changes"].values()) == r["changed"]
     # the scenarios carry cores near the cut-offs (e.g. 28 and 45 mL, DEFUSE-3 near-miss), so something must change
     assert out["x0.8"]["changed"] + out["x1.2"]["changed"] > 0
+
+
+def test_figures_draw_from_chart_data(tmp_path):
+    pytest.importorskip("matplotlib")
+    from strokecopilot.pipeline import figures
+
+    rate = {"value": 0.1, "ci95": [0.08, 0.12], "numerator": 1, "denominator": 10}
+    models = list(figures.LABELS)
+    c = {"c9": {"rows": [{"model": m, "hallucination_rate": rate, "content_hallucination_rate": rate,
+                          "critical_hallucination_rate": rate} for m in models]},
+         "rulebook": {"rows": [{"model": m, "with": 0.04, "without": 0.18} for m in models[:4]]},
+         "human": {"claims": 100, "kappa": 0.27, "flags_confirmed": [18, 54],
+                   "by_verdict": [{"verdict": "citation_error", "n": 21, "agreement": 0.19}, {"verdict": "clean", "n": 46, "agreement": 0.93}]},
+         "small": {"rows": [{"model": m, "held_out_rate": rate, "thrombectomy": {"yes_caught": 3, "yes": 10}} for m in models[4:]]},
+         "vision_b": {"reliability": [{"mean_prob": 0.1, "observed": 0.1, "count": 5}], "subtypes": [{"subtype": "subdural", "caught": 9, "bleeds": 10}],
+                      "scan_ece": 0.01, "scans": 100, "scan_auc": 0.98, "sensitivity": 0.96, "specificity": 0.88},
+         "vision_a": {"cases": 129, "wrong_side": {"21": 30, "31": 28}, "dice": {"mean": 0.22}},
+         "scenario_sensitivity": {"x0.8": {"changed": 9, "decisions": 300, "changed_share": 0.03, "yes_no_flips": 4},
+                                  "x1.2": {"changed": 10, "decisions": 300, "changed_share": 0.033, "yes_no_flips": 0}}}
+    names = figures.development_figures(c, tmp_path)
+    figures.write_readme(tmp_path, names)
+    assert len(names) == 7 and all((tmp_path / f"{n}.png").exists() and (tmp_path / f"{n}.svg").exists() for n in names)
+    assert "fig_c9_hallucination_by_model" in (tmp_path / "README.md").read_text()

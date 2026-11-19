@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Notion synced with Phase 4 so far)
+- **Decisions:**
+  - **DEC-32** added (Decided, Infra, 19 Nov, decided by Parsa), with its rationale and alternatives.
+  - **DEC-31**'s page gains its three dated amendments: DEC-32's demo change; the scenario sensitivity supplement; and Phase 4 code paths on the Mac (Option A).
+- **Experiments:**
+  - EXP-60, EXP-61, EXP-62, EXP-63, EXP-64 added as Done, with the figures above and their commits;
+  - EXP-65 as Running (dummy cell result);
+  - EXP-66 as Planned.
+- **Tasks:** nine Phase 4 tasks from plan §7, owned by Parsa and linked to DEC-31 (the Space to DEC-32):
+  - Done: RSNA test split, contract path, D3 code, unlock;
+  - In progress: reasoner runs, the Space, figures;
+  - Next up: error propagation, sensitivity.
+- Run Calendar not touched. No case IDs in Notion.
+
+## 2026-11-19 — Claude Code session (Phase 4: report figures exported)
+- **`pipeline/figures.py`** draws the report's figures from the same numbers as the Space (`demo.charts`; `charts.default_sources` now shared with the bank), so the report and the page cannot disagree.
+  - **Style:** the reference palette's categorical slots in fixed order (one per model), thin marks, hairline grid, one axis per panel, whiskers for intervals, and direct labels where they carry the point.
+- **Exported to Drive `artifacts/figures/`** (PNG at 300 dpi and SVG, with a `README.md` of captions and sources). Numbers only, no IDs, no RSNA images:
+  - `fig_c9_hallucination_by_model`: all, content and critical rates, small multiples;
+  - `fig_rulebook_effect`;
+  - `fig_human_check`;
+  - `fig_small_reasoner_tradeoff`;
+  - `fig_visionB_rsna_test` (reliability and subtypes, EXP-60);
+  - `fig_visionA_cutoff_crossings`;
+  - `fig_core_sensitivity_scenarios`.
+- Checked by eye. Fixed before export: label overlap and a 105% tick on the Vision B panel, misaligned rows in the small-model panels, and the human-check bar order.
+- **Held-out figures** (EXP-66) are added with the same module after the analysis. Plan §7's figures line stays open until then.
+- Test added. pytest: 870 passed.
+
 ## 2026-11-19 — Claude Code session (Phase 4: the analysis command, and ISLES'24 images for the Space, while the runs go)
 - **`phase4 analyse`** (EXP-66, once the cells are done): DEC-31 D3 on the finished held-out cells, through EXP-63's tested `heldout_analysis.report`. It covers:
   - correctness per model and arm;
