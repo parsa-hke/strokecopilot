@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (the Space's key and daily cap)
+- **Key:** Parsa added `ANTHROPIC_API_KEY` as a secret on the private Space; the health check reports `key_present: true`, `live_enabled: true`, nothing spent.
+- **Daily cap $5** (Parsa's choice, a change to DEC-32 §7, recorded there): Space variable `DAILY_CAP_USD = 5`; the code's default stays $1. The cap is soft (in memory, reset by a restart or sleep); the Anthropic workspace's monthly limit is the hard cap.
+- **One live run on the Space** (Parsa's go; builder defaults: witnessed onset, 5 h, M1, core 20 mL, Tmax > 6 s 90 mL): live, 51.6 s (reasoner 28 s, extractor 11 s, judge 11 s, its calls concurrent); thrombolysis no, thrombectomy yes; 24 claims, 1 flagged, 0 critical; **$0.108**, matching the health check's spend. A first request was refused (422, nothing spent) because the script sent `builder.validate`'s output, whose not-applicable fields are null; the page drops those fields, so visitors are unaffected.
+- **Spend:** $0.11.
+- **Notion sync:** Decisions: DEC-32 (note the $5 daily cap).
+
 ## 2026-11-20 — Claude Code session (Phase 4, step 5: the Space filled with held-out results, not yet published)
 - **Bank with held-out cases** (`ALLOW_HELDOUT=1 … phase4 bank`, under the existing permission rule): 195 cases (5 fixtures, 150 scenarios, 20 development `D-xx`, 20 held-out `H-xx`, the same aliases as EXP-66's report), each with the six models' saved answers on both vision arms (EXP-65 cells). `demo.bank` now has `real_cases`, `heldout_cases` and `build`; held-out cases enter only through `phase4`.
 - **Chart data:** `charts.heldout(report)` adds EXP-66's numbers (correctness per model and arm, error propagation with case aliases, the ±20% core check, held-out vision, the realism check). Numbers and aliases only.

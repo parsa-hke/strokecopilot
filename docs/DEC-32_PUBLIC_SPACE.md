@@ -227,7 +227,9 @@ measures it.
 - **The workspace's monthly limit is the hard cap**, set by Parsa. Parsa expects fewer than 20 live runs in all (19 Nov
   2026), so the limit is small: about **$5** suggested, which allows about 40–60 runs (20 runs cost about $1.60–2.40).
   The $20 of the first draft was too high.
-- The server's daily cap ($1, about 10 runs; adjustable by a Space variable) and the per-visitor limits are soft. They
+- **Changed by Parsa, 20 Nov 2026:** the daily cap is **$5** (about 30 runs at the $0.16 reserve), set as the Space
+  variable `DAILY_CAP_USD = 5`; the code's default stays $1. The workspace's monthly limit remains the hard cap.
+- The server's daily cap ($1 at first, about 10 runs; adjustable by a Space variable) and the per-visitor limits are soft. They
   live in memory, so a restart resets them. Free CPU Spaces also sleep when unused and restart on the next visit.
 - Persisting them would need a paid storage bucket or a write token to a dataset repo (a second secret). Not proposed:
   the workspace limit already bounds the worst case at its own value.
