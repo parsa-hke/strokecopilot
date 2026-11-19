@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Item 4 step 7 started: EXP-47, the small reasoner on DEC-30's arms)
+- **EXP-47 reasoner pass** (Colab, notebook 55 at 451556a; Parsa's go at the $3–6 estimate):
+  - Colab gave an **A100 80 GB** after all, so the G4 path was not used. vLLM 0.34.0.
+  - All 350 requests answered: `gemma-3-4b` in 270 s, `gemma-3-4b-tuned` in 136 s. That is much faster than the 30–40 min estimate.
+  - The tuned folder was filled from the base snapshot with 7 files, among them `preprocessor_config.json`, `chat_template.json` and `tokenizer.model`.
+- **Imported to the Mac** (`scripts/paid_runs import`): 5 + 150 + 20 per model. **349 of 350 valid.** One base-model fixture hit the 8,000-token limit before finishing its JSON, and counts as a format failure, the same rule as every model. The tuned model: 175 of 175.
+- **Extraction and judge** through the Batch API as in EXP-37: the first extraction batches were submitted 19 Nov. `runs/EXP-47_small_reasoner/autocollect.sh` (not committed) advances every 15 min under `caffeinate` and stops when all 6 cells are done.
+- **`pipeline/small_reasoner_report.py`** (DEC-30's report, to run as EXP-48 once EXP-47 is scored):
+  - **Case groups.** The 150 scenarios are split by route: **held-out** (51 scenarios take at least one of the 4 held-out routes; the main result) and **seen** (99). Fixtures (5), real development cases (20) and all 175 are reported too.
+  - **Comparisons.** Each group has the summary rates for the small pair and the four EXP-37 models. Tuned minus base is paired on the same cases (hallucination, content, critical, decisions right). Tuned and base are each compared with every EXP-37 model on the scenario groups and on all 175.
+  - **Per route.** A table for each key route (counts only: the groups are small).
+  - **Output.** `report.json`, `report.md`, and one figure (`small_reasoner.png`): base and tuned per group, hallucination rate and decisions right, with 95% intervals, in the C9 style and palette.
+  - `compare.paired` and `compare._pooled` take a `keep(case_id)` filter for the groups. Display names were added for the 4B pair.
+  - **`notebooks/42_nlpB_small_reasoner.ipynb`:** a thin Colab wrapper, like notebook 41.
+  - **Tests:** `tests/test_small_reasoner_report.py` (2): the split is DEC-30's 4 routes, 51 and 99; the report on fake cells gives the planted differences per group.
+- pytest: 768 passed.
+- **Notion sync:** Experiments: EXP-47 (running).
+
 ## 2026-11-18 — Claude Code session (Item 4 step 6: serving the small reasoner pair, notebook 55)
 - **`open_models.py`:** two new entries.
   - `gemma-3-4b` (DEC-30's prompted small reasoner, `google/gemma-3-4b-it`, gated).

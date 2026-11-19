@@ -245,14 +245,17 @@ def case_records(run_folder, metrics_name=None):
     return records
 
 
-def paired(folders_a, folders_b, metric="hallucination_rate", metrics_name=None):
+def paired(folders_a, folders_b, metric="hallucination_rate", metrics_name=None, keep=None):
     """a minus b on the cases both hold (metrics.paired_difference: a paired case bootstrap). Each side may pool
     several run folders (for example fixtures, scenarios and real cases of one arm); case IDs must not repeat within a
-    side. Returns the difference with its CI, both rates, and how many cases each side had and shared."""
+    side. `keep(case_id)`, if given, limits both sides to some cases (for example DEC-30's held-out routes). Returns the
+    difference with its CI, both rates, and how many cases each side had and shared."""
     def pool(folders):
         out = {}
         for folder in ([folders] if isinstance(folders, (str, Path)) else folders):
             for record in case_records(folder, metrics_name):
+                if keep is not None and not keep(record["case_id"]):
+                    continue
                 if record["case_id"] in out:
                     raise ValueError(f"Case {record['case_id']} appears twice on one side of a comparison.")
                 out[record["case_id"]] = record
@@ -270,7 +273,8 @@ def paired(folders_a, folders_b, metric="hallucination_rate", metrics_name=None)
 # --- C9: the report for the paid runs ---------------------------------------------------------------------------
 
 DISPLAY = {"claude-sonnet-5-5": "Sonnet 5.5", "qwen/qwen3.5-27b": "Qwen3.5-27B", "qwen3.5-27b": "Qwen3.5-27B",
-           "gemma-3-27b": "Gemma 3 27B", "medgemma-27b-text": "MedGemma 27B"}
+           "gemma-3-27b": "Gemma 3 27B", "medgemma-27b-text": "MedGemma 27B", "gemma-3-4b": "Gemma 3 4B",
+           "gemma-3-4b-tuned": "Gemma 3 4B tuned"}
 # The rulebook comparison pairs each with-rulebook arm with its without-rulebook twin on the same cases. The
 # without-rulebook scenarios are a half (DEC-29), so the pairs hold 5 + 75 + 20 cases.
 RULEBOOK_PAIRS = (("fixtures_rulebook", "fixtures_norulebook"), ("scenarios_rulebook", "scenarios_norulebook"),
@@ -281,8 +285,8 @@ SERIES = {"with": "#2a78d6", "without": "#eb6834"}  # categorical slots 1 and 2 
 INK, INK_2, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
 
 
-def _pooled(folders, metric):
-    records = [r for f in folders for r in case_records(f)]
+def _pooled(folders, metric, keep=None):
+    records = [r for f in folders for r in case_records(f) if keep is None or keep(r["case_id"])]
     s = vm.summarise(records)
     return {"value": s[metric]["value"], "ci95": s[metric]["ci95"], "numerator": s[metric]["numerator"],
             "denominator": s[metric]["denominator"], "cases": s["cases"]}
