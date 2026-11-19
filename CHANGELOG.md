@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (EXP-41 done; Phase 3 closed)
+- **EXP-41 consensus:** Parsa settled the 28 disagreements as third rater on `consensus_parsa.html` (`labels_parsa_2026-11-19.csv`; he sided with labeller A 12 times and B 16 times). `label_page.merge_consensus` wrote them into `runs/EXP-41_labelling/labels/final.csv` (Mac only, with the key). **S035 changed to no error** at Parsa's request, after we checked that passage AHA2026-T3-trace3 is about the TRACE-III and TIMELESS thrombolysis trials; the reason is in `note_consensus`.
+- **Final agreement** (`agreement_final.json`):
+  - human–human κ **0.27** (Lorna + Benny 0.05, Mohamed + Hana 0.33);
+  - verifier–human agreement on all 100: **0.61** with the rescored verifier (points 19 and 20), 0.48 at the first scoring; weighted 0.87;
+  - verifier-clean claims agree **43/46**;
+  - the verifier caught **18 of the 21** human-judged errors, and humans confirmed **18 of its 54** flags (content 14/33, citation 4/21). The verifier's rates are upper bounds; the comparison between models stands.
+  - **Not reported:** population human error rates per model. Weighted by the strata they come out at Sonnet 0.9%, Gemma 21.5%, MedGemma 17.3% and Qwen 24.5%, but with stratified-bootstrap intervals as wide as 0.5–49% (Qwen), because each clean stratum of thousands of claims is represented by about 8.
+- **Plan §7:** the adjudication line is ticked. "Phase 3 closed 19 Nov 2026 (Parsa)" is under the acceptance criteria, all three met.
+  - The optional per-subtype outputs and **Item 1 (BiomedCLIP, minimal)** are recorded as report-only extras that continue in this session after the close. They never touch held-out cases or the RSNA test split, and do not feed the pipeline (DEC-31).
+  - Phase 4 runs in its own session from DEC-31.
+- **Notion sync:** Experiments: EXP-41 (done, final agreement), EXP-42 (human check added to Notes).
+
 ## 2026-11-19 — Claude Code session (Phase 3 wrap-up check)
 - **Plan §7 NLP B, the C9 line:** the rescored numbers (points 19 and 20) replace the first scoring, which is kept in the same line.
 - **Phase 3 status:**
