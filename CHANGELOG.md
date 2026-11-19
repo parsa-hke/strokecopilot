@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Phase 4, Task 2: the held-out contract path, D1, code)
+- **Plans from the checkpoints (Parsa, 19 Nov):** each fold's `checkpoint_final.pth` carries the plans and `dataset.json` it was trained with. These are the authority, and DEC-31's rebuild is a cross-check.
+  - **Checked on the Mac from Drive (no data, no IDs):** all five agree (plans and `dataset.json` hashes identical; trainer `nnUNetTrainer_StrokeCopilot`; epoch 300; mirroring on all three axes).
+  - For every fold, the checkpoint's plans, 3d_fullres configuration and `dataset.json` equal that fold's `debug.json`, and the configuration equals the `plan_3d_fullres.json` the run recorded.
+- **`contract/heldout.py`:** every contract field computed case by case, as the development runs did:
+  - **core:** nnU-Net (the ensemble with `-f 0 1 2 3 4` and `checkpoint_final.pth`; a single fold for the dev check);
+  - **penumbra and occlusion evidence:** `thresholds.threshold_masks` and `volumes.occlusion_evidence`, as EXP-1;
+  - **haemorrhage:** EXP-16's 5 mm slabs, EXP-6 and DEC-28;
+  - **confidence:** `confidence.case_confidence` with EXP-32's mapping (DEC-27).
+
+  It also provides:
+  - ground-truth contracts the EXP-34 way;
+  - the results folder assembled from the checkpoints, with `check_folds` and `plan_differences` for the rebuild;
+  - the case-set guard: development, or exactly the 20 held-out cases with `ALLOW_HELDOUT=1`;
+  - a field-by-field comparison with EXP-33, counts only;
+  - output that never overwrites.
+
+  If the threshold core cannot be computed, DEC-27's distance mapping goes on without it, because it does not use it.
+- **`notebooks/60_heldout_contracts.ipynb` (Colab A100), one code path with two modes:**
+  - **`dev_check` (EXP-61, before unlocking):** six checks:
+    1. the five checkpoints agree, with their `debug.json` and recorded plans;
+    2. DEC-31's rebuild (`nnUNetv2_plan_and_preprocess --no_pp`) matches;
+    3. 2 cases per fold, re-predicted by their validating fold, reproduce the recorded validation masks;
+    4. the ensemble runs on those 10 and is timed;
+    5. the held-out code rebuilds all 129 EXP-33 contracts field by field (all but `confidence.core`, which is in-sample here);
+    6. Vision B reproduces EXP-16's 68 flags.
+  - **`heldout` (EXP-62):** needs `UNLOCK = True` and a passed dev check with the same plans and checkpoint hashes. It writes `vision_outputs_heldout_v1` and `vision_outputs_gt_heldout_v1` on Drive.
+- **Tests:** `tests/test_heldout_contracts.py` (18) on synthetic data. Among them, `vision_a_inputs` equals EXP-1's own `baseline_row` on a synthetic case. pytest: 817 passed.
+- **Blocked, rightly:** a local check that counted held-out cases in the tarball read the held-out list, and the permission check stopped it. Nothing was printed, and it isn't needed.
+- **Not run yet:** the code must be pushed, then Parsa runs notebook 60 in `dev_check` mode. Spend so far: $0 (Colab: the dev check's A100 time, to be measured).
+- **Notion sync:** Experiments: EXP-61 (planned: held-out path dev check), EXP-62 (planned: held-out contracts, after unlocking).
+
 ## 2026-11-19 — Claude Code session (Phase 4, Task 1: Vision B's RSNA test-split check, code)
 - **`vision/haemorrhage/final_check.py`:** DEC-31 §1 item 3's figures for one split, with nothing chosen. It uses EXP-6's top-2 aggregation and Platt calibration with DEC-28's 0.175 (`infer.contract_calibrator`). It reports:
   - the scan AUC;
