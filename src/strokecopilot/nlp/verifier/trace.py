@@ -513,10 +513,15 @@ def _overlaps(quote, span, note):
 
 
 def _backs(source, trace, note):
-    """True if a declared source supports part of this claim."""
+    """True if a declared source supports part of this claim.
+
+    Point 19 (metric doc §9): a confirmed absence claim ("onset time is not recorded") is backed by a declared note
+    quote that is in the note, even when the absence was checked without tracing the note line that states it."""
     if source["type"] == "vision":
         return any(u["type"] == "vision" and u["field"] == source["field"] for u in trace.used)
     if source["type"] == "note":
+        if trace.kind == "absence" and trace.subtype is None and _norm(source["quote"]) in _norm(note):
+            return True
         return any(u["type"] == "note" and _overlaps(source["quote"], u["span"], note) for u in trace.used)
     return source["id"] in trace.supported_passages
 
@@ -550,6 +555,12 @@ def attribute(traces, declared, note, own_sources=True, charge=True, passages=Tr
     (own_sources False), so a passage they do not use is not held against them.
     """
     orphans = [s for s in declared if not any(_backs(s, t, note) for t in traces)] if own_sources and charge else []
+    # Point 20 (metric doc §9): when a claim of the entry is about this patient but was checked without tracing any
+    # input (a rule applied to the patient, a number checked by rule, an absence), the verifier cannot tell which
+    # imaging field or note line it rests on, so the entry's vision and note sources are not charged as unsupported.
+    # Passages are still checked, and a general rule statement citing a patient field is still charged.
+    if any(not t.used and getattr(t, "_about_patient", False) for t in traces):
+        orphans = [s for s in orphans if s["type"] == "passage"]
     if not passages:
         orphans = [s for s in orphans if s["type"] != "passage"]
     # A passage the entry cites but no claim uses is charged only to a claim that rests on a rule: a passage is never
@@ -676,6 +687,7 @@ def trace_all(claims, inputs):
     traces = [trace_claim(claim, inputs) for claim in claims]
     groups = {}
     for claim, trace in zip(claims, traces):
+        trace._about_patient = bool(claim.applies_to_patient)  # for point 20 in attribute()
         groups.setdefault((claim.field, claim.entry), (claim.declared_sources, []))[1].append(trace)
     for (field_name, _), (declared, group) in groups.items():
         # Uncertainties have no sources in the schema, so only their content is scored there (§9).

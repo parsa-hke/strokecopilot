@@ -311,3 +311,43 @@ def test_an_unused_passage_is_not_charged_to_a_plain_fact():
     rec = copy.deepcopy(CLEAN_REC)
     rec["rationale"][4]["sources"].append(passage_source("TEST-DEFUSE3"))  # cited next to a rule it does not back
     assert _run(rec)["rationale[4].0"].subtype == 7
+
+
+# --- points 19 and 20 (EXP-41: the verifier charged correct note and imaging sources) ----------------------------
+
+def _t(kind, used=(), about_patient=True, rule_part=False, passages=()):
+    t = tr.Trace(claim_id="rationale[0].0", field="rationale", kind=kind, traceable=True, subtype=None, subtype_name=None,
+                 content_false=False, reason="", used=list(used), supported_passages=list(passages))
+    t._about_patient, t._rule_part = about_patient, rule_part
+    return t
+
+
+NOTE19 = "Arrived by ambulance. Time of symptom onset: not recorded. NIHSS 7."
+
+
+def test_point_19_a_confirmed_absence_is_backed_by_the_quote_that_states_it():
+    t = _t("absence")
+    tr.attribute([t], [{"type": "note", "quote": "Time of symptom onset: not recorded."}], NOTE19)
+    assert t.subtype is None and t.declared_ok  # S028, S031, S094: charged as misattributed before
+    t = _t("absence")
+    tr.attribute([t], [{"type": "note", "quote": "Onset at 09:00."}], NOTE19)
+    assert t.subtype is None  # a quote not in the note: the untraced claim is not charged (point 20) ...
+    assert not tr._backs({"type": "note", "quote": "Onset at 09:00."}, t, NOTE19)  # ... but it backs nothing
+
+
+def test_point_20_untraced_claims_about_the_patient_do_not_charge_their_imaging_and_note_sources():
+    t = _t("rule", rule_part=True, passages=["AHA-BASILAR"])  # "meets the basilar criteria", S030
+    tr.attribute([t], [{"type": "passage", "id": "AHA-BASILAR"}, {"type": "vision", "field": "occlusion_site"}], NOTE19)
+    assert t.subtype is None
+    # Passages are still checked: an untraced patient claim citing a passage that supports nothing is still charged.
+    t = _t("rule", rule_part=True, passages=["AHA-BASILAR"])
+    tr.attribute([t], [{"type": "passage", "id": "AHA-BASILAR"}, {"type": "passage", "id": "AHA-OTHER"}], NOTE19)
+    assert t.subtype == 7
+    # A general rule statement (not about the patient) citing an imaging field is still charged.
+    t = _t("rule", about_patient=False, rule_part=True, passages=["AHA-BASILAR"])
+    tr.attribute([t], [{"type": "passage", "id": "AHA-BASILAR"}, {"type": "vision", "field": "penumbra_ml"}], NOTE19)
+    assert t.subtype == 7
+    # A traced claim citing the wrong field (core volume for a time, S003) is still charged.
+    t = _t("comparison", used=[{"type": "note", "key": "lkw_to_imaging", "span": "NIHSS 7"}])
+    tr.attribute([t], [{"type": "vision", "field": "core_ml"}], NOTE19)
+    assert t.subtype == 7

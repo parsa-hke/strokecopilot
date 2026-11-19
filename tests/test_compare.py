@@ -221,3 +221,17 @@ def test_c9_report_writes_tables_figures_and_comparisons(tmp_path):
     assert set(report["sonnet_repeats"]) == {"real_predicted", "real_predicted_repeat2", "real_predicted_repeat3"}
     rows = list(csv.DictReader((tmp_path / "out" / "table.csv").open()))
     assert len(rows) == 9 + 7 and "Gemma 3 27B" in (tmp_path / "out" / "report.md").read_text()
+
+
+def test_case_records_read_the_traces_that_belong_to_the_scoring(tmp_path):
+    cell = _cell(tmp_path, "m", "scenarios_rulebook", ["scenario-001"], bad=3)
+    assert sum(t["subtype"] is not None for t in compare.case_records(cell)[0]["traces"]) == 3
+    (cell / "traces_rescore").mkdir()
+    traces = [{"claim_id": f"r[{i}]", "subtype": 4 if i < 1 else None, "critical": i < 1} for i in range(10)]
+    (cell / "traces_rescore" / "scenario-001.json").write_text(json.dumps({"claims": [], "traces": traces}))
+    (cell / "metrics_rescore.json").write_text((cell / "metrics.json").read_text())
+    assert sum(t["subtype"] is not None for t in compare.case_records(cell)[0]["traces"]) == 1  # the rescore's own
+    assert sum(t["subtype"] is not None for t in compare.case_records(cell, "metrics.json")[0]["traces"]) == 3
+    from strokecopilot.pipeline import end_to_end as e2e
+    assert [e2e.traces_dir_for(n) for n in ("metrics.json", "metrics_rescore.json", "metrics_p20.json")] == \
+        ["traces", "traces_rescore", "traces_p20"]

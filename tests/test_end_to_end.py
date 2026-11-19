@@ -124,3 +124,20 @@ def test_real_cases_load_with_rule_expectations_and_refuse_heldout(tmp_path, mon
         e2e.load_cases("real", ids=["sub-stroke9990"], vision_dir=vision_dir, notes_dir=notes_dir, folds=folds)
     with pytest.raises(ValueError, match="need ids"):
         e2e.load_cases("real", vision_dir=vision_dir, notes_dir=notes_dir)
+
+
+def test_rescore_writes_its_own_traces_with_criticality(tmp_path):
+    """A rescore writes traces_rescore/ after scoring, so each trace carries its criticality as the original traces do."""
+    import shutil
+    from pathlib import Path as P
+
+    src = sorted(P("runs/EXP-37_paid_runs/claude-sonnet-5-5/fixtures_rulebook").glob("traces/*.json"))
+    if not src:
+        pytest.skip("EXP-37 run folder not on this machine")
+    cell = tmp_path / "cell"
+    shutil.copytree(src[0].parent.parent, cell)
+    e2e.rescore(cell, log=lambda *_: None)
+    for f in (cell / "traces").glob("*.json"):
+        old = [t["critical"] for t in json.loads(f.read_text())["traces"]]
+        new = [t["critical"] for t in json.loads((cell / "traces_rescore" / f.name).read_text())["traces"]]
+        assert old == new

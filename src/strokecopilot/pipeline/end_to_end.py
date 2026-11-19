@@ -238,17 +238,32 @@ def run_fixtures(reasoner, extractor, judge, retriever, out_dir, stems=None, tau
                      extra_config, source="fixtures")
 
 
+def traces_dir_for(metrics_name):
+    """The traces folder that goes with a metrics file: traces/ for metrics.json, traces_rescore/ for
+    metrics_rescore.json, traces_<x>/ for metrics_<x>.json."""
+    stem = Path(metrics_name).stem
+    return "traces" if stem == "metrics" else "traces_" + stem.removeprefix("metrics_")
+
+
 def rescore(out_dir, retriever=None, tau=tr.TAU, metrics_name="metrics_rescore.json", log=print, source=None,
-            judge_llm=None, judge_prompt=tr.JUDGE_PROMPT, flagged_name="flagged_rescore.json"):
+            judge_llm=None, judge_prompt=None, flagged_name="flagged_rescore.json", cases=None):
     """Re-score a finished run with the current verifier and rulebook code: the saved reasoner outputs and model
     claims, the regex and citation claims rebuilt. Judge verdicts come from the cache only (no API calls), unless
     `judge_llm` is given: then the judge answers only the verdicts the cache lacks (new candidates, or a new
     `judge_prompt`, whose version is part of the cache key). `retriever` answers retrievals the cache does not hold.
-    Writes metrics_rescore.json and flagged_rescore.json (or the names given)."""
+    Writes metrics_rescore.json and flagged_rescore.json (or the names given), and the new traces in traces_rescore/
+    (named after the metrics file), so compare.case_records reads each case's claims with the scoring they belong to."""
     out = Path(out_dir)
+    trace_dir = out / traces_dir_for(metrics_name)
+    trace_dir.mkdir(exist_ok=True)
     config = json.loads((out / "config.json").read_text()) if (out / "config.json").exists() else {}
     source = source or config.get("source") or config.get("mode") or "fixtures"
-    cases = {c["id"]: c for c in load_cases(source)}
+    # The run's own arm and judge prompt (DEC-29: the without-rulebook arm scores its placeholder differently).
+    rulebook = config.get("rulebook", True)
+    judge_prompt = judge_prompt or config.get("judge_prompt") or tr.JUDGE_PROMPT
+    # Real cases need their contracts and notes: pass them as `cases` ({id: case} or a list).
+    cases = {c["id"]: c for c in (cases.values() if isinstance(cases, dict) else cases)} if cases is not None \
+        else {c["id"]: c for c in load_cases(source)}
     corpus = ingest.load()
     judge = vr.CachedJudge(tr.Judge(judge_llm, judge_prompt) if judge_llm else None, vr.JsonCache(out / "judge_cache.json"),
                            offline=judge_llm is None, version=judge_prompt)
@@ -266,8 +281,10 @@ def rescore(out_dir, retriever=None, tau=tr.TAU, metrics_name="metrics_rescore.j
             continue
         rec = json.loads(output.read_text())
         claims = vr.refresh_claims(rec, json.loads(saved.read_text())["claims"])
-        traces = [t.to_dict() for t in tr.trace_all(claims, _inputs(case, judge, cached_retriever, tau, corpus, rec))]
-        record, check, found, missing = _score(case, rec, claims, traces)
+        traces = [t.to_dict() for t in tr.trace_all(claims, _inputs(case, judge, cached_retriever, tau, corpus, rec, rulebook))]
+        record, check, found, missing = _score(case, rec, claims, traces)  # marks criticality on the traces
+        (trace_dir / f"{call.stem}.json").write_text(json.dumps(
+            {"claims": [c.to_dict() for c in claims], "traces": traces}, indent=1, ensure_ascii=False))
         mine = flagged_claims(call.stem, claims, traces)
         flagged += mine
         records.append(record)
@@ -275,7 +292,8 @@ def rescore(out_dir, retriever=None, tau=tr.TAU, metrics_name="metrics_rescore.j
                      "omissions": found, "uncertainty_omissions": missing})
         log(f"{call.stem}: {len(mine)} of {len(traces)} claims flagged" + (f"; omissions: {'; '.join(found)}" if found else ""))
     judge_cost = cost_usd(getattr(judge_llm, "model", ""), _usage(judge_llm)) if judge_llm else 0.0
-    metrics = {"rescored": True, "source": source, "tau": tau, "judge_prompt": judge_prompt, "judge_calls": judge.calls,
+    metrics = {"rescored": True, "source": source, "rulebook": rulebook, "tau": tau, "judge_prompt": judge_prompt,
+               "judge_calls": judge.calls,
                "summary": vm.summarise(records) if records else None, "per_case": rows,
                "cost_usd_estimate": {"reasoner": 0.0, "extractor": 0.0, "judge": judge_cost}}
     (out / metrics_name).write_text(json.dumps(metrics, indent=1, default=str))

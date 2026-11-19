@@ -224,11 +224,15 @@ def case_records(run_folder, metrics_name=None):
     criticality. A case without traces whose reasoner failed is a format failure; a case the verifier did not finish is
     left out, as the run's own scoring left it out."""
     folder = Path(run_folder)
-    rows = json.loads(_metrics_file(folder, metrics_name).read_text()).get("per_case") or []
+    metrics_file = _metrics_file(folder, metrics_name)
+    rows = json.loads(metrics_file.read_text()).get("per_case") or []
+    traces_dir = folder / _traces_dir_for(metrics_file.name)  # a rescore's own traces (end_to_end.rescore)
+    if not traces_dir.exists():
+        traces_dir = folder / "traces"
     records = []
     for row in rows:
         error = row.get("error") or ""
-        trace_file = folder / "traces" / f"{row['case']}.json"
+        trace_file = traces_dir / f"{row['case']}.json"
         if error.startswith("verifier failed"):
             continue
         if not trace_file.exists():
@@ -243,6 +247,11 @@ def case_records(run_folder, metrics_name=None):
                         "uncertainty_omissions": len(row.get("uncertainty_omissions") or []),
                         "decisions_correct": sum(judged), "decisions_determined": len(judged)})
     return records
+
+
+def _traces_dir_for(metrics_name):
+    stem = Path(metrics_name).stem
+    return "traces" if stem == "metrics" else "traces_" + stem.removeprefix("metrics_")
 
 
 def paired(folders_a, folders_b, metric="hallucination_rate", metrics_name=None, keep=None):
@@ -361,6 +370,8 @@ def _pct(m, digits=1):
 
 
 def _diff(d, digits=1):
+    if d is None or d.get("difference") is None:
+        return "n/a"
     ci = d.get("ci95")
     text = f"{100 * d['difference']:+.{digits}f} pts"
     return f"{text} [{100 * ci[0]:+.{digits}f}, {100 * ci[1]:+.{digits}f}]" if ci else text

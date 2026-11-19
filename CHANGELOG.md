@@ -1,5 +1,51 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (EXP-41: the four labellers' sheets, preliminary agreement)
+- **Labels in from all four:** Lorna (17 Nov), Hana (17 Nov), Mohamed (18 Nov), Benny (18 Nov). Each pair labelled its 50 claims completely.
+  - Merged per pair (`label_page.merge_sheets`) and combined, then joined with the key (`adjudicate.read_labels`).
+  - The files are in `runs/EXP-41_labelling/labels/` on the Mac only, next to the key, which never goes to Drive.
+- **Agreement between labellers, preliminary:**
+  - Cohen's kappa pooled **0.27** over 100 claims: Lorna + Benny **0.05**, Mohamed + Hana **0.33**.
+  - 72 claims agreed; **28 to settle** by each pair's consensus, as the guide sets out (12 and 16). `pair*_to_settle.csv` lists them; the sheets are blind, with aliases only.
+  - "Error" calls out of 50: Lorna 11, Benny 3, Mohamed 23, Hana 11. Most disagreements are true-but-uncited claims, which the guide counts as errors and the more lenient labeller of each pair passed.
+- **Verifier against the 72 agreed claims:**
+  - Verifier-clean claims: 23/23 agree.
+  - Verifier content errors: 8/19 confirmed.
+  - Verifier citation errors (all "misattributed source"): **2/30 confirmed**.
+  - Weighted by the sampling strata: 0.94, dominated by the clean stratum.
+- **Finding to check: the verifier's misattributed-source flags look unreliable.** Several are plain mistakes. For example, the quote "Time of symptom onset: not recorded." was judged to support nothing for the claim "Time of symptom onset is not recorded", and S014, S025, S028 and S031 are the same. Citation flags are 20–31% of each model's C9 hallucination rate (EXP-42), so **C9's content rate (sub-types 1–5) is the safer headline** until the cause is found.
+- **Cause, investigated the same day.** `trace.attribute` charges a declared source that backs no claim of its entry, and for a vision field or note quote "backs" means matching an input the claim's trace recorded as used. Some claims are checked without recording any input, so their correct sources cannot match:
+  - **Pattern A, absence claims.** For example "Time of symptom onset is not recorded" (`used: []`): the note quote that says so is charged.
+  - **Pattern B, rule or number claims checked without traced inputs.** For example "meets the basilar criteria" citing `occlusion_site`.
+  - **Pattern C, inputs traced but a source matches none of them.** These are mostly real wrong citations, such as `core_ml` or `haemorrhage.present` cited for a time. A few are partial spans, for example a "Last seen well at 07:37" quote when only the time-to-imaging line was traced.
+  - **In the sample's 30 flags:** A 7, B 7, C 16. A and B are the verifier's mistakes. In C the labellers mostly passed claims the guide counts as errors.
+  - **Across EXP-37's headline cells**, A + B make up this share of all flags: Sonnet 26 of 260 (10%), Qwen 64 of 281 (23%), Gemma 3 27B 48 of 681 (7%), MedGemma 83 of 1,162 (7%).
+  - **Without A + B, the rates would be about:** Sonnet 4.0% (from 4.4), Qwen 4.8% (from 6.2), Gemma 17.3% (from 18.6), MedGemma 17.0% (from 18.3). These are estimates; no rescore has been run.
+  - **Proposed fix:** two new metric points for Parsa. Not applied at this point, because it changes the metric.
+- **Points 19 and 20 approved by Parsa (19 Nov) and applied** (`docs/HALLUCINATION_METRIC.md` §9):
+  - Point 19 (`trace._backs`): a confirmed absence claim is backed by the declared note quote that states the absence.
+  - Point 20 (`trace.attribute`): imaging and note sources are not charged when a claim of the entry is about the patient but was checked without tracing an input.
+  - Still charged: passages, general rule statements, and pattern C.
+  - Tests: two new ones in `tests/test_trace.py`. One existing no-rulebook test, a general rule citing an imaging field, keeps its charge, which is why point 20 is limited to claims about the patient.
+- **`end_to_end.rescore` fixed and extended:**
+  - It now takes the run's `rulebook` arm and `judge_prompt` from its config. Before, a without-rulebook cell was rescored as if it had the rulebook (wrong-rule flags 35 → 82 on the first try; caught, and those files were regenerated).
+  - It accepts preloaded `cases` for real-case cells.
+  - It writes `traces_rescore/` after scoring, so criticality is kept; a first version wrote them before scoring and lost it (caught and fixed). A new test checks criticality matches the original traces.
+  - `compare.case_records` reads the traces folder that matches its metrics file.
+- **Rescore (no API calls: 0 judge calls in all 36 cells):** EXP-37's 30 cells and EXP-47's 6. Only misattributed-source flags changed; a few became uncited-rule flags where the claim still lacks its passage. Per-cell record in `runs/rescore_points_19_20.json`.
+- **C9 rebuilt** in `runs/EXP-42_c9_table/rescore_points_19_20/`. Content and critical rates are unchanged.
+  - Hallucination rate: Sonnet 4.4 → **4.0%**, Qwen 6.2 → **5.0%**, Gemma 3 27B 18.6 → **17.1%**, MedGemma 18.3 → **17.7%**.
+  - **Qwen minus Sonnet: +1.0 pts [−0.1, +2.1]**, which now includes 0 (it was +1.7 and excluded 0). Gemma +13.2 and MedGemma +13.7 are unchanged in substance.
+- **DEC-30 report rebuilt** in `runs/EXP-48_small_reasoner_report/rescore_points_19_20/`.
+  - Tuned minus base: −27.3 pts over all 175 (was −27.2); **−23.5 on held-out routes** (was −24.6).
+  - The tuned model is level with the 27B Gemmas on held-out routes (+2.7 and +1.6, intervals spanning 0).
+  - The critical-rate rise is unchanged (+1.9 [+0.4, +3.4]). The treatment-bias finding stands.
+- **EXP-41 against the rescored verifier:** 13 of the 30 sampled citation flags are now clean. On the 72 agreed claims, agreement rises **0.46 → 0.61** (weighted 0.94 → 0.95). Verifier citation errors are confirmed 2/19; most of the rest are real wrong citations (pattern C) that the labellers passed. Content errors are confirmed 8/19, and clean 34/34.
+- `compare._diff` prints "n/a" for an undefined difference.
+- Copied to Drive: the rescored cells, C9 and the DEC-30 report.
+- pytest: 784 passed.
+- **Notion sync:** Experiments: EXP-41 (preliminary agreement in Notes, still Running until consensus).
+
 ## 2026-11-19 — Claude Code session (Item 2: EXP-49's selection code and Kaggle notebook)
 - **Inputs found:**
   - EXP-6's `best.pt` (94 MB) and `calibration.json` are on Drive (`runs/EXP-6_visionB_resnet50/`).
