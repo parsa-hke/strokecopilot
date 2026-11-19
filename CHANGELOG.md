@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (Phase 5 additions, task A: the clinician pack, approved and fixed)
+- **Scope of this side session:** Phase 5 additions A to J (clinician pack, SHAP, t-tests, BiomedCLIP and probes, subgroups, a non-Claude judge, retrieval, ONNX, reproducibility), report only under DEC-31's freeze. Other Phase 5 sessions own the reports, paper, deck and Space page.
+- **`docs/CLINICIAN_PACK.md`** (approved by Parsa, 20 Nov 2026): two instruments for two clinicians, answered independently; delivery; the case-selection rule; the fixed questions; consent; the analysis plan; the rule-error policy; and the sha256 of each built file. It says what may be claimed (expert opinion, never clinical validation). It supersedes `docs/CLINICIAN_REVIEW.md` as the thing that gets sent; that file gets a pointer line.
+- **`pipeline/clinician_pack.py`** builds the pack from the Space's bank and the corpus. Nothing is run or paid for.
+  - **Instrument 1:** 72 items, each agree / disagree / unsure with a comment: the 47 passages, the 5 fixtures' rule answers (10), 12 rule conventions, and 3 open questions.
+  - **Instrument 2:** 9 cases, seeded draw (seed 20261120) within strata: right answers, flagged ones, wrong-and-caught, wrong-and-missed. Cases: fx04, fx05, scenario-025/032/056/057, D-03, D-05, D-12. D-05 is the only development case with a vision error the verifier missed (a false bleed flag). One case is Gemma 3 27B's. Per-case questions Q1–Q8 and R1, plus general questions G1–G6.
+  - The output goes to `runs/EXP-67_clinician_review/pack/` (gitignored: real-case notes by alias). The build refuses to finish on a development case ID, an RSNA ID or a key pattern; it was clean. The bank loader refuses held-out cases.
+- **Found:** `docs/CLINICIAN_REVIEW.md` gave TRACE-III as "mismatch > 15 mL", but `rules._trace3` and the rulebook use total Tmax > 6 s volume > 15 mL. The pack states what the code does (convention C09) and asks the clinicians. Nothing in the code changed.
+- **Parsa's answers (20 Nov 2026):**
+  - §7, the rule-error policy, is approved: nothing is re-run; the affected scenario and development decisions are counted in code; held-out decisions only with his OK.
+  - Ethics clearance for the expert interviews is confirmed.
+  - The consent has no withdrawal date or address, because the clinicians are known to the team.
+  - Roles are self-reported: instrument 1 now opens with the consent and P1–P4 (name, role and specialty, years in practice, acute stroke decisions). That makes 76 items, 69 of them scored.
+  - The pack was rebuilt; the case selection is unchanged, and the checksums in `docs/CLINICIAN_PACK.md` §9 are updated.
+- **Delivery: Google Forms, generated** (Parsa's choice, after a form inside the public Space was advised against: it would change DEC-32 and publish, the Space has no lasting storage, and anyone could submit).
+  - The pack now also writes `forms_spec.json`, `build_forms.gs` (an Apps Script that builds both forms with private response Sheets in Parsa's Drive and sends nothing), and `interview_cases.md` / `.docx` (the nine case pages for the interview form, through pandoc, reproducible; no questions or expected answers).
+  - Checked: `node --check` passes, and a run against a mock FormApp builds both forms (171 and 122 items) with only the consent questions required.
+  - Two tests added: every response-sheet item appears once in the forms under its ID, only consent is required, and the expected answers come after every case; the case document holds no questions or expected answers.
+- **Pack approved and fixed by Parsa (20 Nov 2026):** the cases, questions and analysis plan. A rebuild reproduces every recorded checksum (`docs/CLINICIAN_PACK.md` §9); any change from here needs a dated note there. The pack is copied to Drive `runs/EXP-67_clinician_review/pack/` (10 files, checksums match).
+- **Next, Parsa:** run `build_forms.gs` at script.google.com, check both forms (published, no e-mail collection, link works in a private window), and send each clinician the two links and `interview_cases.docx`.
+- **Tests:** `tests/test_clinician_pack.py` (6). pytest: 879 passed. **Spend:** $0.
+- **DEC-34 (Parsa, 20 Nov 2026)** added to plan §2: Phase 5 additions are report only under DEC-31's freeze, and the clinician review is EXP-67 under `docs/CLINICIAN_PACK.md`. DEC-33 stays reserved for Item 1.
+- **Notion sync:** Decisions: DEC-34 (new, Decided, 20 Nov 2026, Parsa). Experiments: EXP-67, clinician review (Planned: pack fixed, waiting for answers). Tasks: Phase 5 additions, task A, clinician pack (Done: fixed and ready to send; sending is Parsa's).
+
 ## 2026-11-20 — Claude Code session (Phase 4 done: the Space is public)
 - **Public** on Parsa's word: https://huggingface.co/spaces/parsa-hke/stroke-copilot (visibility switched from private; same build, nothing re-uploaded). Checked without a token: health 200 (195 cases, key present, live on, cap $5), page with the banner and CSP, held-out cases served; in the browser, the story images, nine results cards and the held-out tab load with no console errors.
 - **Plan §7 Phase 4:** the Space line and the acceptance line are ticked. Phase 4 is done.

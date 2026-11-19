@@ -1,5 +1,7 @@
 # Clinician review request
 
+*Superseded on 20 Nov 2026 by `docs/CLINICIAN_PACK.md` (Phase 5, task A), which is what gets sent. Kept as the record of the Phase 3 draft. Note: its "our own choices" line gives TRACE-III as "mismatch > 15 mL"; the code and the rulebook use total Tmax > 6 s volume > 15 mL.*
+
 **Stroke Decision Copilot**: an MSc Applied AI group project at UOWD (MAAI 901/902). It is a research prototype and is not for clinical use.
 
 The system reads CT perfusion and plain CT, combines the results with a triage note and published guidelines, and suggests whether thrombolysis and thrombectomy are indicated. Every claim in its explanation is then checked against its inputs. The rules and test cases below are what we score it against, so an error here would make our results wrong.
