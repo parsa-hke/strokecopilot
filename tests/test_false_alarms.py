@@ -61,6 +61,11 @@ def test_selection_finds_the_gain_and_respects_subtypes():
     assert best["eligible"] and best["specificity"] == max(r["specificity"] for r in rows.values() if r["eligible"])
     assert report["specificity_gain"]["gain"] > 0 and report["specificity_gain"]["ci95"][0] > 0
     assert report["meets_adoption_rule"] is True
+    fs = best["full_split"]  # what EXP-50 needs to apply the proposal to ISLES'24
+    assert fs["target"] == fa.TARGET and fs["same_split_sensitivity"] >= fa.TARGET and fs["platt"]["temperature"] > 0
+    from strokecopilot.vision.haemorrhage.aggregate import Calibrator
+    c = Calibrator(temperature=fs["platt"]["temperature"], bias=fs["platt"]["bias"])
+    assert float(c.apply(np.array([fs["threshold_raw"]]))[0]) == pytest.approx(fs["threshold_calibrated"], abs=1e-5)
     text = repr(report)
     assert "s1_0" not in text and "p1" not in text  # no scan or patient ID in the report
 

@@ -78,6 +78,22 @@ def evaluate(scans, target=TARGET, seeds=op.REPEAT_SEEDS, main_seed=op.SEED, boo
     return summary, main_called
 
 
+def full_split(scans, target=TARGET):
+    """What applying a candidate elsewhere (ISLES'24, EXP-50) needs, numbers only: the raw-score threshold for `target`
+    sensitivity on the whole validation split, and a Platt calibration fitted on the candidate's own scan scores with
+    that threshold on its scale. Platt is monotonic, so both thresholds make the same calls. For "none" this is how
+    DEC-28's threshold was set (EXP-17: the full-split 96% threshold on EXP-6's calibration)."""
+    from strokecopilot.vision.haemorrhage import aggregate as agg
+
+    scores, labels = scans["score"].to_numpy(), scans["label"].to_numpy()
+    point = agg.threshold_for_sensitivity(scores, labels, target)
+    temperature, bias = agg.fit_logistic(scores, labels, bias=True)
+    calibrated = float(agg.Calibrator(temperature=temperature, bias=bias).apply(np.array([point["threshold"]]))[0])
+    return {"target": target, "threshold_raw": op._r(point["threshold"], 6), "platt": {"temperature": op._r(temperature, 6),
+            "bias": op._r(bias, 6)}, "threshold_calibrated": op._r(calibrated, 6),
+            "same_split_sensitivity": op._r(point["sensitivity"]), "same_split_specificity": op._r(point["specificity"])}
+
+
 def eligible(summary, none, sens_margin=SENS_MARGIN, subtype_margin=SUBTYPE_MARGIN):
     """(ok, reasons): the pre-registered non-inferiority on sensitivity, overall and per subtype."""
     reasons = []
@@ -120,7 +136,8 @@ def select(slices, target=TARGET, seeds=op.REPEAT_SEEDS, ratios=sr.GATE_RATIOS, 
             scans = scans.set_index("series_id").loc[scans_none["series_id"]].reset_index()
         summary, called = evaluate(scans, target, seeds, bootstrap=bootstrap)
         name = label(rule, ratio)
-        rows[name], calls[name] = {"rule": rule, "ratio": ratio, **summary}, called
+        rows[name], calls[name] = {"rule": rule, "ratio": ratio, **summary,
+                                   "full_split": full_split(scans, target)}, called
         log(f"{name:12s} sensitivity {summary['sensitivity']:.4f}, specificity {summary['specificity']:.4f}")
     none = rows["none"]
     for name, r in rows.items():

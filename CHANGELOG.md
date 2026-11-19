@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Item 2: the threshold export and EXP-50's ISLES'24 read-out)
+- **Gap found in EXP-49 (running from 218faf8):** `select()` did not export the thresholds a candidate needs to be applied to ISLES'24, and those can only be computed on Kaggle.
+  - Fixed: `false_alarms.full_split` now gives each candidate's full-split raw threshold for 96% sensitivity, its own Platt calibration, and the threshold on that scale (numbers only). This is how DEC-28's threshold was set for "none".
+  - The running EXP-49 lacks it. If its proposal is "none", nothing is lost. Otherwise one rerun of notebook 24 (about 20 free Kaggle minutes) exports it.
+- **`vision/haemorrhage/isles_false_alarms.py`** (EXP-50, on the Mac):
+  - Each development scan goes through EXP-16's preparation (`isles_check.prepare`: 5 mm slabs, windows, JPEG), then EXP-6's model, then the per-slab brain fraction and height.
+  - Flags under "none" use DEC-28 (EXP-6's calibration and `CONTRACT_THRESHOLD`, as the contracts were built). Flags under every other candidate use the threshold EXP-49 exported.
+  - The proposal against "none" is tested with an exact McNemar test.
+  - Where the top slab sits: height, brain fraction relative to its scan, whether the top 2 are neighbours, and the share of top slabs at the skull base.
+  - Grad-CAM on the top 2 slabs of each flagged scan: medians of heat in brain, bone, other tissue and outside, plus a figure of 8 drawn by seed.
+  - `contract_check` expects the 68 flags of EXP-16 and EXP-33 under "none".
+  - Run with `python -m strokecopilot.vision.haemorrhage.isles_false_alarms --out <Drive folder> [--exp49 metrics.json]`. It checks the split's sha256 and that there are 129 development cases, uses the repo's `data/local` copy (or fetches the Drive tarball by checksum), and refuses an `--out` outside Drive, because `per_case.csv` holds case IDs. It checks `metrics.json` for IDs before saving. It runs on MPS.
+- **Smoke test on 3 real development scans** (nothing saved, counts only): it runs end to end (28–30 slabs per scan, Grad-CAM on 6 slabs) in 38 s including the model load, so the full 129 should take about 15–25 min (estimate). DEC-28's 0.175 is 0.627 on the raw score.
+- **Tests:** `tests/test_isles_false_alarms.py` (5), on synthetic NIfTI heads through the real slab preparation.
+  - A scan with a hot skull-base slab is flagged under "none" and cleared by the gate; a scan with two hot mid-brain slabs is flagged under both.
+  - Also tested: the threshold inversion and the EXP-49 parsing, McNemar, the summary with no IDs, the figure, and a failed case kept with its error. Test for `full_split` added to `test_false_alarms.py`.
+- pytest: 789 passed.
+- **Notion sync:** Experiments: EXP-50 (planned).
+
 ## 2026-11-19 — Claude Code session (EXP-41: the four labellers' sheets, preliminary agreement)
 - **Labels in from all four:** Lorna (17 Nov), Hana (17 Nov), Mohamed (18 Nov), Benny (18 Nov). Each pair labelled its 50 claims completely.
   - Merged per pair (`label_page.merge_sheets`) and combined, then joined with the key (`adjudicate.read_labels`).
