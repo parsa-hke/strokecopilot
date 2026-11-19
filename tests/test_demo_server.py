@@ -79,6 +79,7 @@ def test_live_run_streams_steps_then_caches(bank_dir):
     events = result_of(client, post(client))
     steps = [e["step"] for e in events if e["type"] == "progress" and e["status"] == "done"]
     assert steps[:2] == ["note", "rules"] and "reasoner" in steps and "judge" in steps
+    assert steps.count("note") == 1 and steps.count("rules") == 1  # reported once, by the server
     assert events[-1]["source"] == "live" and events[-1]["view"]["banner"] == live.BANNER
     again = result_of(client, post(client))
     assert again[-1]["source"] == "cache"

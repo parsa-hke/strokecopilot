@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Phase 4, Task 4: the Space image checked locally)
+- **Docker image** (`docker build` of `demo/space/build/space`, 2.52 GB, python 3.12-slim, CPU PyTorch).
+  - The first build crashed at start-up: `nibabel` and `pandas` were missing (`builder` → `confidence` → `isles24_survey`). Both are now in the `space` extra.
+  - The rebuilt image:
+    - starts in about 4 s with live off and about 8 s with live on (the bge retrieval index loads);
+    - `/healthz` lists 175 bank cases and 154 fallback cases;
+    - serves the page (200) with the CSP and the not-for-clinical-use header;
+    - **contains no `splits/` folder and no `folds.json` anywhere** (searched the whole filesystem).
+- **Load test against the container** (live off): 50 of 50 visitors got a result, 0 errors, at most 0.64 s.
+- **Live failure path with an invalid key** (no spend: the API refuses it): the run stopped at the reasoner step and fell back to the closest precomputed case with its reason. Spend counted $0.00, the failure time was recorded in `/healthz`, and the key does not appear in the logs.
+- **Fixed:** "note" and "rules" progress events were sent twice (by the server and by the live run); the server now sends them once. Test updated. pytest: 861 passed.
+- Not run against a real key in the container. EXP-64 ran the same live code from the Mac; the Space itself gets a short live check after the push, on Parsa's word.
+
+## 2026-11-19 — Claude Code session (Phase 4, Task 2 done: EXP-61, the held-out contract path checked on development cases)
+- **EXP-61** (Colab A100-SXM4-40GB, `5b5594b`; torch 2.14.1, nnU-Net 2.8.1; `runs/EXP-61_heldout_path_dev_check/` on Drive, counts only). **7 of 7 checks passed:**
+  1. the five checkpoints agree with each other, their `debug.json` and their recorded `plan_3d_fullres.json`;
+  2. fold 0's recorded validation masks (EXP-22) came from this fold 0 checkpoint (sha256 match);
+  3. **DEC-31's rebuild matches:** `nnUNetv2_plan_and_preprocess --no_pp` on the 129 development cases gives the same 3d_fullres configuration, intensity properties and transposes (no difference);
+  4. **single-fold reproduction:** 10 development cases (2 per fold, seed 20261119), re-predicted by their validating fold, reproduce the recorded masks: 8 identical, at most 3 voxels different, Dice ≥ 0.9998, volume within 0.01 mL. The differences are GPU arithmetic;
+  5. **the five-fold ensemble** runs at 3.0 s per case. That was on development cases, where 4 of 5 folds trained on each case, so it is a path test only;
+  6. **the held-out code rebuilds all 129 EXP-33 contracts** with 0 differences in `haemorrhage.present`, `core_ml`, `penumbra_ml`, mismatch, occlusion site, ASPECTS and warnings. `confidence.core` differs by design: the all-129 mapping is in-sample on development cases;
+  7. **Vision B reproduces EXP-16:** 68 flags; largest confidence difference 0.0037.
+- **Times:** fetch 62 s, assembling the results folder 86 s, rebuild 90 s, predictions 153 s, 129 contracts 245 s.
+- **What this means for unlock day:** notebook 60 in `heldout` mode runs the same path, with the ensemble, on the 20 held-out cases. It refuses to run unless this dev check passed with the same plans and checkpoint hashes.
+- **Plan §7 Phase 4:** ticked lines for the held-out contract path (EXP-61) and the D3 code (EXP-63).
+- **Before unlocking (DEC-31 §1):** EXP-41 consensus done; freeze list in force; RSNA test check done (EXP-60); D1 code done (EXP-61); D3 code done (EXP-63). Still open: the Space (Task 4: the page is built, the image is being checked locally).
+- **Notion sync:** Experiments: EXP-61 (done, 7/7). Tasks: Phase 4 held-out contract path (done), D3 code (done).
+
 ## 2026-11-19 — Claude Code session (EXP-61's first try stopped; runs now named exactly)
 - **EXP-61, first try** (Colab A100): stopped in section 4 with "too many values to unpack". The pattern `EXP-*_nnunet_fold0` matched two folders on Drive: `EXP-14_nnunet_fold0` (the 300-epoch model) and the older `EXP-3_nnunet_fold0` (150 epochs, no final checkpoint).
   - The same loose pattern would have picked fold 0's reference masks from the wrong place.

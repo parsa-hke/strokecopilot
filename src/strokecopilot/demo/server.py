@@ -145,8 +145,10 @@ class State:
     def _work(self, run, built):
         cost = 0.0
         try:
-            emit = lambda step, status, detail: run.emit({"type": "progress", "step": step, "status": status,  # noqa: E731
-                                                          "detail": detail})
+            def emit(step, status, detail):
+                if step in ("note", "rules"):  # already reported by start(), before any live call
+                    return
+                run.emit({"type": "progress", "step": step, "status": status, "detail": detail})
             result = self.runner(built, emit)
             cost = result["cost"]["total"]
             self.cache.put(built.key, result["view"])
