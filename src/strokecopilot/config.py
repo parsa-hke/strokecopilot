@@ -30,6 +30,21 @@ DRIVE_SLIM = DRIVE_ROOT / "slim"
 DRIVE_RUNS = DRIVE_ROOT / "runs"
 DRIVE_ARTIFACTS = DRIVE_ROOT / "artifacts"
 
+
+
+def local_drive_root():
+    """The StrokeCopilot folder of Google Drive for desktop on this computer: STROKECOPILOT_DRIVE if set, else the one
+    GoogleDrive-<account> folder that holds it (as compute/pod.py finds it), so no account name lives in the code.
+    None when there is no such folder or more than one."""
+    import os
+
+    env = os.environ.get("STROKECOPILOT_DRIVE")
+    if env:
+        return Path(env).expanduser()
+    hits = sorted(Path.home().glob("Library/CloudStorage/GoogleDrive-*/My Drive/StrokeCopilot"))
+    return hits[0] if len(hits) == 1 else None
+
+
 # Colab local disk, where slim tarballs are extracted (plan §4.3)
 LOCAL_ROOT = Path("/content")
 

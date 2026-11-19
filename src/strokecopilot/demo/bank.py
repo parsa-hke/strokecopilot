@@ -155,6 +155,21 @@ def write(entries, out_dir):
     return out
 
 
+def passages():
+    """The rulebook passages the page shows when a claim cites one: our own words (DEC-18), with their pointers."""
+    from strokecopilot.nlp.corpus import ingest
+
+    return {pid: {k: p.get(k) for k in ("source", "section", "pointer", "treatment", "text")} for pid, p in ingest.load().items()}
+
+
+def write_extras(out_dir, chart_data):
+    """charts.json (demo.charts) and passages.json beside the bank."""
+    out = Path(out_dir)
+    (out / "charts.json").write_text(json.dumps(chart_data, separators=(",", ":"), default=str))
+    (out / "passages.json").write_text(json.dumps(passages(), separators=(",", ":")))
+    return out
+
+
 def scan(folder, case_ids=()):
     """Problems found in a built folder: case IDs, RSNA IDs or key patterns in any file. Empty means clean."""
     problems = []
@@ -182,11 +197,17 @@ def main(argv=None):
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True)
-    parser.add_argument("--drive", default="~/Library/CloudStorage/GoogleDrive-parsahosseini.it@gmail.com/My Drive/StrokeCopilot")
+    parser.add_argument("--drive", default=None, help="the StrokeCopilot folder on Drive (default: config.local_drive_root)")
     parser.add_argument("--exp37", default="runs/EXP-37_paid_runs")
     parser.add_argument("--exp47", default="runs/EXP-47_small_reasoner")
     args = parser.parse_args(argv)
-    art = Path(os.path.expanduser(args.drive)) / "artifacts"
+    from strokecopilot.config import local_drive_root
+
+    drive = Path(os.path.expanduser(args.drive)) if args.drive else local_drive_root()
+    if drive is None:
+        raise ValueError("No Drive folder found; pass --drive or set STROKECOPILOT_DRIVE.")
+    args.drive = str(drive)
+    art = drive / "artifacts"
     roots = {"EXP-37": args.exp37, "EXP-47": args.exp47}
     entries = presets(roots)
     real = sorted(r["case"] for r in json.loads((Path(args.exp37) / FALLBACK_MODEL / "real_predicted" / "metrics_rescore.json")
@@ -195,6 +216,17 @@ def main(argv=None):
     entries += development_cases(roots, {"predicted": art / "vision_outputs_v1", "groundtruth": art / "vision_outputs_gt_v1"},
                                  art / "isles24_notes_v1", real)
     out = write(entries, args.out)
+    from strokecopilot.demo import charts
+
+    runs = Path(os.path.expanduser(args.drive)) / "runs"
+    write_extras(out, charts.charts({
+        "exp48": "runs/EXP-48_small_reasoner_report/rescore_points_19_20/report.json",
+        "exp42": "runs/EXP-42_c9_table/rescore_points_19_20/report.json",
+        "exp41": "runs/EXP-41_labelling/labels/agreement_final.json",
+        "exp49": "runs/EXP-49_visionB_false_alarms/metrics.json",
+        "exp50": runs / "EXP-50_visionB_isles_false_alarms" / "metrics.json",
+        "exp60": "runs/EXP-60_visionB_rsna_test/metrics.json",
+        "exp63": "runs/EXP-63_d3_dev_check/report.json"}))
     problems = scan(out, splits.development_ids())
     if problems:
         raise ValueError(f"The bank failed the leak scan ({len(problems)} files). Delete {out} and check.")

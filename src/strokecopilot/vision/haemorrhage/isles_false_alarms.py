@@ -20,6 +20,7 @@ import math
 import numpy as np
 import pandas as pd
 
+from strokecopilot.config import local_drive_root
 from strokecopilot.data import splits
 from strokecopilot.vision.haemorrhage import explain as ex
 from strokecopilot.vision.haemorrhage import isles_check as ic
@@ -186,7 +187,7 @@ def contract_check(table, expected=68):
 
 
 
-DRIVE = "~/Library/CloudStorage/GoogleDrive-parsahosseini.it@gmail.com/My Drive/StrokeCopilot"
+DRIVE = str(local_drive_root() or "~/StrokeCopilot")  # Drive for desktop (config.local_drive_root)
 SLIM_SHA256 = "b0afd16e4cbfb16a69fb5190083fc3869f5dcc6c92f86f10135b0de1f59f4728"  # as notebook 21 checks it
 FOLDS_SHA256 = "023813f2dba930b7521653f1549b1fa1369b8bd29b63658175c5cea58410d291"
 EXPECTED_DEVELOPMENT = 129

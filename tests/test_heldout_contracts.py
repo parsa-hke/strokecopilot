@@ -253,3 +253,18 @@ def test_write_contracts_never_overwrites(tmp_path):
 def test_on_drive():
     assert ho.on_drive("/content/drive/MyDrive/StrokeCopilot/x")
     assert not ho.on_drive("/tmp/x")
+
+
+def test_runs_are_named_exactly_not_matched(tmp_path):
+    root = tmp_path / "runs"
+    for k, run in ho.VALIDATION_RUNS.items():
+        (root / run / "nnUNet_results" / nw.DATASET_NAME / ho.TRAINER_DIR / f"fold_{k}" / "validation").mkdir(parents=True)
+    (root / "EXP-14_nnunet_fold0" / "nnUNet_results" / nw.DATASET_NAME / ho.TRAINER_DIR / "fold_0").mkdir(parents=True)
+    # an older run whose name a pattern would also match must not be picked
+    (root / "EXP-3_nnunet_fold0" / "nnUNet_results" / nw.DATASET_NAME / ho.TRAINER_DIR / "fold_0").mkdir(parents=True)
+    assert ho.fold_path(root, 0).parts[-5] == "EXP-14_nnunet_fold0"
+    assert ho.validation_path(root, 0).parts[-6] == "EXP-22_nnunet_fold0_masks"
+    assert ho.validation_path(root, 3).parts[-6] == "EXP-20_nnunet_fold3"
+    assert ho.recorded_plan_path(root, 2).name == "plan_3d_fullres.json"
+    with pytest.raises(FileNotFoundError):
+        ho.fold_path(tmp_path / "elsewhere", 1)

@@ -48,6 +48,34 @@ FOLDS = (0, 1, 2, 3, 4)
 CHECKPOINT = "checkpoint_final.pth"
 TRAINER_DIR = f"{nw.TRAINER}__{nw.PLANS}__{nw.CONFIGURATION}"
 VISION_A_NAMES = ("ncct", "cbf", "tmax", "occlusion", "cow", "infarct")
+# The runs, named exactly (a pattern also matched EXP-3's older fold 0 folder, found in EXP-61's first try, 19 Nov 2026).
+CHECKPOINT_RUNS = dict(build.NNUNET_RUNS)  # EXP-14, EXP-18 to EXP-21: checkpoint_final.pth, debug.json, plan_3d_fullres.json
+# Each fold's recorded validation masks. EXP-14 kept none; EXP-22 wrote them from EXP-14's checkpoint_final.pth (its
+# config.json records that checkpoint's sha256, which the notebook checks).
+VALIDATION_RUNS = {**CHECKPOINT_RUNS, 0: "EXP-22_nnunet_fold0_masks"}
+
+
+def fold_path(runs_root, fold, runs=None):
+    """A fold's nnU-Net folder in a named run (CHECKPOINT_RUNS by default). Raises if it is missing."""
+    runs = CHECKPOINT_RUNS if runs is None else runs
+    path = Path(runs_root) / runs[fold] / "nnUNet_results" / nw.DATASET_NAME / TRAINER_DIR / f"fold_{fold}"
+    if not path.is_dir():
+        raise FileNotFoundError(f"Fold {fold}'s folder is missing from {runs[fold]}.")
+    return path
+
+
+def validation_path(runs_root, fold):
+    """The folder holding a fold's recorded validation masks."""
+    path = fold_path(runs_root, fold, VALIDATION_RUNS) / "validation"
+    if not path.is_dir():
+        raise FileNotFoundError(f"Fold {fold}'s validation masks are missing from {VALIDATION_RUNS[fold]}.")
+    return path
+
+
+def recorded_plan_path(runs_root, fold):
+    return Path(runs_root) / CHECKPOINT_RUNS[fold] / "plan_3d_fullres.json"
+
+
 # The fields a development-check contract must reproduce exactly from EXP-33's. haemorrhage.confidence is compared as a
 # largest difference instead (GPU arithmetic and the JPEG library can move the fourth decimal).
 REPRODUCED_FIELDS = ("haemorrhage.present", "core_ml", "penumbra_ml", "mismatch_ratio", "mismatch_volume_ml", "occlusion_site",

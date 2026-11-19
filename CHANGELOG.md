@@ -1,5 +1,54 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (EXP-61's first try stopped; runs now named exactly)
+- **EXP-61, first try** (Colab A100): stopped in section 4 with "too many values to unpack". The pattern `EXP-*_nnunet_fold0` matched two folders on Drive: `EXP-14_nnunet_fold0` (the 300-epoch model) and the older `EXP-3_nnunet_fold0` (150 epochs, no final checkpoint).
+  - The same loose pattern would have picked fold 0's reference masks from the wrong place.
+  - My local check hadn't caught it, because it matched on `checkpoint_final.pth`, which only EXP-14 has.
+  - Nothing was read past the split check, and nothing was written.
+- **Fix:** `contract/heldout.py` names the runs exactly.
+  - `CHECKPOINT_RUNS` = EXP-14 and EXP-18 to EXP-21.
+  - `VALIDATION_RUNS` = the same, except fold 0 → `EXP-22_nnunet_fold0_masks`. EXP-14 kept no validation masks; EXP-22 wrote them from EXP-14's `checkpoint_final.pth`.
+  - `fold_path`, `validation_path` and `recorded_plan_path` raise if a folder is missing.
+  - Notebook 60 uses these everywhere (no pattern remains). It also checks that EXP-22's recorded checkpoint sha256 equals fold 0's checkpoint.
+  - **Checked on Drive:** each fold has its checkpoint, `debug.json`, recorded plan and validation masks (26/26/26/26/25).
+  - Test added. pytest: 861 passed.
+
+## 2026-11-19 — Claude Code session (Phase 4, Task 4: the Space's page, chart data and build)
+- **The page** (`demo/space/static/`: `index.html`, `styles.css`, `app.js`, `charts.js`). Plain HTML/CSS/JS, no third-party code or CDN, matching the server's CSP. Every server value is set as text, never as HTML.
+  - **Banner:** "Research prototype — not for clinical use." is sticky at the top of every screen, cannot be dismissed, and is repeated in the footer.
+  - **Story:** six scroll-driven steps (perfusion, core and penumbra, bleed check, rulebook, reasoner, verifier), each with measured numbers (EXP-25/63, EXP-60, EXP-50) and a small visual. Step 1's visual is a labelled schematic for now; the ISLES'24 images are not yet in.
+  - **Case explorer:** the 5 fixtures, 150 scenarios and 20 real development cases (by alias), with the six-model switch and, for real cases, the predicted or ground-truth vision arm.
+    - Each claim is clickable, and its sources light up: contract rows, note lines (marked), and rulebook passages with ID and pointer.
+    - Flagged claims show their sub-type, whether they would change a decision, and the reason.
+  - **Results:** six chart cards, each with a hover tooltip and a table view:
+    - C9 dot-and-interval chart, with all / content / critical;
+    - the rulebook effect (dumbbell);
+    - the human check (tiles and agreement by verdict);
+    - the tuned 4B (rate on held-out routes, and thrombectomy yes caught);
+    - Vision B on the RSNA test split (tiles, reliability, subtypes), with Item 2;
+    - the ±20% core sensitivity.
+
+    Model colours are the reference palette's categorical slots in fixed order. Light and dark themes are each chosen, plus a toggle.
+  - **Builder:** 16 controls built from `/api/meta`'s bounds and choices; 155 presets to start from; live progress per step with timers; and the result with the reason when it fell back.
+- **Chart data** (`demo/charts.py` → `charts.json`): counts only, gathered from EXP-41, EXP-42, EXP-48, EXP-49, EXP-50, EXP-60 and EXP-63. **`passages.json`:** the 47 own-words passages. The server gains `/api/bank/charts` and `/api/bank/passages`.
+- **Space build** (`demo/space/Dockerfile`, `demo/space/README.md` with Space metadata and `license: cc-by-nc-sa-4.0`, and `demo/space_build.py`):
+  - It assembles the exact tree to push: the page, the bank, and a package copy **without `splits/`** (the copied pyproject drops it from the wheel).
+  - It refuses the tree on: any of the 149 case IDs (compared in code, never printed); RSNA IDs; key patterns; e-mail addresses; disallowed file types; or a split file.
+  - Built locally: 317 files, 19.1 MB, clean.
+- **Found and fixed (privacy):** two source files hard-coded the Drive-for-desktop path, which contains Parsa's e-mail address (`isles_false_alarms.py`, EXP-50's default; the new `bank.py`). A new `config.local_drive_root()` finds the folder by pattern (as `compute/pod.py` already did) or from `STROKECOPILOT_DRIVE`. No address remains in `src/`, and the Space build now refuses any address.
+- **Checked in the browser** (local preview, live off, no key): no console errors; the hero, story, explorer and results render.
+  - Claim clicks highlight contract rows, note lines and passages.
+  - The builder's run streams its steps and falls back with its reason.
+  - Phone width (375 px) has no sideways scroll; it was 531 px before `fieldset`/`select` min-width fixes.
+  - Light and dark themes both checked.
+- **Tests:** server endpoints for charts and passages; the Space build's pyproject edit and its scan (split folder and file, e-mail, case ID, file type). pytest: 860 passed.
+- **Not done yet:**
+  - the Docker image has not been built yet (building it locally next);
+  - the load test;
+  - ISLES'24 map images for the story;
+  - the Space itself: nothing has been pushed.
+- **For Parsa:** the package's code comments and docstrings name team members (first names, as decision credits) and the GitHub repository. A public Space shows its source. Keep it (normal for a course project), strip them in the build, or use "protected" visibility.
+
 ## 2026-11-19 — Claude Code session (Phase 4, Task 4: EXP-64, the Space's live dummy)
 - **EXP-64** (Mac, Parsa's shell with the Space's dedicated key; `runs/EXP-64_space_live_dummy/` on the Mac and Drive; synthetic inputs, no IDs). 5 of 5 live runs succeeded. **$0.4485 in all**, Anthropic, Space workspace.
 

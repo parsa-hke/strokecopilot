@@ -39,3 +39,28 @@ def test_builder_bounds_cover_every_preset_feature():
     for s in sc.generate():
         f = builder.features(s.vision, s.facts, {d: v for d, v in s.expected.items()})
         assert f["site"] in builder.CHOICES["site"]
+
+
+def test_space_pyproject_drops_the_split_from_the_wheel():
+    from strokecopilot.demo import space_build as sb
+
+    text = '[tool.hatch.build.targets.wheel.force-include]\n"schemas" = "strokecopilot/schemas"\n"splits" = "strokecopilot/splits"\n'
+    out = sb.space_pyproject(text)
+    assert '"splits"' not in out and '"schemas"' in out
+
+
+def test_space_tree_check_catches_every_leak(tmp_path):
+    from strokecopilot.demo import space_build as sb
+
+    tree = tmp_path / "space"
+    (tree / "static").mkdir(parents=True)
+    (tree / "static" / "app.js").write_text("const ok = 1; // @decorator.style is not an address")
+    assert sb.check(tree, ["sub-stroke9901"]) == []
+    (tree / "pkg" / "splits").mkdir(parents=True)
+    (tree / "pkg" / "splits" / "folds.json").write_text("{}")
+    (tree / "static" / "x.js").write_text("// contact someone@example.org")
+    (tree / "static" / "y.json").write_text('{"case": "sub-stroke9901"}')
+    (tree / "static" / "z.exe").write_bytes(b"MZ")
+    problems = "; ".join(sb.check(tree, ["sub-stroke9901"]))
+    for expected in ("split folder", "split file", "e-mail", "case ID", "file type not allowed"):
+        assert expected in problems

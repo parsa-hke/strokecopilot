@@ -219,6 +219,14 @@ def create_app(state, static_dir=None):
     def bank_index():
         return FileResponse(state.bank_dir / "index.json", media_type="application/json")
 
+    @app.get("/api/bank/charts")
+    def bank_charts():
+        return FileResponse(state.bank_dir / "charts.json", media_type="application/json")
+
+    @app.get("/api/bank/passages")
+    def bank_passages():
+        return FileResponse(state.bank_dir / "passages.json", media_type="application/json")
+
     @app.get("/api/bank/case/{case_id}")
     def bank_case(case_id: str):
         if not ID_RE.match(case_id) or case_id not in state.ids:

@@ -21,7 +21,7 @@ corpus = ["pypdf"]  # only for the local copy check
 retrieval = ["numpy", "sentence-transformers"]
 llm = ["anthropic>=2.4", "openai>=1.40"]  # openai: the client for vLLM's OpenAI-compatible server (VLLMJSON)
 # The public Hugging Face Space (DEC-32): server, live runs and the verifier's retrieval.
-space = ["fastapi>=0.115", "uvicorn>=0.30", "anthropic>=2.4", "numpy", "sentence-transformers"]
+space = ["fastapi>=0.115", "uvicorn>=0.30", "anthropic>=2.4", "numpy", "pandas", "scipy", "nibabel", "sentence-transformers"]
 # Item 4 (DEC-30): LoRA fine-tuning of the small reasoner on a Colab A100 (notebook 54); versions as tested on CPU.
 finetune = ["torch", "transformers==5.22.1", "peft==0.21.3", "accelerate==1.16.0", "safetensors"]
 

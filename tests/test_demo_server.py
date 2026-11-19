@@ -140,6 +140,9 @@ def test_bank_meta_health_and_headers(bank_dir):
     assert client.get(f"/api/bank/case/{case_id}").json()["id"] == case_id
     assert client.get("/api/bank/case/..%2Findex").status_code == 404
     assert client.get("/api/bank/case/nope").status_code == 404
+    (bank_dir / "charts.json").write_text('{"c9": {}}')
+    (bank_dir / "passages.json").write_text('{"P1": {"text": "t"}}')
+    assert client.get("/api/bank/charts").json() == {"c9": {}} and "P1" in client.get("/api/bank/passages").json()
     h = client.get("/healthz")
     assert h.json()["ok"] and h.json()["key_present"] is True and "sk-" not in h.text
     assert "default-src 'self'" in h.headers["content-security-policy"]
