@@ -27,7 +27,8 @@ folds: 26, 26, 26, 26 and 25. Unlocking means `ALLOW_HELDOUT=1` in Phase 4 noteb
 4. **Code, built and tested on development cases only:**
    - the held-out contract path (D1);
    - the error-propagation and sensitivity analyses (D3);
-   - the demo (plan §8.5).
+   - the public Space (DEC-32), built on fixtures, scenarios and development results, with the live element
+     dummy-tested (amended 19 Nov 2026; it was "the demo (plan §8.5)").
 
    Notes for held-out cases are generated after unlocking, with the same generator and seed scheme as
    `isles24_notes_v1`.
@@ -93,7 +94,8 @@ Undetermined decisions are excluded and counted, never guessed.
 6. Reasoner runs.
 7. Verifier.
 8. Analyses.
-9. Demo on held-out cases.
+9. Fill the Space with held-out results, load-test it, and publish it on Parsa's word (amended 19 Nov 2026; it was
+   "Demo on held-out cases").
 
 ## 3. Cost and time (estimates, unmeasured until run)
 
@@ -107,3 +109,11 @@ Undetermined decisions are excluded and counted, never guessed.
 - **OpenRouter:** Qwen's 40 requests, under $1.
 - **Colab A100:** about 1–2 hours, for the nnU-Net ensemble on 20 cases plus the Gemma pair and the small pair.
 - **Kaggle:** Vision B's RSNA test check, about 15 minutes, free.
+- **The Space's live use (DEC-32)** is separate from this estimate. It is bounded by its own workspace's monthly limit,
+  kept small (about $5 suggested), plus about $0.50 for the dummy.
+
+## 4. Amendments
+
+- **19 Nov 2026, before unlocking (DEC-32, approved by Parsa):** the demo is a public Hugging Face Space instead of a
+  Gradio app run from Colab (`docs/DEC-32_PUBLIC_SPACE.md`). §1 item 4, D4 step 9 and §3 are changed to match. No
+  analysis, model, arm or freeze-list item changes.

@@ -15,5 +15,5 @@ Stroke Decision Copilot — MAAI 901/902 group project (UOWD).
 
 ## Environment
 - Training runs on Google Colab; data lives on a shared Google Drive folder (plan §4). Nothing under data/ or runs/ is committed.
-- Secrets come from Colab Secrets or env vars. Never in code or notebooks.
+- Secrets come from Colab Secrets or env vars, or, for the Space's live key only, the Space's secrets (DEC-32). Never in code or notebooks.
 - Package is installable with `pip install git+<repo-url>`.

@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Phase 4, Task 1: Vision B's RSNA test-split check, code)
+- **`vision/haemorrhage/final_check.py`:** DEC-31 §1 item 3's figures for one split, with nothing chosen. It uses EXP-6's top-2 aggregation and Platt calibration with DEC-28's 0.175 (`infer.contract_calibrator`). It reports:
+  - the scan AUC;
+  - sensitivity and specificity, with patient-bootstrap intervals (2,000 replicates, seed 20261108, whole patients; one set of resamples serves every figure);
+  - sensitivity per subtype, as counts with Wilson and bootstrap intervals;
+  - ECE with 10 bins.
+
+  Extras, labelled as such: slice AUC, Wilson intervals, counts, log loss and reliability bins. `validation_check` gates the opening: on validation, scan AUC within 0.005 of EXP-6's 0.977 and sensitivity at 0.175 of at least 0.955.
+- **`notebooks/25_visionB_rsna_test.ipynb` (Kaggle T4, free):**
+  - It runs the same report on validation first. The test split is opened only if that check passes and `OPEN_TEST_SPLIT = True`, and `ALLOW_RSNA_TEST` is set only for the moment the rows are taken.
+  - Run 1 is a dry run (validation only); Run 2 opens the test split, once.
+  - Guards: the split fingerprint must match EXP-6, the test scan count must match EXP-6's record if it has one, and the ID check runs before saving.
+  - The experiment ID is set to EXP-60, pending Parsa's confirmation of the numbering.
+- **Tests:** `tests/test_final_check.py` (9), on synthetic slices. They check the weighted bootstrap AUC against the rank AUC (with ties and with duplicated rows), the counts and subtypes, the threshold on the calibrated scale, determinism, that no IDs are saved, refusals, and the validation gate. pytest: 799 passed.
+- **Not run yet:** the notebook installs the package from `main`, so the code must be committed and pushed before Run 1.
+- **Notion sync:** Experiments: EXP-60 (planned: Vision B RSNA test split, once), pending the numbering decision.
+
+## 2026-11-19 — Claude Code session (Phase 4, Task 0: DEC-32, the public Space)
+- **Phase 4 started** in its own session, from DEC-31. `splits/folds.json` checked by sha256 only (matches). No held-out case is unlocked.
+- **DEC-32 approved as drafted by Parsa (19 Nov):** the demo is a public Hugging Face Space (`docs/DEC-32_PUBLIC_SPACE.md`), replacing the Gradio app run from Colab.
+  - **Design:** a Docker Space on CPU basic (FastAPI server, static page) with a story, a case explorer with clickable claims, results charts, and a live scenario builder. The builder takes structured inputs only, runs Sonnet 5.5 (prompt v3, rulebook) and the verifier with EXP-37's settings, and falls back to the nearest precomputed scenario.
+  - **Choices a–f as recommended:** public; a private staging Space first; HF sign-in off at launch, behind a switch; continuous controls within the evaluated ranges; a six-model switch in the explorer; limits in memory, with the workspace limit as the hard cap.
+  - **Spend limit:** kept small. Parsa expects fewer than 20 live runs, so about $5 a month is suggested for the workspace limit (not $20), with a $1 server daily cap.
+- **Cost per live run, measured from EXP-37's logged usage** (Sonnet `scenarios_rulebook`, live prices): about $0.08 with a warm cache (reasoner $0.044, extractor $0.031, judge $0.003), about $0.11–0.12 cold. Latency is not measured yet (batch runs); the dummy measures it.
+- **ISLES'24 licence rechecked on Zenodo (record 17652035, v7):** CC BY-NC-SA 4.0, so images may appear with attribution. The Zenodo page gives the dataset paper as arXiv:2408.09259, which is an unrelated paper; `docs/DATA_USE.md`'s 2408.11142 is right.
+- **Amended to match:**
+  - plan §2 (DEC-32 row), §4.4 (the Space's secret), §7 Phase 4 (the demo task and the acceptance line) and §8.5;
+  - DEC-31 (`docs/PHASE4_PREREGISTRATION.md`): §1 item 4, D4 step 9, §3, and a new §4 for amendments, dated before unlocking;
+  - CLAUDE.md's secrets line.
+- **Open questions for Parsa:**
+  - DEC and EXP numbering between the two sessions (Item 1 to take DEC-33; Phase 4 to use EXP-60 onward);
+  - D1: may the plans saved in each `checkpoint_final.pth` be the authority, with DEC-31's rebuild as the cross-check?
+  - the actual Anthropic credit, from the console.
+- No code changed, so pytest was not rerun. Spend this session: $0.
+- **Notion sync:** Decisions: DEC-32 (new, decided 19 Nov 2026); DEC-31 (note: demo step amended by DEC-32). Tasks: Phase 4 demo task reworded, acceptance line changed.
+
 ## 2026-11-19 — Claude Code session (EXP-41 done; Phase 3 closed)
 - **EXP-41 consensus:** Parsa settled the 28 disagreements as third rater on `consensus_parsa.html` (`labels_parsa_2026-11-19.csv`; he sided with labeller A 12 times and B 16 times). `label_page.merge_consensus` wrote them into `runs/EXP-41_labelling/labels/final.csv` (Mac only, with the key). **S035 changed to no error** at Parsa's request, after we checked that passage AHA2026-T3-trace3 is about the TRACE-III and TIMELESS thrombolysis trials; the reason is in `note_consensus`.
 - **Final agreement** (`agreement_final.json`):
