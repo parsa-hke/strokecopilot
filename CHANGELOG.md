@@ -1,5 +1,42 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (Phase 4, steps 3 and 4 done: EXP-65 runs, EXP-66 D3 analyses)
+- **EXP-65, all 14 held-out cells done** (`runs/EXP-65_heldout_runs/` on the Mac; Colab answers on Drive):
+  - Sonnet: Batch API, 4 cells;
+  - Qwen: OpenRouter, Alibaba route, system prompt merged, 2 cells;
+  - Gemma 3 27B and MedGemma 27B: notebook 53 `heldout`, Colab A100, 4 cells;
+  - Gemma 3 4B and tuned: notebook 55 `heldout`, 4 cells;
+  - every cell verified (Sonnet extractor, Haiku `judge_v3`, Batch API).
+
+  | Model | Arm | Hallucination rate | Format failures |
+  |---|---|---|---|
+  | Sonnet 5.5 | predicted / ground truth | 3.2% / 5.3% | 0, 0 |
+  | Sonnet 5.5 | core ×0.8 / ×1.2 | 3.3% / 4.6% | 0, 0 |
+  | Qwen3.5-27B | predicted / ground truth | 6.3% / 3.6% | **9** / 2 |
+  | Gemma 3 27B | predicted / ground truth | 11.6% / 11.3% | 0, 0 |
+  | MedGemma 27B | predicted / ground truth | 10.0% / 9.0% | 2 / 6 |
+
+- **Measured spend (estimates at batch or list prices):** Anthropic **$4.73** (DEC-31 estimate about $5.5 with contingency); OpenRouter **$0.28**; Colab A100 for notebooks 53 and 55 (compute units not reported yet).
+- **EXP-66, DEC-31 D3** (`phase4 analyse`; `runs/EXP-66_heldout_analysis/report.json` and `report.md` on the Mac and Drive; aliases `H-01`…, ID-checked):
+  - **Truth:** thrombolysis undetermined 17, yes 2, no 1; thrombectomy no 20/20. Rules on the predicted contracts get 22/23 right.
+  - **Correctness, predicted vision (scored decisions):** Sonnet 22/23; Qwen 13/13 (9 answers missing); Gemma 3 27B 22/23; MedGemma 21/21; Gemma 3 4B **3/23** (it recommends thrombectomy where there is no established occlusion); tuned 4B 21/23.
+    - The tuned model's bias towards "no" (EXP-48) happens to match a held-out truth that is almost all "no", so the comparison says little.
+    - Ground-truth vision: Sonnet 23/23, Qwen 20/20, Gemma 22/23, MedGemma 16/16, 4B 5/23, tuned 22/23.
+  - **Error propagation (predicted arm):**
+    - Sonnet: 1 wrong, a vision error (false bleed flag), missed by the verifier.
+    - Gemma 3 27B: 1 reasoning error, caught.
+    - Tuned 4B: 1 vision error (bleed flag), caught; 1 reasoning error, caught.
+    - Base 4B: 20 reasoning errors, all caught.
+    - Qwen and MedGemma: 0.
+    - The verifier cannot see a vision error whose claims faithfully restate the contract, as EXP-63 found on development cases.
+  - **Sensitivity:** core ×0.8 and ×1.2 change 0/40 rule decisions and 0/40 of Sonnet's own answers. With the DEC-31 §4 supplement (scenarios 9/300 and 10/300), the reading is: a 20% core error can matter in principle, but in this cohort the unknown occlusion site decides first.
+  - **Held-out vision (ensemble):** Dice 0.182 (median 0.095); absolute volume error 13.4 mL (median 7.9; signed median −6.5); wrong side of 21/31/51/70 mL in 4/4/3/0 of 20. Bleed flags 10/20 (Wilson 29.9–70.1%).
+  - **Realism check, hallucination rate held-out vs development real cases (unpaired, predicted vision):** Sonnet 3.2% vs 3.3%; Qwen 6.3% vs 3.3% (11 answers); Gemma 11.6% vs 10.9%; MedGemma 10.0% vs 7.9%; 4B 40.4% vs 35.1%; tuned 4B 21.5% vs 12.3%. The larger models hold; the tuned 4B's gain over its base shrinks on real held-out cases.
+- **Figure:** `fig_heldout_realism_check` added to `artifacts/figures/` (`figures.heldout_figures`; README updated).
+- **Plan §7 Phase 4:** the end-to-end, error-propagation, sensitivity and figures lines are ticked. Still open: the Space, filled with held-out results and published on Parsa's word; then the acceptance line.
+- **pytest:** 870 passed.
+- **Notion sync:** Experiments: EXP-65 (Done, spend), EXP-66 (Done, figures above). Tasks: reasoner runs, error propagation, sensitivity, figures (Done).
+
 ## 2026-11-19 — Claude Code session (Notion synced with Phase 4 so far)
 - **Decisions:**
   - **DEC-32** added (Decided, Infra, 19 Nov, decided by Parsa), with its rationale and alternatives.

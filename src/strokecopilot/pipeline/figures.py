@@ -205,7 +205,40 @@ def development_figures(c, out):
     return written
 
 
+def heldout_figures(rep, out):
+    """The held-out figures from EXP-66's report (phase4 analyse). Returns the names written."""
+    plt, written = _plt(), []
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    models = [m for m in ORDER if "c9" in rep["models"].get(m, {})]
+    fig, ax = plt.subplots(figsize=(7.5, 3.0))
+    for i, m in enumerate(models):
+        y = len(models) - 1 - i
+        dev, held = rep["models"][m]["c9"]["development"]["hallucination_rate"], rep["models"][m]["c9"]["heldout"]["hallucination_rate"]
+        for r, dy, filled in ((dev, 0.16, False), (held, -0.16, True)):
+            if r["value"] is None:
+                continue
+            ax.plot(r["ci95"], [y + dy, y + dy], color=_color(m), lw=2, alpha=0.5, solid_capstyle="round")
+            ax.plot([r["value"]], [y + dy], "o", ms=6.5, mfc=_color(m) if filled else "white", mec=_color(m), mew=1.8)
+        ax.text(max(dev["ci95"][1], held["ci95"][1]) + 0.008, y, f"{100 * held['value']:.1f}% held-out, {100 * dev['value']:.1f}% development",
+                va="center", fontsize=8, color=INK_2)
+    ax.set_yticks(range(len(models)))
+    ax.set_yticklabels([LABELS[m] for m in reversed(models)])
+    ax.set_ylim(-0.6, len(models) - 0.4)
+    ax.set_xlim(0, 0.75)
+    ax.xaxis.set_major_formatter(lambda x, _: f"{100 * x:.0f}%")
+    ax.grid(axis="y", visible=False)
+    ax.set_title("Realism check: hallucination rate on the 20 held-out cases (filled) and 20 development real cases (hollow),\n"
+                 "predicted vision, 95% case-bootstrap intervals (EXP-66, EXP-37, EXP-47)", fontsize=9.5, color=INK, loc="left")
+    _save(fig, out, "fig_heldout_realism_check", written)
+    plt.close(fig)
+    return written
+
+
 CAPTIONS = {
+    "fig_heldout_realism_check": ("DEC-31 D3 (EXP-66): each model's verifier hallucination rate on the 20 held-out cases next "
+                                  "to EXP-37's/EXP-47's 20 development real cases, predicted vision, unpaired. Qwen's held-out "
+                                  "rate rests on 11 answers (9 format failures)."),
     "fig_c9_hallucination_by_model": ("C9 (EXP-42, EXP-48; metric points 1-20), verifier rates on the same 175 cases per "
                                       "model, 95% case-bootstrap intervals. Upper bounds: people confirmed 18 of 54 flags (EXP-41)."),
     "fig_rulebook_effect": "DEC-29 (EXP-42): false-content rate without and with the rulebook, paired on the same 100 cases.",
@@ -236,6 +269,9 @@ def main(argv=None):
     out = Path(args.out) if args.out else drive / "artifacts" / "figures"
     c = charts.charts(charts.default_sources(drive / "runs"))
     names = development_figures(c, out)
+    heldout = Path("runs/EXP-66_heldout_analysis/report.json")
+    if heldout.exists():
+        names += heldout_figures(json.loads(heldout.read_text()), out)
     write_readme(out, names)
     print(json.dumps({"written": names, "out": str(out)}, indent=1))
 
