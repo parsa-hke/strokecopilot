@@ -163,7 +163,7 @@ def gradcam_figure(examples, out_png, n=8, seed=0):
     picked = [examples[i] for i in sorted(rng.choice(len(examples), size=min(n, len(examples)), replace=False))]
     cols = 4
     rows = math.ceil(len(picked) / cols)
-    fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 3.3 * rows), facecolor="#fcfcfb")
+    fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 3.7 * rows), facecolor="#fcfcfb")
     for ax in np.atleast_1d(axes).ravel():
         ax.axis("off")
     for ax, e in zip(np.atleast_1d(axes).ravel(), picked):
@@ -173,7 +173,7 @@ def gradcam_figure(examples, out_png, n=8, seed=0):
                      fontsize=9, color="#0b0b0b")
     fig.suptitle("ISLES'24 scans flagged at DEC-28: top slab and Grad-CAM (presumed bleed-free)", fontsize=11, x=0.01,
                  ha="left", color="#0b0b0b")
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.95), h_pad=2.0)  # room for the title and for each row's two-line captions
     fig.savefig(out_png, dpi=140, facecolor="#fcfcfb")
     plt.close(fig)
     return out_png

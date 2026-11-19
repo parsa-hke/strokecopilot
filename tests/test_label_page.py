@@ -109,3 +109,32 @@ def test_pair_downloads_merge_combine_and_read_back_through_adjudicate(tmp_path)
     (tmp_path / "other.csv").write_text((tmp_path / "other.csv").read_text().replace("S002", "S009"))
     with pytest.raises(ValueError, match="not the same sample"):
         lp.merge_sheets(tmp_path / "lorna.csv", tmp_path / "other.csv", tmp_path / "bad.csv")
+
+
+def test_consensus_page_shows_both_labels_and_fills_the_consensus_column(tmp_path):
+    prior = {"S001": [{"name": "Lorna", "letter": "A", "label": "error", "note": "not cited"},
+                      {"name": "Benny", "letter": "B", "label": "no_error", "note": ""}]}
+    page = lp.build_consensus_page(ITEMS[:1], CASES, PASSAGES, prior)
+    data = _data(page)
+    assert data["labeller"] == "consensus" and data["items"][0]["prior"] == prior["S001"] and data["cases"] == {"C001": CASES["C001"]}
+    assert "['consensus', 'note_consensus']" in page and page.count("</script>") == 2
+    for word in ("model", "verdict", "subtype", "run_folder"):
+        assert f'"{word}"' not in page
+    combined = tmp_path / "combined.csv"
+    with combined.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=adj.SHEET_FIELDS)
+        w.writeheader()
+        w.writerow({"sample_id": "S001", "claim": "x", "label_A": "error", "label_B": "no_error"})
+        w.writerow({"sample_id": "S002", "claim": "y", "label_A": "no_error", "label_B": "no_error"})
+    mine = tmp_path / "mine.csv"
+    with mine.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=adj.SHEET_FIELDS)
+        w.writeheader()
+        w.writerow({"sample_id": "S001", "consensus": "error", "note_consensus": "the guide: uncited is an error"})
+    out = lp.merge_consensus(combined, mine, tmp_path / "final.csv")
+    rows = {r["sample_id"]: r for r in csv.DictReader(out.open())}
+    assert rows["S001"]["consensus"] == "error" and rows["S002"]["consensus"] == ""
+    with mine.open("a", newline="") as f:
+        csv.DictWriter(f, fieldnames=adj.SHEET_FIELDS).writerow({"sample_id": "S002", "consensus": "error"})
+    with pytest.raises(ValueError, match="agreed"):
+        lp.merge_consensus(combined, mine, tmp_path / "final2.csv")

@@ -78,3 +78,36 @@ Open before EXP-49:
 - whether EXP-6's per-slice validation probabilities are saved on Kaggle (otherwise they are recomputed on the free
   T4);
 - where EXP-6's checkpoint is for the Mac run.
+
+## Results (19 Nov 2026)
+
+**EXP-49 and EXP-51 (RSNA validation, Kaggle).** EXP-51 is EXP-49 rerun with the threshold export, and its selection
+is identical. The scan AUC (0.9772) reproduces EXP-6, and all 10 candidates are eligible. The proposal is
+**gate(0.55)**:
+- specificity 0.8853 against "none" 0.8812, at sensitivity 0.9595 against 0.9597 (means over 20 seeds);
+- paired gain on the main seed +0.0047 [+0.0015, +0.0086], which meets the adoption rule;
+- subtype sensitivities unchanged within 0.001.
+
+Requiring the top two slices to be neighbours lowers specificity. The Grad-CAM reference shows why a gate does little
+on RSNA: its false positives put 73% of their heat in brain tissue at mid-head, as true positives do (85%).
+
+**EXP-50 (ISLES'24, Mac, 1.4 min).** "none" reproduces the 68 flags of 129 (52.7%). Against that:
+- gate(0.55) flags 64 (49.6%): it clears 4 and adds none (McNemar exact p = 0.125). The 4 it clears are
+  low-brain slabs, three of them at the skull base (height 0.17–0.19);
+- no candidate clears flags significantly. The adjacency rules swap about as many flags as they clear, and both(0.70)
+  adds 9.
+
+The flagged scans' top slab mostly sits in brain tissue: median relative brain fraction 0.87, and none below 0.40.
+Its median height is 0.38. Grad-CAM puts a median 76% of the heat in brain tissue, and only 2 of 136 slabs have more
+heat on bone than on brain. Only 16% of flagged scans have their top two slabs as neighbours, against 25% of
+unflagged scans.
+
+**Reading.** Skull-base slabs explain only a few of ISLES'24's false alarms: 4 of 68 under the gate. EXP-35's 12 of 23
+came from the borderline band between 0.175 and 0.278 alone. Most flags come from single hot slabs inside the brain
+tissue of acute-stroke patients. This is a domain shift in how the brain itself looks to the model, which no slab
+rule can fix. These are density masks and Grad-CAM, read by Claude, not by a radiologist.
+
+**Decision (Parsa, 19 Nov 2026): DEC-28 stands.** gate(0.55) met the RSNA rule, but on ISLES'24 it cleared 4 of 68
+flags (p = 0.125). Adopting it would have meant amending DEC-28, rebuilding the 129 contracts and rerunning the
+predicted-vision arms. Item 2 is reported as an explanation of the false alarms (Grad-CAM, tissue shares, the four
+rules tested) with a negative result: no slab rule fixes them.

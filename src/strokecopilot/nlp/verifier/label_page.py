@@ -127,6 +127,42 @@ def build_page(items, cases, passages, name, title="Verifier labelling"):
                  .replace("__DATA__", payload))
 
 
+def build_consensus_page(items, cases, passages, prior, name="Parsa", title="Settling disagreements"):
+    """The page for a third rater who settles a pair's disagreements (LABELLING_GUIDE "Consensus"): each item shows both
+    labels and notes, and the page fills `consensus` and `note_consensus`. prior: {sample_id: [{name, letter, label,
+    note}, ...]}. Blind like the labellers' pages: no model, run or verifier verdict."""
+    used = {i["case_alias"] for i in items}
+    shown = [{**i, "prior": prior[i["sample_id"]]} for i in items]
+    data = {"labeller": "consensus", "name": name, "partner": "", "half": "both", "sample": sample_hash(items),
+            "items": shown, "cases": {a: c for a, c in cases.items() if a in used}, "passages": passages,
+            "fields": adj.SHEET_FIELDS}
+    payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    return (_PAGE.replace("__TITLE__", html.escape(f"{title} — {name}"))
+                 .replace("__DATA__", payload))
+
+
+def merge_consensus(combined_sheet, consensus_sheet, out_path):
+    """The combined sheet with `consensus` and `note_consensus` from the third rater's download. Refuses a consensus
+    row whose sample is not in the combined sheet, or one given where the pair already agreed."""
+    def rows(path):
+        with Path(path).open(encoding="utf-8") as f:
+            return list(csv.DictReader(f))
+    base, extra = rows(combined_sheet), {r["sample_id"]: r for r in rows(consensus_sheet) if r.get("consensus")}
+    ids = {r["sample_id"] for r in base}
+    if set(extra) - ids:
+        raise ValueError(f"Consensus for samples not in the sheet: {sorted(set(extra) - ids)[:3]}.")
+    for r in base:
+        if r["sample_id"] in extra:
+            if r["label_A"] == r["label_B"]:
+                raise ValueError(f"{r['sample_id']}: the pair agreed; it needs no consensus.")
+            r["consensus"], r["note_consensus"] = extra[r["sample_id"]]["consensus"], extra[r["sample_id"]].get("note_consensus", "")
+    with Path(out_path).open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=adj.SHEET_FIELDS)
+        writer.writeheader()
+        writer.writerows({k: r.get(k, "") for k in adj.SHEET_FIELDS} for r in base)
+    return Path(out_path)
+
+
 def merge_sheets(sheet_a, sheet_b, out_path):
     """One sheet with label_A/note_A from labeller A's download and label_B/note_B from B's; refuses two sheets of
     different samples. Returns out_path, ready for adjudicate.read_labels."""
@@ -280,6 +316,7 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
     <div class="top"><span class="sid" id="sid"></span><span class="chip" id="field"></span><span class="chip" id="alias"></span></div>
     <div class="claim" id="claim"></div>
     <div class="context" id="context"></div>
+    <div class="context" id="prior"></div>
     <div class="decide">
       <div class="choices">
         <button class="choice err" id="btnErr">Error <small>content false, or its citation wrong or missing · <kbd>E</kbd></small></button>
@@ -333,7 +370,7 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
 (function () {
   const D = JSON.parse(document.getElementById('data').textContent);
   const P = Object.fromEntries(D.passages.map(p => [p.id, p.text]));
-  const col = D.labeller === 'A' ? ['label_A', 'note_A'] : ['label_B', 'note_B'];
+  const col = D.labeller === 'consensus' ? ['consensus', 'note_consensus'] : D.labeller === 'A' ? ['label_A', 'note_A'] : ['label_B', 'note_B'];
   const storeKey = 'strokecopilot-labels-' + D.name + '-' + D.sample;
   let S = {}, canStore = true;
   try { localStorage.setItem(storeKey + '-probe', '1'); localStorage.removeItem(storeKey + '-probe');
@@ -344,7 +381,8 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
   function save() { try { localStorage.setItem(storeKey, JSON.stringify(S)); } catch (e) {} }
   function done() { return D.items.filter(i => S[i.sample_id] && S[i.sample_id].label).length; }
 
-  $('who').textContent = D.name + ' · pair ' + D.half + ' with ' + D.partner + ' · labeller ' + D.labeller;
+  $('who').textContent = D.labeller === 'consensus' ? D.name + ' · third rater · settling ' + D.items.length + ' disagreements'
+    : D.name + ' · pair ' + D.half + ' with ' + D.partner + ' · labeller ' + D.labeller;
   if (canStore) $('storeBanner').remove();
 
   function renderList() {
@@ -390,6 +428,8 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
     $('alias').textContent = 'case ' + it.case_alias;
     $('claim').textContent = it.claim;
     $('context').innerHTML = it.context ? 'From the answer: <i>' + esc(it.context) + '</i>' : '';
+    $('prior').innerHTML = it.prior ? '<b>The two labels:</b> ' + it.prior.map(p => esc(p.name) + ' (' + esc(p.letter) + '): <b>' +
+      (p.label === 'error' ? 'Error' : 'No error') + '</b>' + (p.note ? ' — <i>' + esc(p.note) + '</i>' : '')).join('<br>') : '';
     let srcs = it.sources.map(s => sourceHtml(s, it)).join('');
     const cited = (it.claim.match(/[A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9.]+)+/g) || []).filter(id => P[id] && !it.sources.some(s => s.id === id));
     if (cited.length) srcs += '<div class="hint" style="margin-top:8px">Passages named in the claim:</div>' + cited.map(id => sourceHtml({type: 'passage', id}, it)).join('');

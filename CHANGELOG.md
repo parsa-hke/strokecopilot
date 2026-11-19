@@ -1,5 +1,48 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Item 2: EXP-51 and EXP-50, the ISLES'24 read-out)
+- **EXP-51** (Kaggle T4, 1f0849f, 11.6 min, free): EXP-49 rerun with the threshold export, and its selection is identical field by field.
+  - "none" full-split threshold 0.174984 on EXP-6's calibration, **exactly DEC-28**.
+  - gate(0.55): the same raw cut (0.6268).
+  - Files in `runs/EXP-51_visionB_false_alarms/` (Mac and Drive).
+- **EXP-50** (Mac MPS, 1f0849f, 1.4 min; `runs/EXP-50_visionB_isles_false_alarms/` on Drive only, because `per_case.csv` holds case IDs):
+  - All 129 development scans scored; "none" **reproduces the 68 flags** (52.7%).
+  - **gate(0.55) flags 64:** it clears 4 and adds none, McNemar exact p = 0.125. Three of the 4 are skull-base slabs (height 0.17–0.19, relative brain fraction 0.47–0.54).
+  - Other candidates: gate(0.25) and gate(0.40) 68; gate(0.70) 65; the adjacency rules 63–64 but swap 9–14 flags each way; both(0.70) 77.
+  - **The flagged scans' top slab is mostly in brain tissue:** median relative brain fraction 0.87 (none below 0.40), median height 0.38. Grad-CAM puts 76% of the heat in brain tissue (median of 136 slabs); 2 of 136 slabs have more heat on bone than brain. 16% of flagged scans' top two slabs are neighbours, against 25% of unflagged.
+  - **Reading:** skull-base slabs explain only a few of ISLES'24's false alarms. Most come from single hot slabs in the brain tissue of acute-stroke scans, a domain shift no slab rule fixes. EXP-35's 12 of 23 described the borderline band only.
+- `isles_false_alarms.gradcam_figure`: row spacing fixed (the second row's captions were hidden), and the figure was redrawn from the same scans.
+- `docs/ITEM2_FALSE_ALARMS.md`: results section added.
+- **Decision (Parsa, 19 Nov): DEC-28 stands.** gate(0.55) is not adopted. Item 2 is reported as an explanation, with the negative result that no slab rule fixes the false alarms. Recorded in `docs/ITEM2_FALSE_ALARMS.md` and as a ticked line in plan §7 (Vision B). The contracts, the paid runs and C9 are unchanged.
+- **Notion sync:** Experiments: EXP-51 (done), EXP-50 (done).
+
+## 2026-11-19 — Claude Code session (Item 2: EXP-49's result)
+- **EXP-49** (Kaggle T4, 218faf8, 12.0 min, free): the scan AUC (0.9772) reproduces EXP-6. All 10 candidates are eligible under the pre-registered margins.
+
+  | Candidate | Sensitivity | Specificity |
+  |---|---|---|
+  | none | 0.9597 | 0.8812 |
+  | gate(0.25 / 0.40 / **0.55** / 0.70) | 0.9597 / 0.9595 / **0.9595** / 0.9584 | 0.8813 / 0.8827 / **0.8853** / 0.8726 |
+  | adjacent | 0.9605 | 0.8702 |
+  | both(0.25–0.70) | 0.9585–0.9610 | 0.8637–0.8707 |
+
+  These are means over the 20 seeds, at the 96% target.
+- **Proposal: gate(0.55).** Paired specificity gain on the main seed **+0.0047 [+0.0015, +0.0086]**: 6 fewer false alarms of 1,287 bleed-free scans. It meets the adoption rule. Subtype sensitivities are unchanged within 0.001 (epidural 0.921 on 31 bleeds).
+- **Reading:**
+  - Requiring the top two slices to be neighbours (adjacent, both) costs specificity on RSNA.
+  - The Grad-CAM reference shows why a gate can do little on RSNA. RSNA's false positives put 73% of their heat in brain tissue at mid-head (median height 0.52), as true positives do (85%). So RSNA's false alarms are not skull-base ones.
+  - EXP-35 traced ISLES'24's borderline flags to skull-base slabs. Whether the gate helps there is EXP-50's question.
+  - The gain is also the best of 10 candidates on the same data, so it is slightly optimistic.
+- The run predates the threshold export (1f0849f), so gate(0.55)'s threshold for EXP-50 needs a rerun of notebook 24 (EXP-51).
+- Files: `runs/EXP-49_visionB_false_alarms/` on the Mac and Drive, numbers only (checked for IDs).
+- **Notion sync:** Experiments: EXP-49 (done).
+- **EXP-41 consensus: Parsa settles the 28 disagreements as third rater** (his decision, 19 Nov), instead of each pair meeting. The report will say so.
+  - `label_page.build_consensus_page`: the labelling page in a third-rater mode. It shows both labellers' labels and notes under each claim and fills `consensus` and `note_consensus`. It is still blind: no model, run or verifier verdict.
+  - `label_page.merge_consensus` puts the download back into the combined sheet. It refuses a consensus on a claim the pair agreed on.
+  - The page is `runs/EXP-41_labelling/consensus_parsa.html`, built by `build_consensus.py` next to it. It is local only, with the key.
+  - Checked in the browser: it renders, shows the two labels, and marks a verdict.
+  - Test added to `tests/test_label_page.py`; pytest 790 passed.
+
 ## 2026-11-19 — Claude Code session (Item 2: the threshold export and EXP-50's ISLES'24 read-out)
 - **Gap found in EXP-49 (running from 218faf8):** `select()` did not export the thresholds a candidate needs to be applied to ISLES'24, and those can only be computed on Kaggle.
   - Fixed: `false_alarms.full_split` now gives each candidate's full-split raw threshold for 96% sensitivity, its own Platt calibration, and the threshold on that scale (numbers only). This is how DEC-28's threshold was set for "none".
