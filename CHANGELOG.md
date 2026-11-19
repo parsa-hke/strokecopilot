@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Phase 3 wrap-up check)
+- **Plan §7 NLP B, the C9 line:** the rescored numbers (points 19 and 20) replace the first scoring, which is kept in the same line.
+- **Phase 3 status:**
+  - Open: human adjudication, waiting for Parsa's third-rater consensus on the 28 disagreements; and the optional Vision B per-subtype outputs.
+  - Acceptance: the hallucination table with ≥3 models and CIs is met (EXP-42, rescored), and so are the validated contracts for all development cases (EXP-33). Adjudication agreement is pending.
+- **Still unticked from Phases 0–2, for Parsa to confirm:**
+  - the professors' written confirmation (DEC-1);
+  - the shared Drive folder for the team;
+  - a clinician's review of the rulebook;
+  - `00_template`'s first T4 run;
+  - onboarding.
+- **Found for Phase 4, before the held-out cases are unlocked:**
+  - DEC-25 leaves open how the five fold models are combined for held-out cases.
+  - The plan says "× 3 models", while there are now four paid models plus DEC-30's two small ones.
+  - Notes exist only for the 129 development cases.
+  - `demo/` does not exist yet.
+  - Nothing implements the error-propagation or ±20% core analyses yet.
+- **`docs/PHASE4_PREREGISTRATION.md`, approved as drafted by Parsa (19 Nov) as DEC-31.** It is in plan §2, and the §7 Phase 4 task links to it. It was written before any held-out case is opened. Held-out set: 20 cases, counted by sha256-checked split only.
+  - **To close first:** the EXP-41 consensus; the freeze list; Vision B's one RSNA test-split check (DEC-22, now that EXP-6 + DEC-28 is final); and the code, tested on development cases only.
+  - **D1:** a five-fold nnU-Net ensemble for held-out cores, with everything else as for development cases. `plans.json` and `dataset.json` are not on Drive (only `fold_N/` was kept) and must be rebuilt and matched to each fold's `debug.json` first.
+  - **D2:** all six reasoner models, with the rulebook, in predicted and ground-truth vision arms: 240 requests.
+  - **D3:** correctness; C9's metrics next to EXP-37's development real cases; error propagation defined mechanically by `rules.decide` on the predicted contract (vision against reasoning error, verifier caught against miss); the ±20% core sensitivity check, rule-level and for Sonnet; held-out Dice, volume and cut-off crossings.
+  - **D4:** the order of work.
+  - **Estimates:** Anthropic about $5–6, OpenRouter under $1, Colab A100 about 1–2 h, Kaggle free.
+
 ## 2026-11-19 — Claude Code session (Item 2: EXP-51 and EXP-50, the ISLES'24 read-out)
 - **EXP-51** (Kaggle T4, 1f0849f, 11.6 min, free): EXP-49 rerun with the threshold export, and its selection is identical field by field.
   - "none" full-split threshold 0.174984 on EXP-6's calibration, **exactly DEC-28**.
