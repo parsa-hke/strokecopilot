@@ -144,3 +144,83 @@ def test_forest_labels():
     assert figures._forest_label({"id": "T5a", "label": "qwen3.5-27b minus Sonnet"}) == "Qwen3.5-27B"
     assert figures._forest_label({"id": "T3a", "label": "claude-sonnet-5-5: with minus without"}) == "Sonnet 5.5"
     assert figures._forest_label({"id": "T6b", "label": "x"}) == "held-out routes (51)"
+
+
+def test_linear_shap_of_a_logistic_mapping_adds_up():
+    from strokecopilot.analysis import confidence_shap as cs
+    mapping = {"features": ["a", "b"], "fill": [0.0, 1.0], "mean": [0.5, 1.0], "std": [2.0, 0.5],
+               "weights": [1.5, -0.4], "intercept": -0.3}
+    X = np.array([[1.0, 1.2], [np.nan, 0.4], [3.0, 2.0]])
+    phi, base, logit = cs.shap_values(mapping, X)
+    assert np.allclose(phi.sum(axis=1) + base, logit)
+    assert np.allclose(phi.mean(axis=0), 0)  # centred on the cases explained
+    s = cs.summarise(mapping, phi, np.array([True, False, False]))
+    assert math.isclose(sum(v["share_of_attribution"] for v in s["signals"].values()), 1.0)
+
+
+def test_retrieval_pairs_and_digit_share():
+    from strokecopilot.analysis import retrieval_shap as rs
+    p = rs.pairs()
+    assert len(p) == 12 and all(claim for _, claim in p)
+    share, tokens = rs.digit_share(["core ", "< ", "70 ", "mL", ""], [0.1, 0.0, 0.3, 0.1, 0.5])
+    assert math.isclose(share, 0.6) and math.isclose(tokens, 0.25)
+
+
+def test_surrogate_design_and_validation_on_synthetic_claims():
+    from strokecopilot.analysis import surrogate_flags as sf
+    rng = np.random.default_rng(0)
+    rows = []
+    for g in range(60):
+        for _ in range(10):
+            kind = rng.choice(["rule", "vision"])
+            rows.append({"group": f"c{g}", "model": "m", "case type": "scenario", "field": "rationale", "kind": kind,
+                         "sources": 1, "cites a passage": 0, "cites imaging": 1, "cites the note": 0, "derived": 0,
+                         "words": 8, "numbers": 1, "flagged": int(kind == "rule" and rng.random() < 0.9)})
+    X, y, groups, cols, owner = sf.design(rows)
+    assert X.shape == (600, len(cols)) and set(owner.values()) >= {"kind", "model", "numbers"}
+    v = sf.validate(X, y, groups, n_boot=200)
+    assert v["auc"] > 0.9 and v["ci95"][0] > 0.5 and v["cases"] == 60
+    e = sf.explain(X, y, cols, owner)
+    assert next(iter(e["share_of_attribution"])) == "kind"
+
+
+def test_pixel_helpers():
+    from strokecopilot.analysis import visionb_pixel_shap as vp
+    assert vp._pool(np.ones((320, 320))).shape == (10, 10)
+    rows = [{"shap": {"brain": 0.6, "bone": 0.1, "other": 0.1, "outside": 0.2},
+             "shap_positive": {"brain": 0.5, "bone": 0.2, "other": 0.1, "outside": 0.2},
+             "gradcam": {"brain": 0.8, "bone": 0.1, "other": 0.05, "outside": 0.05}, "spearman_shap_gradcam": 0.4}] * 3
+    s = vp.summarise(rows)
+    assert s["slabs"] == 3 and s["slabs_brain_over_bone"] == {"shap": 3, "gradcam": 3}
+    assert math.isclose(s["median_share"]["gradcam"]["brain"], 0.8)
+
+
+def test_reasoner_shap_versions_hide_each_group_and_keep_the_full_case():
+    from strokecopilot.analysis import reasoner_shap as rs
+    pairs = rs.scenarios_with_specs()
+    chosen = rs.choose(pairs)
+    assert len(chosen) == 24 and len({s.id for s, _ in chosen}) == 24
+    assert [s.id for s, _ in rs.choose(pairs)] == [s.id for s, _ in chosen]  # seeded
+    s, spec = chosen[0]
+    vs = rs.versions(s, spec)
+    assert len(vs) == 64
+    values, full = rs.rule_values(vs)
+    assert full == {d: s.expected[d]["value"] for d in rs.DECISIONS} and values[-1].tolist() == [1.0, 1.0]
+    empty = vs[0]
+    assert empty["vision"]["core_ml"] is None and empty["vision"]["occlusion_site"] == "unknown"
+    assert empty["vision"]["haemorrhage"] == s.vision["haemorrhage"]  # the bleed stays fixed
+    for key in ("age", "nihss", "premorbid_mrs", "inr", "anticoagulant"):
+        assert empty["facts"].get(key).type == "not_recorded"
+    assert empty["facts"].get("onset_to_imaging") is None and empty["facts"].get("lkw_to_imaging") is None
+    phi = rs.shapley_table(values)
+    for k, d in enumerate(rs.DECISIONS):
+        assert math.isclose(sum(phi[d].values()), values[-1, k] - values[0, k], abs_tol=1e-9)
+
+
+def test_reasoner_shap_model_values_need_every_answer():
+    from strokecopilot.analysis import reasoner_shap as rs
+    rec = {"thrombolysis": {"recommend": True}, "thrombectomy": {"recommend": False}}
+    other = {"thrombolysis": {"recommend": False}, "thrombectomy": {"recommend": False}}
+    values, full = rs.model_values([other] * 63 + [rec])
+    assert full == {"thrombolysis": True, "thrombectomy": False} and values[0].tolist() == [0.0, 1.0]
+    assert rs.model_values([rec, None] + [rec] * 62) == (None, None)

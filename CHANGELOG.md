@@ -1,5 +1,36 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (Phase 5 task B: SHAP row 9 ready for Colab)
+- **DEC-35 amended (Parsa, 20 Nov 2026), row 9:** the bleed stays fixed at its real value, because the frozen contract cannot say "unknown" for `haemorrhage.present`. The reasoner game has six groups (perfusion, occlusion site, ASPECTS, time, patient, contraindications), and the rules are scored on the same six. Recorded in plan §2 and the survey.
+- **`analysis.reasoner_shap`:**
+  - picks 24 scenarios by seed (one per key route, then 8 more);
+  - builds all 64 versions of each, with the absent groups null in the contract and "not recorded" in a note re-rendered with the first phrasing throughout;
+  - writes the Colab requests and scores model against rules (`python -m strokecopilot.analysis.reasoner_shap`).
+
+  1,280 distinct requests per model. Every full version reproduces its scenario's rule decision.
+- **Notebook 55** gains `MODE = 'shap_dummy'` (one scenario) and `'shap'` (EXP-74); three lines of the notebook changed. Checked end to end on the Mac with rule-derived gold answers (the model's values then equal the rules', as they must). Not yet run on Colab.
+- **Tests:** `tests/test_analysis.py` (21). pytest: 900 passed. **Spend:** $0.
+- **Notion sync:** Decisions: DEC-35 (amended: row 9 bleed fixed). Experiments: EXP-74 (Planned: reasoner SHAP, notebook 55).
+
+## 2026-11-20 — Claude Code session (Phase 5 task B: SHAP rows 3, 6, 10 and 11 done)
+- **`shap` 0.48.0** installed in the project venv and pinned in a new `analysis` extra (`pyproject.toml`; it built from source on Python 3.14).
+- **EXP-70, row 3, `confidence.core` v2** (`analysis.confidence_shap`; seconds, $0): exact SHAP of v2's logistic mapping, identical to `shap.LinearExplainer` with all 129 cases as background. The distance to the nearest cut-off carries **73%** of the attribution, core size 14%, missing Tmax 12%, disagreement 1%. In-sample; it backs DEC-27.
+- **EXP-71, row 10, the retriever** (`analysis.retrieval_shap`; Mac CPU, 45 s, $0): Partition SHAP over passage tokens of the bge similarity, for the 12 key fixture passages with a citing gold claim (EXP-7's queries were not saved).
+  - Number tokens carry at least their share in 10 of 12 (median 13% of the attribution on 10% of the tokens).
+  - So bge does not ignore numbers; sibling rows share the same numbers. This refines EXP-7's diagnosis and still supports DEC-19.
+- **EXP-73, row 11, a surrogate of the verifier's flags** (`analysis.surrogate_flags`; 18 s, $0), labelled a surrogate:
+  - gradient boosting on claim features known before verification, 27,472 claims; out-of-fold AUC **0.92 [0.92, 0.93]**, grouped by case, so SHAP is reported;
+  - rule claims (44% flagged) and non-numeric comparisons (26%) push towards a flag; imaging values (2%) away;
+  - model and claim kind carry 60% of the attribution.
+- **EXP-72, row 6, Vision B pixels** (`analysis.visionb_pixel_shap`; dummy 2 scans then full; Mac MPS, 10.4 min, $0; no case ID saved). Expected gradients on the top 2 slabs of the 68 flagged ISLES'24 development scans, beside Grad-CAM on the same slabs.
+  - Reproduces EXP-50: 68 flags; Grad-CAM 76% in brain.
+  - SHAP: median **50%** in brain, 26% in bone (Grad-CAM 9%); brain over bone in **127 of 136** slabs; median Spearman with Grad-CAM 0.50.
+  - A second method supports Item 2: the false alarms come from brain tissue.
+- **Figures** in Drive `artifacts/figures/` with README lines: `fig_confidence_v2_shap`, `fig_retrieval_token_shap`, `fig_surrogate_flags_shap`, `fig_visionB_pixel_shap`. Results in `docs/PHASE5_SHAP_SURVEY.md` §5; runs on the Mac and Drive.
+- **Fixed:** the figures module's entry point ran before its later functions were defined.
+- **Tests:** `tests/test_analysis.py` (19). pytest: 898 passed. **Spend:** $0.
+- **Notion sync:** Experiments: EXP-70, EXP-71, EXP-72, EXP-73 (Done, figures above).
+
 ## 2026-11-20 — Claude Code session (Phase 5 task C: EXP-69, the t-tests)
 - **`analysis.ttest_plan`** loads every approved test from the saved runs. It first recomputes each reported bootstrap result from the same files and seed and stops on any mismatch (all matched). It then runs `ttests.paired` / `ttests.welch` and applies Holm. T7's held-out side comes from a new `phase4 rates` command: per-case rates only, no ID or alias, ID-checked; post hoc, as Parsa allowed. One `ALLOW_HELDOUT=1 … phase4 rates` run.
 - **EXP-69** (`runs/EXP-69_ttests/` on the Mac and Drive; Mac, seconds, $0): **34 of 35 tests**; T9 waits for task D.

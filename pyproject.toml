@@ -24,6 +24,8 @@ llm = ["anthropic>=2.4", "openai>=1.40"]  # openai: the client for vLLM's OpenAI
 space = ["fastapi>=0.115", "uvicorn>=0.30", "anthropic>=2.4", "numpy", "pandas", "scipy", "nibabel", "sentence-transformers"]
 # Item 4 (DEC-30): LoRA fine-tuning of the small reasoner on a Colab A100 (notebook 54); versions as tested on CPU.
 finetune = ["torch", "transformers==5.22.1", "peft==0.21.3", "accelerate==1.16.0", "safetensors"]
+# Phase 5 report-only analyses (DEC-35, DEC-36): SHAP, surrogates and t-tests; shap pinned as installed and tested.
+analysis = ["numpy", "scipy", "matplotlib", "scikit-learn", "shap==0.48.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/strokecopilot"]

@@ -90,6 +90,12 @@ of attribution in brain, bone, other, outside). ISLES'24 images with attribution
   scenario set, not the mix of patients in practice. On the 129 development contracts (optional) the unknown occlusion
   site will dominate, as EXP-63 found.
 
+**Row 9, amended 20 Nov 2026 (Parsa), before any answer:** the bleed stays fixed at its real value, because the frozen
+contract cannot say "unknown" for `haemorrhage.present`. Six groups instead of seven (64 versions per scenario; 1,280
+distinct requests per model after identical versions merge); the rules are scored on the same six. Ready: notebook 55
+`MODE = 'shap_dummy'` (one scenario) then `'shap'`, as EXP-74; checked end to end on the Mac with rule-derived gold
+answers.
+
 **Row 9, reasoners.** The same games as row 8, with the model's `recommend` booleans as the output and the rules'
 values beside them on the very same coalitions. Seven groups, to keep 128 coalitions: bleed; core and Tmax > 6 s (with
 `confidence.core`); occlusion site; ASPECTS; time; age, NIHSS and mRS; contraindication facts. A group is absent when its
@@ -144,3 +150,33 @@ means no thrombectomy, in 86 of 150 scenarios), so some single values are negati
 the core volume, the quantity our segmentation model estimates, rarely does (exact Shapley values over 150 synthetic
 scenarios)."
 
+**Row 3, `confidence.core` v2: EXP-70 (done 20 Nov 2026; figure `fig_confidence_v2_shap`).** Exact SHAP values of v2's
+logistic mapping (closed form, matching `shap.LinearExplainer` exactly with all 129 cases as background) in log-odds of
+a large error. The distance to the nearest cut-off carries **73%** of the mean |SHAP value|, predicted core size 14%,
+missing Tmax near the at-risk area 12%, disagreement with the threshold core 1%. In-sample, since v2 was fitted on the
+same cases. It backs DEC-27's choice: v2 was mostly the distance already.
+
+**Row 10, the retriever: EXP-71 (done 20 Nov 2026; figure `fig_retrieval_token_shap`).** Partition SHAP over the
+passage tokens of the bge similarity between each of the 12 key fixture passages and a gold claim citing it (EXP-7's
+own queries were not saved; the gold claims stand in, so ranks differ from EXP-7's). Number tokens carry **at least
+their share** of the similarity in 10 of the 12 passages (median 13% of the attribution on 10% of the tokens; ratio
+1.25). So bge does not ignore numbers; EXP-7's misses (here, 4 of 12 passages not ranked first) come from sibling rows
+that share the same numbers in other combinations (6 h, 24 h, ASPECTS ranges), which raise their similarity too. This
+refines EXP-7's diagnosis and still supports DEC-19.
+
+**Row 11, verifier flags: EXP-73 (done 20 Nov 2026; figure `fig_surrogate_flags_shap`). A surrogate model, not the
+verifier.** A gradient-boosted classifier of "flagged" from claim features known before verification, 27,472 claims of
+the six models' rulebook arms; out-of-fold AUC **0.92 [0.92, 0.93]** (grouped by case), so its SHAP values are reported.
+Claim kind (32% of the attribution) and model (28%) dominate, then how many numbers a claim holds (10%). Rule claims (44%
+flagged) and non-numeric comparisons or reasons (26%) push towards a flag; restated imaging values (2%), decision
+citations (7%) and absence claims (9%) push away. Rule and non-numeric comparison claims are the ones the LLM judge
+decides; imaging values and numbers are checked in code. The model ranking matches EXP-42's.
+
+**Row 6, Vision B pixels: EXP-72 (done 20 Nov 2026; Mac MPS, 10.4 min; figure `fig_visionB_pixel_shap`).** Expected
+gradients (`shap.GradientExplainer`, 100 samples) on the logit of the top 2 slabs of the 68 flagged ISLES'24 development
+scans, background the top slab of 50 unflagged scans, read with Item 2's tissue masks. The run reproduces EXP-50 (68
+flags; Grad-CAM median 76% of the heat in brain, 134 of 136 slabs brain over bone). SHAP agrees on the main point:
+median **50%** of the |attribution| in brain tissue, and brain over bone in **127 of 136** slabs. It gives bone more
+weight than Grad-CAM (26% against 9%), as pixel-level gradients pick out high-contrast edges, and the two maps agree
+moderately (median Spearman 0.50, IQR 0.31–0.59, at 10 × 10). So a second, different method supports Item 2's reading:
+the false alarms come from brain tissue, not from skull-base slabs.
