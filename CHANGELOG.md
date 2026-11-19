@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (Phase 5 additions: owner, and SHAP row 8 done, EXP-68)
+- **Owner:** Parsa owns and runs every Phase 5 addition (his decision, 20 Nov 2026); recorded in both docs.
+- **EXP-68, the rule engine's inputs** (DEC-35, SHAP row 8; `analysis.rule_shap`; Mac, 6 s, $0; `runs/EXP-68_rule_shap/` on the Mac and Drive). Exact Shapley values, 13 input groups, 8,192 coalitions per scenario, on the 150 synthetic scenarios.
+  - **Thrombectomy** turns mostly on the occlusion site (mean |value| 0.57); time, NIHSS and pre-stroke mRS give 0.14 each, ASPECTS 0.06, the core 0.007 and Tmax > 6 s 0.003.
+  - **Thrombolysis** turns on time (0.41), then the occlusion site (0.14) and NIHSS (0.13); the core and Tmax > 6 s give 0.06 and 0.05.
+  - **Where the rules say yes,** vision inputs carry 28% of thrombolysis's attribution (40 scenarios) and 50% of thrombectomy's (32).
+  - **With every input unknown,** the rules already reach the decision in 55/150 (thrombolysis, undetermined) and 86/150 (thrombectomy, no). There the values sum to 0 and some are negative, so the magnitudes are the summary. This agrees with EXP-63 (core ×0.8/×1.2 change 9 and 10 of 300 decisions).
+  - **Limits:** a synthetic scenario set with even route coverage, not real patients; it measures the rules, not any model.
+- **Figure** `fig_rule_engine_shap` (PNG and SVG) in Drive `artifacts/figures/`, with its README line (`analysis.figures`, which adds or replaces only its own lines). Palette pair checked with the dataviz validator.
+- **Tests:** a README-line test added (`tests/test_analysis.py`, 12). pytest: 891 passed. **Spend:** $0.
+- **Notion sync:** Experiments: EXP-68 (Done: rule engine SHAP, figures above). Tasks: Phase 5 task B (in progress: row 8 done).
+
+## 2026-11-20 — Claude Code session (Phase 5 additions, tasks B and C: the SHAP survey and the t-test list, approved)
+- **`docs/PHASE5_SHAP_SURVEY.md`** (draft): 19 places checked against the code and saved outputs. Each row gives the method (exact enumeration or which `shap` explainer), the question, the data, the cost and whether it is feasible.
+  - **Proposed to run:** Vision A input channels; Vision A `confidence.core` v2; Vision B windows and pixels; the rule engine; the Gemma 3 4B pair; the retriever; three surrogates. Optional: Vision A spatial. Sonnet only in a small form (about $9, estimate).
+  - **Said not to apply or to tell us nothing:** DEC-27's one-input confidence; the top-2 slab score; `confidence.penumbra`; calibration; the probes' embeddings; the LLM judge; the threshold baseline; a surrogate on EXP-41's 21 human-judged errors.
+  - **Found:** nnU-Net reads six channels (NCCT, CBF, CBV, MTT, Tmax, a Tmax-valid mask), not four maps. The proposal has five players, with Tmax and its mask as one. The proposed baseline for absent Tmax is the trained "no reliable data" form (Tmax 0, mask 0); the other maps are mean-filled (a constant, all zeros after nnU-Net's per-image z-score; to be checked in the dummy run, since nnU-Net is not installed on the Mac).
+  - **Found:** EXP-7's retrieval queries are not in `src/`; only its config and metrics are on Drive.
+- **`docs/PHASE5_TTESTS.md`** (draft): 35 Student's t-tests (paired, or Welch where unpaired) beside the existing results, at the case level. It says plainly that the data has already been seen. Each test reports a rank test beside it, Holm over the whole list, and its effect size and assumption checks. T7 (development against held-out) is post hoc on saved held-out results and needs Parsa's OK.
+- **Parsa's choices (20 Nov 2026):** both docs approved with the proposed defaults. T7 (post hoc, held-out, aliases only) is allowed. **DEC-35** (the SHAP analyses) and **DEC-36** (the t-tests) are added to plan §2. Owners are decided later: the code is built and tested now, and nothing runs on data until owners are assigned. EXP numbers start at EXP-68, in order as each analysis runs.
+- **Code, tested without data** (new package `strokecopilot.analysis`):
+  - `shapley.py`: exact Shapley values by enumeration (up to 16 players; number or vector outputs). Tested on an additive game, the glove game and efficiency.
+  - `rule_shap.py`: SHAP row 8, the rule engine's 13 input groups (every `rules.Case` field exactly once; ratio and mismatch kept only with both volumes), with the value 1 when the decision matches the full-input one. Also vision against note as a two-player game. Its `main` refuses to write without the run's `config.json`.
+  - `ttests.py`: paired and Welch t-tests with the interval, d_z or Hedges' g, skewness, Shapiro–Wilk and the rank test beside each; Holm; the check against a bootstrap interval. Checked against scipy and a worked Holm example.
+  - `tests/test_analysis.py` (11).
+- No analysis has been computed yet. pytest: 890 passed. **Spend:** $0.
+- **Notion sync:** Decisions: DEC-35 and DEC-36 (new, Decided, 20 Nov 2026, Parsa). Tasks: Phase 5 additions, task B (SHAP: survey approved, code in progress) and task C (t-tests: list approved, code in progress).
+
 ## 2026-11-20 — Claude Code session (Phase 5 additions, task A: the clinician pack, approved and fixed)
 - **Scope of this side session:** Phase 5 additions A to J (clinician pack, SHAP, t-tests, BiomedCLIP and probes, subgroups, a non-Claude judge, retrieval, ONNX, reproducibility), report only under DEC-31's freeze. Other Phase 5 sessions own the reports, paper, deck and Space page.
 - **`docs/CLINICIAN_PACK.md`** (approved by Parsa, 20 Nov 2026): two instruments for two clinicians, answered independently; delivery; the case-selection rule; the fixed questions; consent; the analysis plan; the rule-error policy; and the sha256 of each built file. It says what may be claimed (expert opinion, never clinical validation). It supersedes `docs/CLINICIAN_REVIEW.md` as the thing that gets sent; that file gets a pointer line.
