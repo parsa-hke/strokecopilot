@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## 2026-11-19 — Claude Code session (Phase 4, Task 4: EXP-64, the Space's live dummy)
+- **EXP-64** (Mac, Parsa's shell with the Space's dedicated key; `runs/EXP-64_space_live_dummy/` on the Mac and Drive; synthetic inputs, no IDs). 5 of 5 live runs succeeded. **$0.4485 in all**, Anthropic, Space workspace.
+
+  | Run | Cache | Time | Cost | Claims flagged | Judge calls |
+  |---|---|---|---|---|---|
+  | 1 | cold | 77 s | $0.100 | 2/29 | 7 |
+  | 2 | warm | 45 s | $0.058 | 0/31 | 3 |
+  | 3 | warm | 55 s | $0.052 | 1/28 | 6 |
+  | 4 | warm | 68 s | $0.085 | 0/37 | 3 |
+  | 5 | cold (after 330 s) | 153 s | $0.154 | 2/53 | 12 |
+
+  - **By step:** reasoner 13–36 s (2,100–5,600 output tokens); extractor 12–21 s; judge 14–97 s.
+  - **The prompt cache works:** the 11,977 rulebook tokens are written on cold runs and read on warm ones.
+  - **Decisions:** Sonnet agreed with the rules on every determined decision (run 2's thrombectomy is undetermined: M2).
+  - **Against DEC-32's estimate** (warm $0.06–0.08, cold $0.10–0.12): warm as estimated; one cold run at $0.15 was above it, because it had a longer answer.
+- **Changes from it:**
+  - **Concurrent judge calls in live runs.** `trace.trace_all` gains `map_fn` (default `map`, so every existing run is unchanged), and `demo/live.py` passes a 6-worker pool. Each claim's trace depends only on that claim and read-only inputs; a test checks the traces are identical to sequential ones. Expected to cut a 12-call judge step from about 97 s to about 20 s; to be confirmed on the Space.
+  - `ClaudeJSON` updates its usage under a lock, so overlapping calls can't drop counts that the spend cap relies on. A test with 400 overlapping calls covers it.
+  - The server's cold-run reservation goes from $0.12 to **$0.16** (the dearest measured).
+  - Per-call timeouts (reasoner 150 s, extractor 120 s, judge 45 s) and the 300 s deadline stay. The largest measured step was well under each.
+  - `docs/DEC-32_PUBLIC_SPACE.md` §7 records the measured figures.
+- pytest: 858 passed.
+- **Spend so far in Phase 4:** Anthropic **$0.45** (the dummy, Space workspace); Kaggle free (EXP-60); Colab EXP-61 still to run.
+- **Notion sync:** Experiments: EXP-64 (done, figures above).
+
 ## 2026-11-19 — Claude Code session (Phase 4, Task 4: the Space's bank and server)
 - **`demo/bank.py`:** the precomputed bank. `python -m strokecopilot.demo.bank --out demo/space/build/bank` builds it from `runs/` and Drive.
   - **Presets:** the 5 fixtures and the 150 scenarios, each with the saved, verified answers of all six models (EXP-37 rulebook arms rescored with points 19–20; EXP-47), shaped by `live.view`. Each preset carries the builder inputs it corresponds to (all 155 map), and the features used for fallback matching.

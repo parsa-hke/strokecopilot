@@ -18,7 +18,7 @@ from collections import OrderedDict, deque
 PER_HOUR = 3
 PER_DAY = 10
 DAILY_CAP_USD = 1.00          # DEC-32 §7 (Parsa: fewer than 20 live runs expected); a Space variable can change it
-COLD_RUN_ESTIMATE_USD = 0.12  # EXP-37's logged usage at live prices, cache cold (DEC-32 §7); the dummy measures it
+COLD_RUN_ESTIMATE_USD = 0.16  # EXP-64 (the dummy): cold runs cost $0.10 and $0.15, warm $0.05-0.08; reserve the dearest
 MAX_CONCURRENT = 3
 CACHE_SIZE = 500
 

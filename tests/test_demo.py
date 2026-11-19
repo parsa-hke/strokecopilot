@@ -210,3 +210,43 @@ def test_reasoner_format_failure_is_a_live_failure():
     with pytest.raises(live.LiveFailure) as e:
         live.run(built, models, retriever)
     assert e.value.step == "reasoner" and "format failure" in e.value.reason
+
+
+def test_concurrent_tracing_gives_the_same_traces_as_sequential():
+    from concurrent.futures import ThreadPoolExecutor
+
+    from strokecopilot.nlp.verifier import claims as cl
+    from strokecopilot.nlp.verifier import trace as tr
+    from strokecopilot.pipeline import end_to_end as e2e
+
+    built = builder.build(LATE_M1)
+    models = fakes(built)
+    rec = live.rr.recommend(built.vision, built.note, models["reasoner"], version=live.PROMPT)[0]
+    claims = cl.extract(rec, models["extractor"])
+    case = {"vision": built.vision, "note": built.note, "facts": built.facts}
+
+    def traced(map_fn):
+        inputs = e2e._inputs(case, tr.Judge(models["judge"], tr.JUDGE_PROMPT), retriever, tr.TAU, ingest.load(), rec)
+        return [t.to_dict() for t in tr.trace_all(claims, inputs, map_fn=map_fn)]
+
+    with ThreadPoolExecutor(6) as pool:
+        assert traced(pool.map) == traced(map)
+
+
+def test_usage_counts_survive_overlapping_calls():
+    from concurrent.futures import ThreadPoolExecutor
+    from types import SimpleNamespace
+
+    from strokecopilot.nlp.reasoner import providers
+
+    class Client:
+        class messages:  # noqa: N801
+            @staticmethod
+            def create(**kw):
+                usage = SimpleNamespace(input_tokens=10, output_tokens=5, cache_read_input_tokens=0, cache_creation_input_tokens=0)
+                return SimpleNamespace(usage=usage, stop_reason="end_turn", content=[SimpleNamespace(type="text", text="{}")])
+
+    llm = providers.ClaudeJSON("claude-haiku-5-5", client=Client())
+    with ThreadPoolExecutor(8) as pool:
+        list(pool.map(lambda _: llm("s", "u", {}), range(400)))
+    assert llm.usage["requests"] == 400 and llm.usage["input_tokens"] == 4000

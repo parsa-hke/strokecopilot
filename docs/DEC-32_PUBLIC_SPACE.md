@@ -212,6 +212,17 @@ rates with `providers.PRICES`:
 These come from batch runs, so latency is not measured. From the output sizes it is likely 1–3 minutes; the dummy
 measures it.
 
+**Measured (EXP-64, 19 Nov 2026, 5 live runs, $0.45 in all):**
+
+| Cache | Cost per run | Time per run |
+|---|---|---|
+| Warm | $0.05–0.08 | 45–68 s |
+| Cold | $0.10 and $0.15 | 77 and 153 s |
+
+- The judge took up to 97 s, because each Haiku call takes about 6–8 s and the 3–12 calls ran one after another. Live runs now trace claims concurrently (6 workers), with the same verdicts.
+- The server reserves $0.16 per run against the daily cap.
+- A $5 monthly limit is about 35–90 runs.
+
 **Caps:**
 - **The workspace's monthly limit is the hard cap**, set by Parsa. Parsa expects fewer than 20 live runs in all (19 Nov
   2026), so the limit is small: about **$5** suggested, which allows about 40–60 runs (20 runs cost about $1.60–2.40).

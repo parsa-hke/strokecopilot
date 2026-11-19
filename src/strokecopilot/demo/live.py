@@ -11,7 +11,9 @@ result (DEC-32).
 so the page draws them the same way.
 """
 
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from strokecopilot.nlp.corpus import ingest
 from strokecopilot.nlp.reasoner import prompt as rp
@@ -25,6 +27,9 @@ from strokecopilot.pipeline import paid_runs as pr
 PROMPT = pr.PROMPT  # reasoner_v3
 TIMEOUTS_S = {"reasoner": 150.0, "extractor": 120.0, "judge": 45.0}
 DEADLINE_S = 300.0
+# EXP-64: each Haiku judge call takes about 6-8 s and a run makes 3-12, one after another (up to 97 s). Claims are traced
+# concurrently instead (trace.trace_all's map_fn); the verdicts and the scoring are unchanged.
+JUDGE_WORKERS = 6
 MAX_RETRIES = 2
 STEPS = ("note", "rules", "reasoner", "extractor", "judge", "score")
 BANNER = "Research prototype — not for clinical use."
@@ -72,10 +77,13 @@ class _CountingJudge:
     def __init__(self, llm, emit):
         self.llm, self.emit, self.calls = llm, emit, 0
         self.model = llm.model
+        self._lock = threading.Lock()
 
     def __call__(self, system, user, schema):
-        self.calls += 1
-        self.emit("judge", "running", {"calls": self.calls})
+        with self._lock:
+            self.calls += 1
+            calls = self.calls
+        self.emit("judge", "running", {"calls": calls})
         return self.llm(system, user, schema)
 
 
@@ -139,7 +147,8 @@ def run(built, models, retriever, emit=lambda *a: None, deadline_s=DEADLINE_S, c
         check_deadline("extractor")
         t = clock()
         inputs.decision_passages = tr.decision_passages(rec)
-        traces = [x.to_dict() for x in tr.trace_all(claims, inputs)]
+        with ThreadPoolExecutor(max_workers=JUDGE_WORKERS) as pool:
+            traces = [x.to_dict() for x in tr.trace_all(claims, inputs, map_fn=pool.map)]
     except LiveFailure:
         raise
     except Exception as e:

@@ -115,6 +115,7 @@ class ClaudeJSON:
         self.effort = effort
         self.max_tokens = max_tokens
         self.usage = {"requests": 0, "input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0, "seconds": 0.0}
+        self._usage_lock = threading.Lock()  # calls may overlap (the Space's concurrent judge calls, DEC-32)
 
     def describe(self):
         return {"provider": "anthropic", "model": self.model, "effort": self.effort, "max_tokens": self.max_tokens}
@@ -129,10 +130,11 @@ class ClaudeJSON:
             messages=[{"role": "user", "content": user}],
             output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": schema}},
         )
-        self.usage["requests"] += 1
-        self.usage["seconds"] += time.perf_counter() - started
-        for name in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"):
-            self.usage[name] += getattr(response.usage, name, 0) or 0
+        with self._usage_lock:
+            self.usage["requests"] += 1
+            self.usage["seconds"] += time.perf_counter() - started
+            for name in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"):
+                self.usage[name] += getattr(response.usage, name, 0) or 0
         if response.stop_reason == "refusal":
             raise RefusalError(f"{self.model} declined the request.")
         if response.stop_reason == "max_tokens":

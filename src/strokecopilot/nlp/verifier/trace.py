@@ -682,9 +682,12 @@ def trace_claim(claim, inputs):
     return trace
 
 
-def trace_all(claims, inputs):
-    """Trace every claim, then settle attribution entry by entry. Returns traces in claim order."""
-    traces = [trace_claim(claim, inputs) for claim in claims]
+def trace_all(claims, inputs, map_fn=map):
+    """Trace every claim, then settle attribution entry by entry. Returns traces in claim order.
+
+    map_fn lets a caller trace claims concurrently (the Space's live runs pass a thread pool's map, DEC-32): each claim's
+    trace depends only on that claim and the read-only inputs, so the traces are the same in any order."""
+    traces = list(map_fn(lambda claim: trace_claim(claim, inputs), claims))
     groups = {}
     for claim, trace in zip(claims, traces):
         trace._about_patient = bool(claim.applies_to_patient)  # for point 20 in attribute()
