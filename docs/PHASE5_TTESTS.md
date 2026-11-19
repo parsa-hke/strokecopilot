@@ -104,3 +104,35 @@ computed in our own code (statsmodels is not installed), with a test against a w
 4. Holm over the whole list as one family (proposed), or per group of tests.
 5. A Decisions row and an EXP number for the t-tests (after EXP-67 and the SHAP rows).
 6. Owner: Parsa (decided 20 Nov 2026).
+
+## 7. Results (EXP-69, 20 Nov 2026)
+
+`runs/EXP-69_ttests/` on the Mac and Drive: `report.md` (every test), `metrics.json`, `qq_plots.png`; figure
+`fig_ttests_forest` in Drive `artifacts/figures/`. **34 of the 35 tests ran**; T9 waits for task D. Before any t
+statistic, every reported bootstrap result was recomputed from the same files and matched. Holm is over the 34 tests run;
+adding T9 can only raise the adjusted p-values, and no conclusion below is within that margin.
+
+- **Clear after Holm (11):** nnU-Net's Dice over the threshold (T1, +0.104 [+0.077, +0.131], d_z 0.67); the rulebook
+  effect for all four models (T3a–d, −9 to −15 points); Gemma 3 27B, MedGemma, Gemma 3 4B and the tuned 4B above
+  Sonnet (T5b–e); the tuned 4B below its base, overall and on held-out routes (T6a–b, −29 and −24 points).
+- **Not clear after Holm:** nnU-Net's volume error against the threshold (T2, −1.6 mL [−4.6, +1.4], p 0.29, as DEC-25
+  said); every predicted-against-ground-truth vision comparison (T4a–d; Gemma 3 27B's −4.9 points has p 0.046
+  unadjusted, 0.82 after Holm); Qwen against Sonnet (T5a); the tuned 4B's critical rate (T6c); every development-against-
+  held-out comparison (T7, post hoc; the two 4B models are nominally worse on held-out cases, p 0.026 and 0.011, Holm
+  0.53 and 0.26); every subgroup (T8; nominally, Vision A Dice is higher under 80, +0.087, p 0.038, and the absolute
+  volume error larger in women, +14.6 mL, p 0.025, both skewed, Holm 0.72 and 0.53).
+- **Where the t-test and the reported bootstrap disagree (2 of the 18 with a reported interval), both stand:**
+  - **T5a, Qwen minus Sonnet:** t +1.3 points [+0.2, +2.4] (p 0.023, Holm 0.50) against the reported +1.0 [−0.1, +2.1].
+    51 cases drop out of the t-test (mostly Qwen's format failures); after Holm the two agree that the difference is
+    not established.
+  - **T6c, the tuned 4B's critical rate:** t +0.9 points [−0.8, +2.5] (p 0.31) against the reported +1.9 [+0.4, +3.4].
+    25 cases with no claim of determined criticality drop out, and the pooled rate weights cases with many claims. So
+    EXP-48's "higher critical rate" is fragile: it holds for the pooled claim rate, not for the mean per-case rate.
+- **Assumptions:** most paired differences are close to normal (Q–Q plots); the subgroup groups are zero-heavy and
+  skewed (skewness up to 3.2), which is why the rank test sits beside every t-test. Rank tests and t-tests agree on
+  every conclusion above.
+
+**For the reports, one sentence:** "Student's t-tests on per-case values, Holm-corrected over 34 tests, confirm the
+rulebook effect, nnU-Net's Dice gain and the model ranking; they do not support a volume gain, an effect of vision
+errors on hallucination, or any subgroup difference, and they weaken the tuned model's higher critical rate."
+

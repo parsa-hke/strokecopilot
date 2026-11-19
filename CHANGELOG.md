@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (Phase 5 task C: EXP-69, the t-tests)
+- **`analysis.ttest_plan`** loads every approved test from the saved runs. It first recomputes each reported bootstrap result from the same files and seed and stops on any mismatch (all matched). It then runs `ttests.paired` / `ttests.welch` and applies Holm. T7's held-out side comes from a new `phase4 rates` command: per-case rates only, no ID or alias, ID-checked; post hoc, as Parsa allowed. One `ALLOW_HELDOUT=1 … phase4 rates` run.
+- **EXP-69** (`runs/EXP-69_ttests/` on the Mac and Drive; Mac, seconds, $0): **34 of 35 tests**; T9 waits for task D.
+  - **Clear after Holm (11):** T1 (nnU-Net Dice +0.104); T3a–d (rulebook effect, −9 to −15 points); T5b–e (Gemma 27B, MedGemma, 4B, tuned 4B above Sonnet); T6a–b (tuned below base, −29 and −24 points).
+  - **Not clear after Holm:** T2 (volume −1.6 mL, p 0.29); all of T4 (vision arm; Gemma 27B p 0.046 unadjusted); T5a (Qwen vs Sonnet); T6c (tuned critical rate); all of T7 (post hoc; the 4B pair nominally worse on held-out cases); all of T8 (subgroups; nominal Dice by age and volume error by sex, skewed).
+  - **t-test and bootstrap disagree in 2 of the 18 with a reported interval:**
+    - T5a: t +1.3 [+0.2, +2.4] against +1.0 [−0.1, +2.1]; not established after Holm.
+    - T6c: t +0.9 [−0.8, +2.5] against +1.9 [+0.4, +3.4]. This weakens EXP-48's higher critical rate for the tuned model: it holds for the pooled rate, not the per-case mean. Both are reported.
+- **Figures:** `fig_ttests_forest` (T3–T6, t interval beside the reported bootstrap) in Drive `artifacts/figures/` with its README line; `qq_plots.png` in the run folder. Results in `docs/PHASE5_TTESTS.md` §7.
+- **Fixed on the way:** a numpy bool saved as 0.0 in the run's JSON (`agrees_with_bootstrap` now returns a Python bool).
+- **Tests:** `tests/test_analysis.py` (15). pytest: 894 passed. **Spend:** $0.
+- **Notion sync:** Experiments: EXP-69 (Done: 34 of 35 t-tests, figures above). Tasks: Phase 5 task C (done except T9, which waits for task D).
+
 ## 2026-11-20 — Claude Code session (Phase 5 additions: owner, and SHAP row 8 done, EXP-68)
 - **Owner:** Parsa owns and runs every Phase 5 addition (his decision, 20 Nov 2026); recorded in both docs.
 - **EXP-68, the rule engine's inputs** (DEC-35, SHAP row 8; `analysis.rule_shap`; Mac, 6 s, $0; `runs/EXP-68_rule_shap/` on the Mac and Drive). Exact Shapley values, 13 input groups, 8,192 coalitions per scenario, on the 150 synthetic scenarios.

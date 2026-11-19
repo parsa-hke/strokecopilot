@@ -46,7 +46,7 @@ def paired(a, b, label="", alpha=ALPHA):
         half = stats.t.ppf(1 - alpha / 2, df) * sd / math.sqrt(n)
     nonzero = d[d != 0]
     w = stats.wilcoxon(nonzero) if len(nonzero) >= 1 else None
-    return {"label": label, "form": "paired", "n": n, "dropped": dropped, "mean_a": float(a.mean()),
+    return {"_values": [d], "label": label, "form": "paired", "n": n, "dropped": dropped, "mean_a": float(a.mean()),
             "mean_b": float(b.mean()), "mean_difference": mean, "ci": [mean - half, mean + half], "t": t, "df": df,
             "p": p, "effect": "d_z", "effect_size": mean / sd if sd else float("nan"),
             "assumptions": _shape(d),
@@ -75,7 +75,7 @@ def welch(a, b, label="", alpha=ALPHA):
     pooled = math.sqrt(((na - 1) * va + (nb - 1) * vb) / (na + nb - 2))
     j = 1 - 3 / (4 * (na + nb) - 9)  # Hedges' small-sample correction
     u = stats.mannwhitneyu(a, b, alternative="two-sided")
-    return {"label": label, "form": "Welch", "n": [na, nb], "dropped": dropped, "mean_a": float(a.mean()),
+    return {"_values": [a, b], "label": label, "form": "Welch", "n": [na, nb], "dropped": dropped, "mean_a": float(a.mean()),
             "mean_b": float(b.mean()), "mean_difference": mean, "ci": [mean - half, mean + half], "t": t,
             "df": float(df), "p": p, "effect": "Hedges' g",
             "effect_size": j * mean / pooled if pooled else float("nan"),
@@ -108,10 +108,25 @@ def agrees_with_bootstrap(row, bootstrap_ci):
     """True when the t interval and the existing bootstrap interval agree on whether 0 is excluded."""
     t_excl = row["ci"][0] > 0 or row["ci"][1] < 0
     b_excl = bootstrap_ci[0] > 0 or bootstrap_ci[1] < 0
-    return t_excl == b_excl
+    return bool(t_excl == b_excl)
 
 
 def case_rate(per_case_row, numerator="hallucinated", denominator="claims"):
     """One case's rate from a metrics per_case row; NaN when it has no claims (a format failure)."""
     den = per_case_row.get(denominator) or 0
     return per_case_row[numerator] / den if den else float("nan")
+
+
+def case_rates(records, metric):
+    """Per-case rates, in record order, from verifier case records (compare.case_records): numerator over denominator
+    of `metric` (metrics.RATES) for each case on its own; NaN where the denominator is 0 (a format failure, or no claim
+    whose criticality is determined)."""
+    from strokecopilot.nlp.verifier import metrics as vm
+    if not records:
+        return []
+    table = vm._table(records)
+    num, den = vm.RATES[metric]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        rates = np.where(table[den] > 0, table[num] / np.where(table[den] > 0, table[den], 1), np.nan)
+    return [float(x) for x in rates]
+

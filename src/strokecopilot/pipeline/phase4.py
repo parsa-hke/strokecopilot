@@ -260,9 +260,27 @@ def analyse(dirs, ids, out_root, drive_runs, models=MODELS, development_cells=No
     return rep
 
 
+def heldout_rates(out_root, models, dest, ids):
+    """DEC-36's T7 (post hoc, allowed by Parsa on 20 Nov 2026): each model's per-case hallucination rates on the
+    held-out predicted-vision cell, as a list of numbers with no case ID or alias (Welch's test needs only the values).
+    A case with no claims (a format failure) is NaN. Written to `dest` after the ID check."""
+    from strokecopilot.analysis.ttests import case_rates
+    from strokecopilot.pipeline import compare
+    out = {"experiment": "EXP-69", "what": "T7: per-case hallucination rates, held-out cases, predicted vision (post hoc)",
+           "rates": {}}
+    for model in models:
+        folder = cell_dir(out_root, model, "heldout_predicted")
+        if (folder / "metrics.json").exists():
+            out["rates"][model] = case_rates(compare.case_records(folder), "hallucination_rate")
+    ha.check_no_ids(out, ids)
+    Path(dest).parent.mkdir(parents=True, exist_ok=True)
+    Path(dest).write_text(json.dumps(out, indent=1))
+    return {"written": str(dest), "models": {m: len(r) for m, r in out["rates"].items()}}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Phase 4's held-out commands (DEC-31 §4). Counts only.")
-    parser.add_argument("command", choices=("check", "status", "advance", "import", "analyse", "bank", "space"))
+    parser.add_argument("command", choices=("check", "status", "advance", "import", "analyse", "bank", "space", "rates"))
     parser.add_argument("--drive", help="the StrokeCopilot folder on Drive (default: config.local_drive_root)")
     parser.add_argument("--out", default=f"runs/{RUN}")
     parser.add_argument("--models", default=",".join(MODELS))
@@ -270,6 +288,7 @@ def main(argv=None):
     parser.add_argument("--from", dest="src", help="import: the run folder Colab wrote on Drive (default: Drive runs/RUN)")
     parser.add_argument("--bank", default="demo/space/build/bank_heldout", help="bank: the folder to build; space: the bank to use")
     parser.add_argument("--space-out", default="demo/space/build/space_heldout", help="space: the tree to assemble")
+    parser.add_argument("--rates-out", default="runs/EXP-69_ttests/heldout_rates.json", help="rates: where to write")
     parser.add_argument("--wait", action="store_true")
     parser.add_argument("--poll", type=float, default=0, help="advance: repeat every N seconds until every cell is done")
     parser.add_argument("--max-hours", type=float, default=12.0, help="advance --poll: give up after this long")
@@ -307,6 +326,8 @@ def main(argv=None):
         (dest / "report.md").write_text(md)
         print(md)
         result = {"written": str(dest), "not_finished": result["not_finished"]}
+    elif args.command == "rates":
+        result = heldout_rates(args.out, models, args.rates_out, ids)
     elif args.command == "bank":
         from strokecopilot.demo import bank
 

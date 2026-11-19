@@ -109,7 +109,7 @@ def test_holm_worked_example_and_nan():
 
 def test_bootstrap_agreement_and_case_rate():
     row = {"ci": [-0.5, -0.1]}
-    assert ttests.agrees_with_bootstrap(row, [-0.4, -0.05])
+    assert ttests.agrees_with_bootstrap(row, [-0.4, -0.05]) is True
     assert not ttests.agrees_with_bootstrap(row, [-0.4, 0.02])
     assert ttests.case_rate({"hallucinated": 2, "claims": 8}) == 0.25
     assert math.isnan(ttests.case_rate({"hallucinated": 0, "claims": 0}))
@@ -123,3 +123,24 @@ def test_figure_readme_line_is_added_once_and_replaced(tmp_path):
     text = (tmp_path / "README.md").read_text()
     assert "- **fig_other**: kept" in text and "old" not in text
     assert text.count("fig_rule_engine_shap") == 1
+
+
+def test_ttest_plan_stops_on_a_mismatch_with_the_reported_bootstrap():
+    from strokecopilot.analysis import ttest_plan
+    boot = {"difference": -0.149, "ci95": [-0.166, -0.132]}
+    ttest_plan._check(boot, dict(boot), "T3a")
+    with pytest.raises(ttest_plan.Mismatch):
+        ttest_plan._check(boot, {"difference": -0.150, "ci95": [-0.166, -0.132]}, "T3a")
+
+
+def test_case_rates_leave_format_failures_out():
+    rates = ttests.case_rates([{"case_id": "x", "format_failure": True, "traces": []}], "hallucination_rate")
+    assert len(rates) == 1 and math.isnan(rates[0])
+    assert ttests.case_rates([], "hallucination_rate") == []
+
+
+def test_forest_labels():
+    from strokecopilot.analysis import figures
+    assert figures._forest_label({"id": "T5a", "label": "qwen3.5-27b minus Sonnet"}) == "Qwen3.5-27B"
+    assert figures._forest_label({"id": "T3a", "label": "claude-sonnet-5-5: with minus without"}) == "Sonnet 5.5"
+    assert figures._forest_label({"id": "T6b", "label": "x"}) == "held-out routes (51)"
