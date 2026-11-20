@@ -96,6 +96,36 @@ def test_failure_falls_back_to_the_nearest_preset(bank_dir, step):
     assert state.slots.try_acquire()  # the slot was released
 
 
+def test_a_stored_case_run_unchanged_falls_back_to_itself(tmp_path):
+    """A stored case's values do not all survive the builder (a fixture leaves some history unstated; volumes snap to
+    the sliders' steps), so the nearest-case search can pick a neighbour. Its own inputs must give its own answer."""
+    b = builder.build(LATE_M1)
+    view = live.run(b, fakes(b), retriever)["view"]
+    answer = {"available": True, **{k: view[k] for k in ("recommendation", "claims", "decisions", "omissions",
+                                                         "uncertainty_omissions", "counts")}}
+    features = builder.features(b.vision, b.facts, b.expected)
+
+    def entry(case_id, inputs, feats):
+        row = {"id": case_id, "kind": "fixture", "title": case_id, "rules": {}, "models": [bank.FALLBACK_MODEL], "inputs": inputs,
+               "features": feats}
+        file = {"id": case_id, "kind": "fixture", "banner": live.BANNER, "rules": b.expected,
+                "arms": {"rulebook": {"vision": b.vision, "note": b.note, "answers": {bank.FALLBACK_MODEL: answer}}}}
+        return row, file
+
+    # "stored" keeps the inputs but, like a hand-written fixture, leaves two history facts unstated and has an
+    # unsnapped core; "a-twin" has no inputs and matches the built case exactly, so the nearest-case search prefers it.
+    stored = {**features, "head_trauma": None, "previous_ich": None, "core": features["core"] + 0.1}
+    bank.write([entry("stored", b.inputs, stored), entry("a-twin", None, features)], tmp_path)
+    assert builder.nearest(features, [{"id": "stored", "features": stored}, {"id": "a-twin", "features": features}])[0]["id"] == "a-twin"
+
+    _, client = make(tmp_path, None)
+    own = result_of(client, post(client))[-1]
+    assert own["preset_id"] == "stored" and own["exact"] is True and own["differs"] == []
+    assert "own precomputed answer" in own["message"]
+    other = result_of(client, post(client, {**LATE_M1, "age": 60}))[-1]   # changed inputs: the nearest-case search, as before
+    assert other["exact"] is False and "closest precomputed" in other["message"]
+
+
 def test_switched_off_and_limits_fall_back(bank_dir):
     _, client = make(bank_dir, None)
     assert result_of(client, post(client))[-1]["reason"] == "Live runs are switched off"

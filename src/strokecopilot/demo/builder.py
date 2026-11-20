@@ -104,6 +104,18 @@ def key(inputs):
     return hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
 
 
+def preset_key(inputs):
+    """The key a stored case's inputs give when run through the builder unchanged, or None if they are missing or do
+    not validate. Stored inputs carry None for the sleep time and the INR where those do not apply; a request leaves
+    those fields out, so they are dropped here before validating."""
+    if not inputs:
+        return None
+    try:
+        return key(validate({k: v for k, v in inputs.items() if not (k in BOUNDS and v is None)}))
+    except InputError:
+        return None
+
+
 @dataclass
 class Built:
     key: str

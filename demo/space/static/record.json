@@ -2468,7 +2468,7 @@
     {
       "id": "DEC-32",
       "title": "A public demo",
-      "text": "The demo is a public Hugging Face Space: a scrolling story of the pipeline, a case explorer where every claim is clickable and its source lights up, the results as interactive charts, and one live element, a scenario builder with structured inputs only. Cases appear by alias, never by ID, and no live answer is counted in any result."
+      "text": "The demo is a public Hugging Face Space: a scrolling story of the pipeline, a case explorer where every claim is clickable and its source lights up, the results as interactive charts, and one live element, a scenario builder with structured inputs only. Cases appear by alias, never by ID, and no live answer is counted in any result. Amended on 20 Nov 2026: the same parts sit on three pages (the story, the live run and the record); the story follows a scripted case, with a real case by alias for the scan images only; and a stored case run unchanged falls back to its own precomputed answer."
     },
     {
       "id": "DEC-33",

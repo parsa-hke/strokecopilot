@@ -31,10 +31,14 @@ Presentation only (DEC-32 Space). No number, result, chart meaning, schema or se
     - a result screen that scores the bets, shows every claim, and awards badges.
     - Points and eight badges are kept in the browser only (`localStorage`). The builder's values, the server calls, the limits and the fallback are unchanged.
     - Checked with the fallback, a recorded run, and a stand-in runner emitting the real event sequence; desktop and 375 px; no console errors.
+  - **The fallback fixed, on Parsa's word; not yet committed or uploaded** (`demo/builder.py`, `demo/server.py`): a stored case run unchanged now falls back to its own precomputed answer.
+    - **Cause:** stored values do not all survive the builder. Volumes snap to the sliders' 0.5 mL steps (29 cases reported "differs in core, penumbra"), and the five fixtures leave head injury and previous bleed unstated while the builder sends "no", which the nearest-case search counts as a category mismatch (two fixtures fell back to a scenario: `fx02` to `scenario-077`, `fx04` to `scenario-034`).
+    - **Fix:** `builder.preset_key` gives the key a stored case's inputs produce; the server keeps those keys and, on an exact match, returns that case with `exact: true` and no differences. Otherwise the nearest-case search runs as before. The page then says "this case's own precomputed answer".
+    - **Check:** all 154 stored cases run unchanged through the server return themselves with no differences (before: 32 did not, 2 of them a different case). One new test; no result or number changes, and no live answer is counted anywhere.
+  - **DEC-32 amended, on Parsa's word; not yet committed** (`docs/DEC-32_PUBLIC_SPACE.md` §11, plan §2 row and §8.5, and the record's DEC-32 entry): three pages; the story follows the scripted fixture `fx01` with real case D-10 by alias for the images only; the record page; the builder as a game with browser-only points; the exact-match fallback; dark only.
   - **Also seen, not changed (server side):** each upload restarts the container, which resets the in-memory daily spend counter and the result cache (`/healthz` read $0.00 after this upload).
-  - **Seen while testing, not changed (server side, predates this work):** with live runs off, the fallback for some stored cases picks a different nearest case, because stored values do not survive the builder's slider steps (for example `fx02` falls back to `scenario-077`). The page says so when it happens.
-- **Tests:** 910 passed. **Spend:** $0.2281 (two live runs on the Space: $0.1083 and $0.1198; daily cap $5).
-- **Notion sync:** Tasks: Space redesign (story, live-run game, record page) — Done, live on the Space. Decisions: DEC-32 §3 (story case) to confirm with Parsa; not amended. Follow-ups: fallback nearest-case for stored fixtures; daily spend counter resets on redeploy.
+- **Tests:** 911 passed. **Spend:** $0.2281 (two live runs on the Space: $0.1083 and $0.1198; daily cap $5).
+- **Notion sync:** Tasks: Space redesign (story, live-run game, record page) — Done, live on the Space. Decisions: DEC-32 amended 20 Nov 2026 (doc §11). Follow-ups: daily spend counter resets on redeploy.
 
 ## 2026-11-20 — Claude Code session (EXP-74 done: SHAP row 9, the small reasoners; task B complete)
 - **EXP-74** (`analysis.reasoner_shap`; notebook 55 `shap` on a Colab A100, 4ea7972; `runs/EXP-74_reasoner_shap/` on the Mac and Drive, answers on Drive; figure `fig_reasoner_shap`):

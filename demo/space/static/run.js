@@ -230,7 +230,7 @@
       if (r.source !== "live") window.RunViz.STEPS.forEach(([k]) => { if (!done.has(k)) v.step(k, "pre"); });
       $("#run-sub").textContent = r.source === "live" ? "Marking the claims…" : `${label}: ${r.message}`;
       await v.finish(r.view, { label: r.source === "live" ? null : label.toLowerCase(),
-        tag: r.source === "precomputed" ? `closest precomputed case: ${r.preset_title}` : r.source === "cache" ? "from the cache" : null });
+        tag: r.source === "precomputed" ? (r.exact ? "this case's precomputed answer" : `closest precomputed case: ${r.preset_title}`) : r.source === "cache" ? "from the cache" : null });
       await sleep(1200);
       showResult(r, placed, label);
     }); });
@@ -298,7 +298,7 @@
     drawTally(earned);
     // the full answer, on demand
     const full = $("#run-result"); full.hidden = true; $("#full").setAttribute("aria-expanded", "false"); $("#full").textContent = "Read the full answer";
-    renderAnswer(full, view, { title: r.source === "precomputed" ? `The closest precomputed case (${r.preset_title})` : "Sonnet 5.5's answer, claim by claim" });
+    renderAnswer(full, view, { title: r.source === "precomputed" && !r.exact ? `The closest precomputed case (${r.preset_title})` : "Sonnet 5.5's answer, claim by claim" });
     go("result");
   }
 

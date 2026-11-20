@@ -74,6 +74,13 @@ class State:
         self.index = index["cases"]
         self.ids = {row["id"] for row in self.index}
         self.fallback_bank = [row for row in self.index if row.get("features") and bank.FALLBACK_MODEL in row["models"]]
+        # A stored case run unchanged falls back to itself, not to its nearest neighbour: stored values do not all
+        # survive the builder (volumes snap to the sliders' steps; fixtures leave some history unstated).
+        self.exact = {}
+        for row in self.fallback_bank:
+            k = builder.preset_key(row.get("inputs"))
+            if k:
+                self.exact.setdefault(k, row)
         self.key_present = bool(os.environ.get("ANTHROPIC_API_KEY")) if key_present is None else key_present
         self.live_enabled = (env_flag("LIVE_ENABLED", True) and self.key_present) if live_enabled is None else live_enabled
         self.runner = runner
@@ -100,15 +107,20 @@ class State:
             return run
 
     def fallback(self, run, built, reason):
-        target = builder.features(built.vision, built.facts, built.expected)
-        entry, differs = builder.nearest(target, self.fallback_bank)
+        entry, differs = self.exact.get(built.key), []
+        exact = entry is not None
+        if not exact:
+            target = builder.features(built.vision, built.facts, built.expected)
+            entry, differs = builder.nearest(target, self.fallback_bank)
         file = self.case_file(entry["id"])
         arm = file["arms"]["rulebook"]
         answer = arm["answers"][bank.FALLBACK_MODEL]
         run.finish({"source": "precomputed", "reason": reason, "preset_id": entry["id"], "preset_title": entry["title"],
-                    "differs": differs,
-                    "message": f"{reason}. Showing the closest precomputed scenario instead, answered by Sonnet 5.5 earlier "
-                               "with the same prompt and verifier.",
+                    "differs": differs, "exact": exact,
+                    "message": (f"{reason}. Showing this case's own precomputed answer instead, given by Sonnet 5.5 earlier "
+                                "with the same prompt and verifier." if exact else
+                                f"{reason}. Showing the closest precomputed scenario instead, answered by Sonnet 5.5 earlier "
+                                "with the same prompt and verifier."),
                     "view": {"banner": live.BANNER, "vision": arm["vision"], "note": arm["note"], "expected": file["rules"],
                              **{k: answer[k] for k in ("recommendation", "claims", "decisions", "omissions",
                                                        "uncertainty_omissions", "counts")}}})

@@ -296,3 +296,39 @@ Each has a recommendation; the draft assumes the recommended one.
 
 **Time:** about 15–20 h for the Space (the earlier 4–6 h was for a Colab demo), so Phase 4 is about 30–45 h in all.
 **Cost:** hardware free; live use at most the workspace limit; the dummy about $0.50.
+
+## 11. Amendment of 20 Nov 2026: the redesign
+
+**Approved by Parsa on 20 Nov 2026**, after Phase 4 closed. It changes how the Space presents the work, not what it
+reports: no number, result or chart meaning changed, and no live answer is counted in any result. §1's rules on data,
+the banner, the key, spending and publishing stand as written. Where this section differs from §3 to §5, it wins.
+
+1. **Three pages, not one.** The five parts of §3 are kept and spread over three pages with a shared navigation; the
+   banner is fixed on each.
+   - `index.html`: the story (§3.1).
+   - `run.html`: the scenario builder (§3.4, §4).
+   - `research.html`, "the record": the results (§3.3), the case explorer (§3.2), and the About content (§3.5).
+2. **The story follows a scripted case, not a real one (changes §3.1).**
+   - It follows fixture `fx01` ("thrombolysis clear") from onset to the verifier, as one patient's story with three
+     reader challenges. The page says the patient and her scan numbers are scripted.
+   - Real case D-10 appears by alias for the scan images only, as before, with its attribution.
+   - Reason: a real development case leaves both decisions undetermined (its onset time is unknown), so it cannot
+     carry a story about a decision. The fixture also has a real, checkable event: in EXP-37 Sonnet 5.5 reached the
+     rulebook's answer but cited a passage that is in neither the prompt nor the rulebook, and the verifier flagged it.
+   - The story still says how well each step worked (Dice, volume error, Vision B's sensitivity, the 68 of 129 false
+     alarms). The cut-off crossings and Item 2 moved to the record page.
+3. **The record page adds every documented experiment.** `static/record.json` lists each numbered experiment (what it
+   asked, how it ran, what it found, its source), the decisions and the limits, compiled from the plan, the changelog
+   and the phase documents. It carries no case ID, name, key or cost figure, and the leak scan (§6) covers it.
+4. **The builder is presented as a short game (changes how §4 looks, not what it does).** The visitor picks a stored
+   case or tunes the same structured inputs, bets on the model's two decisions and on whether the verifier flags a
+   claim, watches the run step by step, and sees the bets scored.
+   - Inputs, limits, the cache and the fallback are as in §4 and §5.
+   - Points and badges are kept in the visitor's browser (`localStorage`). They are never sent to the server, and the
+     page still sets no cookie and makes no third-party call (§2).
+5. **A stored case run unchanged falls back to itself (clarifies §4).** When a visitor's inputs are exactly a stored
+   case's own inputs, the fallback is that case's own precomputed answer, with no differences listed. Otherwise the
+   nearest precomputed case is used, as before. (Stored values do not all survive the builder: volumes snap to the
+   sliders' steps and the fixtures leave some history unstated, so the nearest-case search could pick a neighbour.)
+6. **One look.** The site is dark only; the light theme is removed.
+
