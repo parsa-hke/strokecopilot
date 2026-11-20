@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (EXP-75 done: SHAP row 1, Vision A's input channels; EXP-82 dummy passed)
+- **EXP-75** (`analysis.visiona_channel_shap`; notebook 15 on a Colab A100; `runs/EXP-75_visionA_channel_shap/` on the Mac and Drive, rows on Drive only; figure `fig_visionA_channel_shap`):
+  - 4,128 predictions (129 cases × 32 combinations); median 0.3 s each.
+  - **Check:** the full combination reproduces every recorded volume (EXP-27) within 0.02 mL; wrong-side count 43 of 129, the same as from EXP-27's recorded volumes.
+  - **Mean |Shapley value|, Dice (volume):** Tmax 0.096, 38% (12.2 mL, 35%); NCCT 0.059, 23% (8.6 mL, 24%); CBF 0.039, 16% (6.5 mL, 19%); MTT 0.032, 13% (4.1 mL, 12%); CBV 0.026, 10% (3.8 mL, 11%).
+  - All inputs: Dice 0.215, 17.5 mL; none: 0.008, 3.1 mL. Every input raises Dice on average; Tmax and NCCT carry more in larger infarcts.
+  - **Wrong side of a cut-off:** 33% with every input against 35% with none. Tmax pushes towards the wrong side on average (+0.05).
+  - **Limits:** reliance, not ablation; the perfusion maps share information; development cases only.
+  - `config.json` written for the Mac step. The Colab config records commit 4ea7972; the modules this run uses are identical between f33c55f (the dummy's) and 4ea7972.
+- **EXP-82 dummy** (notebook 27 on Kaggle at 4ea7972; 200 validation scans, 2,000 training slices; 3.6 min): ran end to end. EXP-6 scores 0.9817 on these 200 scans, the same as EXP-76's dummy on the same seeded scans. The probe and zero-shot AUCs from 200 scans say nothing yet. The full run is on Kaggle.
+- **Figures:** `fig_visionA_channel_shap` titles now give units and two-line headings.
+- **Spend:** none (Colab and Kaggle allowances).
+- **Notion sync:** Experiments: EXP-75 (Done, figure above); EXP-82 (Running). Tasks: Phase 5 task B (row 1 done; rows 5 and 9 running).
+
 ## 2026-11-20 — Claude Code session (task D's figure, task J's report index, README gaps)
 - **`fig_biomedclip`** (`analysis.figures.biomedclip_figure`), ready for EXP-82 and EXP-83. Left: scan AUC and specificity at 96% sensitivity for EXP-6, the BiomedCLIP probe and zero-shot, with ISLES'24 flag counts in the labels once EXP-83 is in. Right: per-subtype scan AUC, subtype probe against EXP-6's 'any' score.
   - Dots, not bars, because the axis is truncated. Drawn from made-up numbers to check the layout by eye; none were saved. `main` draws it when `runs/EXP-82_biomedclip/metrics.json` is present.

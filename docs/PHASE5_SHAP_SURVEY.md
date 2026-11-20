@@ -181,12 +181,30 @@ weight than Grad-CAM (26% against 9%), as pixel-level gradients pick out high-co
 moderately (median Spearman 0.50, IQR 0.31–0.59, at 10 × 10). So a second, different method supports Item 2's reading:
 the false alarms come from brain tissue, not from skull-base slabs.
 
-**Rows 1 and 5: ready to run (20 Nov 2026), not yet run.**
-- **Row 1, EXP-75:** `notebooks/15_visionA_channel_shap.ipynb` on a Colab A100, `MODE = 'dummy'` (one case, all 32
-  combinations, with a check that the full combination reproduces its recorded volume) then `'run'`. Logic in
-  `analysis.visiona_channel_shap`: each case read with nnU-Net's own reader so the axes match training, absent inputs
-  filled only inside the case's nonzero region so nnU-Net crops the same box, rows saved to Drive as they come
-  (resumable). The Mac summarises (`python -m strokecopilot.analysis.visiona_channel_shap`).
+**Row 1, Vision A's input channels: EXP-75 (done 20 Nov 2026; Colab A100, 4,128 predictions, median 0.3 s each;
+figure `fig_visionA_channel_shap`).** The full combination reproduces every case's recorded volume (EXP-27) within
+0.02 mL, on all 129 cases. Means over cases:
+
+| Input | Predicted volume, mean \|value\| (share) | Signed mean | Dice, mean \|value\| (share) |
+|---|---|---|---|
+| Tmax (with its mask) | 12.2 mL (35%) | +11.6 mL | 0.096 (38%) |
+| NCCT | 8.6 mL (24%) | +5.4 mL | 0.059 (23%) |
+| CBF | 6.5 mL (19%) | +0.8 mL | 0.039 (16%) |
+| MTT | 4.1 mL (12%) | −2.5 mL | 0.032 (13%) |
+| CBV | 3.8 mL (11%) | −1.0 mL | 0.026 (10%) |
+
+With every input the mean predicted volume is 17.5 mL and Dice 0.215 (the reported Dice); with none, 3.1 mL and 0.008.
+Every input raises Dice on average. Tmax and NCCT carry more as the reference infarct grows (Dice attribution, 0–5 mL
+against over 70 mL: Tmax 0.046 against 0.157, NCCT 0.032 against 0.116). **Wrong side of a cut-off** (21, 31, 51 or
+70 mL): 43 of 129 cases (33%) with every input, 35% with none, because a near-zero volume is on the right side for most
+small infarcts; Tmax pushes towards the wrong side on average (+0.05), the others slightly away. So nnU-Net relies most on
+Tmax and then on plain CT, more than on CBF, the map the rCBF < 30% baseline uses.
+- **Limits:** reliance, not ablation (no model was trained without an input, so a filled input is outside what the
+  network saw); the four perfusion maps come from the same acquisition and share information, which Shapley values split
+  between them, so Tmax's share may partly stand for the others; development cases, each scored by the fold model that
+  did not train on it; means hide large case-to-case variation.
+
+**Row 5: ready to run (20 Nov 2026).**
 - **Row 5, EXP-76 and EXP-77:** `notebooks/26_visionB_window_shap.ipynb` on Kaggle (`MODE = 'dummy'`, 200 validation
   scans, then `'run'`): every validation slice under the 8 window combinations, the RSNA training means from a seeded
   sample of 3,000 training slices, aggregates only. Then the ISLES'24 half on the Mac with those means

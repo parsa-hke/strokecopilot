@@ -361,9 +361,10 @@ def visiona_channel_figure(metrics, out):
     for ax, key, xlabel, fmt in ((axes[0], "pred_ml", "mean |Shapley value|, mL", "{:.1f}"),
                                  (axes[1], "dice", "mean |Shapley value|, Dice", "{:.3f}")):
         vals = [metrics[key]["mean_abs"][p] for p in players]
+        unit, f = (" mL", "{:.1f}") if key == "pred_ml" else ("", "{:.3f}")
         _hbars(ax, players, [vals], [None], xlabel,
-               f"{'Predicted core volume' if key == 'pred_ml' else 'Dice'} (all inputs {metrics[key]['full_mean']:.3g}, "
-               f"none {metrics[key]['none_mean']:.3g})", fmt)
+               f"{'Predicted core volume' if key == 'pred_ml' else 'Dice'}\nmean over cases: all inputs "
+               f"{f.format(metrics[key]['full_mean'])}{unit}, none {f.format(metrics[key]['none_mean'])}{unit}", fmt)
         ax.set_xlim(0, max(vals) * 1.25 or 1)
     fig.suptitle(f"Vision A: which inputs nnU-Net relies on (development cases: {metrics['complete']})", fontsize=9,
                  color=INK, x=0.01, ha="left")

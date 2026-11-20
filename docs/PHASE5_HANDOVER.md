@@ -5,8 +5,8 @@ Drive `artifacts/figures/` (PNG and SVG; captions in that folder's `README.md`) 
 named doc and run folder. Everything here is report only: nothing was retrained and nothing feeds the contract, the
 pipeline or the Space (DEC-31, DEC-34). No held-out case was used except T7, labelled post hoc.
 
-Status on 20 Nov 2026: A, C (34 of 35 tests), E, F, G and H done; B in progress (rows 1, 5 and 9 running on
-Colab and Kaggle); D ready for Kaggle; I in progress; J is this file, kept current as runs come in.
+Status on 20 Nov 2026: A, C (34 of 35 tests), E, F, G and H done; B in progress (rows 5 and 9 running on
+Colab and Kaggle); D running on Kaggle (dummy passed); I in progress; J is this file, kept current as runs come in.
 
 ## Where each result goes (task J)
 
@@ -55,6 +55,17 @@ thrombectomy turns on the occlusion site (mean |value| 0.57), thrombolysis on ti
   quantity our segmentation model estimates, rarely does."
 - **Limits:** synthetic scenarios with even route coverage; "unknown" is not neutral for these rules.
 
+**Vision A's inputs, EXP-75** (`fig_visionA_channel_shap`). Exact Shapley values of nnU-Net's five inputs over all 32
+combinations on the 129 development cases; the full combination reproduces every recorded volume within 0.02 mL. Tmax
+carries the most (Dice 38%, volume 35%), then plain CT (23%, 24%), CBF (16%, 19%), MTT (13%, 12%) and CBV (10%, 11%).
+Every input raises Dice on average; Tmax and plain CT matter more the larger the infarct. With every input 33% of cases
+are on the wrong side of a cut-off, against 35% with none.
+- **Sentence (901, results and explainability):** "Exact Shapley values over nnU-Net's five inputs show it relies most
+  on Tmax (38% of the attribution for Dice) and then on plain CT (23%), more than on CBF (16%), the map the rCBF < 30%
+  baseline uses."
+- **Limits:** reliance, not ablation (no model was trained without an input); the perfusion maps share information,
+  which Shapley values split between them; development cases; means hide case-to-case variation.
+
 **`confidence.core` v2, EXP-70** (`fig_confidence_v2_shap`). The distance to the nearest cut-off carries 73% of v2's
 attribution, which supports DEC-27's choice of that signal alone. In-sample.
 
@@ -83,10 +94,9 @@ at presentation (AUC 0.73 [0.63, 0.82]): mostly the predicted core volume (48%) 
 age (14%); centre 7%, sex 4%. Vision B's false alarms are not (AUC 0.34 [0.24, 0.43], below chance, the usual sign of no
 signal under cross-validation), so no SHAP values are reported for them.
 
-**Still running (no results yet):** row 1, Vision A's input channels (EXP-75, notebook 15, figure
-`fig_visionA_channel_shap`); row 9, the reasoner's input groups for Gemma 3 4B prompted and tuned against the rule engine
-(EXP-74, notebook 55, figure `fig_reasoner_shap`); the RSNA half of row 5 (EXP-76, notebook 26). Their sentences are
-written once the numbers are in, whatever they show.
+**Still running (no results yet):** row 9, the reasoner's input groups for Gemma 3 4B prompted and tuned against the
+rule engine (EXP-74, notebook 55, figure `fig_reasoner_shap`); the RSNA half of row 5 (EXP-76, notebook 26). Their
+sentences are written once the numbers are in, whatever they show.
 
 ## C. Student's t-tests (EXP-69, DEC-36; `docs/PHASE5_TTESTS.md` §7)
 
