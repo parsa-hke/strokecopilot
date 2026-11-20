@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (task D's figure, task J's report index, README gaps)
+- **`fig_biomedclip`** (`analysis.figures.biomedclip_figure`), ready for EXP-82 and EXP-83. Left: scan AUC and specificity at 96% sensitivity for EXP-6, the BiomedCLIP probe and zero-shot, with ISLES'24 flag counts in the labels once EXP-83 is in. Right: per-subtype scan AUC, subtype probe against EXP-6's 'any' score.
+  - Dots, not bars, because the axis is truncated. Drawn from made-up numbers to check the layout by eye; none were saved. `main` draws it when `runs/EXP-82_biomedclip/metrics.json` is present.
+- **Task J:** `docs/PHASE5_HANDOVER.md` now opens with a table saying which section of the 901 report, the 902 report and the paper each Phase 5 result suits, using the section names from the subject outlines. It's a suggestion; `docs/REPORT_OUTLINE.md` decides.
+  - Also added: a section D placeholder (method and limits, no results), the runs still pending in B (rows 1 and 9, and the RSNA half of row 5), and section F moved into order.
+- **README:** notebook 27 added to the notebooks table, and F's result and the BiomedCLIP comparison added to the Phase 5 paragraph.
+- **Tests:** 31 in `tests/test_analysis.py`. **Spend:** none.
+- **Notion sync:** Tasks: Phase 5 task J (in progress; hand-over index added).
+
 ## 2026-11-20 — Claude Code session (EXP-81 done: task F, the non-Claude judge)
 - **EXP-81** (`analysis.rejudge`; `runs/EXP-81_rejudge/` on the Mac and Drive; figure `fig_judge_agreement`): EXP-41's 100 labelled claims re-judged by `openai/gpt-6-luna` through OpenRouter, with `judge_v3`, τ 0.6 and effort medium, from an empty judge cache.
   - 469 judge calls; 0.81 M input and 0.42 M output tokens (0.24 M of them reasoning); **$0.29** (cap $1); no provider errors.

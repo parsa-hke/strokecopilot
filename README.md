@@ -36,7 +36,7 @@ Development results are on 129 ISLES'24 cases (five folds, each case scored by t
 | **Verifier validity** | Seeded errors: recall ≥ 0.80 on every sub-type, 1% false flags. 100 human-labelled claims: verifier–human agreement 0.61; humans confirmed 18 of its 54 flags; human–human κ 0.27. |
 | **End to end, held-out** (predicted vision) | Decisions right: Sonnet 22/23, Gemma 3 27B 22/23, MedGemma 21/21, Qwen 13/13 (9 format failures), tuned 4B 21/23, base 4B 3/23. Sonnet's one wrong decision came from a false bleed flag the verifier could not see. |
 
-**Phase 5 additions** (report only, after the freeze; some were still running on 20 Nov 2026): exact Shapley values of the rule engine's inputs (the occlusion site and the clock decide most treatments; the core volume rarely does), of Vision A's input channels and Vision B's CT windows, pixel attributions beside Grad-CAM, a surrogate of the verifier's flags, token attributions of the retriever, 34 Student's t-tests beside the bootstrap results, a subgroup analysis, a retrieval re-test, an ONNX export, and a clinician review pack. Summaries for the reports: [`docs/PHASE5_HANDOVER.md`](docs/PHASE5_HANDOVER.md).
+**Phase 5 additions** (report only, after the freeze; some were still running on 20 Nov 2026): exact Shapley values of the rule engine's inputs (the occlusion site and the clock decide most treatments; the core volume rarely does), of Vision A's input channels and Vision B's CT windows, pixel attributions beside Grad-CAM, a surrogate of the verifier's flags, token attributions of the retriever, 34 Student's t-tests beside the bootstrap results, a subgroup analysis, a retrieval re-test, an ONNX export, a re-judging of the 100 human-labelled claims by a non-Claude judge (GPT-6 Luna: 3 of 100 verdicts changed, agreement with the humans 0.62 against Haiku's 0.61), a BiomedCLIP comparison, and a clinician review pack. Summaries for the reports: [`docs/PHASE5_HANDOVER.md`](docs/PHASE5_HANDOVER.md).
 
 ## Quick start
 
@@ -94,6 +94,7 @@ Thin: each calls the package. Colab notebooks open with the badge; Kaggle notebo
 | `24_visionB_false_alarms` | The pre-registered false-alarm rules on RSNA validation, Grad-CAM | Kaggle |
 | `25_visionB_rsna_test` | The RSNA test split, opened once | Kaggle |
 | `26_visionB_window_shap` | Phase 5: Shapley values of the three CT windows | Kaggle |
+| `27_visionB_biomedclip` | Phase 5: BiomedCLIP (linear probe and zero-shot) against the ResNet-50; per-subtype probes | Kaggle |
 | `31_nlpA_reasoner` | The reasoner on the five fixtures | Colab |
 | `40_nlpB_verifier`, `51_verifier_recheck`, `52_haiku_extractor_check` | Verifier: seeded errors, judge choice, re-checks | Colab |
 | `41_nlpB_model_comparison` | The hallucination table (C9) | Colab |

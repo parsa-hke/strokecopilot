@@ -378,3 +378,13 @@ def test_t9_row_is_paired_and_labelled(tmp_path):
     path.write_text(_json.dumps({"exp6": [0.1], "probe": [0.1, 0.2]}))
     with pytest.raises(ValueError):
         tp.t9_row(path)
+
+
+def test_biomedclip_figure_draws_with_and_without_isles(tmp_path):
+    from strokecopilot.analysis import figures
+    m = {"val_scans": 10, "models": {k: {"scan_auc": 0.9, "specificity": 0.5} for k in ("exp6", "probe", "zero_shot")},
+         "subtypes": {"subdural": {"probe_scan_auc": 0.8, "exp6_any_scan_auc": 0.7, "scans_positive": 3}}}
+    assert figures.biomedclip_figure(m, None, tmp_path) == ["fig_biomedclip"]
+    isles = {"scans": 129, "flagged": {"exp6": 68, "probe": 1, "zero_shot": 2}}
+    assert figures.biomedclip_figure(m, isles, tmp_path / "b") == ["fig_biomedclip"]
+    assert "fig_biomedclip" in figures.CAPTIONS

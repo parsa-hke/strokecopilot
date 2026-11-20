@@ -6,7 +6,35 @@ named doc and run folder. Everything here is report only: nothing was retrained 
 pipeline or the Space (DEC-31, DEC-34). No held-out case was used except T7, labelled post hoc.
 
 Status on 20 Nov 2026: A, C (34 of 35 tests), E, F, G and H done; B in progress (rows 1, 5 and 9 running on
-Colab and Kaggle); D ready for Kaggle; I in progress.
+Colab and Kaggle); D ready for Kaggle; I in progress; J is this file, kept current as runs come in.
+
+## Where each result goes (task J)
+
+The section names are the ones the two subject outlines expect: 901's report, 902's report and the one research paper
+for the whole project (which stands in for both courses' paper assessments). Every entry is report only and carries its
+limits wherever it is used.
+
+| Task | Run | 901 report | 902 report | Paper |
+|---|---|---|---|---|
+| A. Clinician review | EXP-67 | Challenges & Mitigation | Evaluation & Results; Ethical Issues | Discussion |
+| B. Rule engine SHAP | EXP-68 | | Solution Architecture | Results |
+| B. Vision A channels (row 1) | EXP-75 | Results & Analysis | | Ablation Studies |
+| B. `confidence.core` v2 | EXP-70 | Training Strategy & Evaluation | | |
+| B. Vision B windows (row 5) | EXP-76, EXP-77 | Results & Analysis; Challenges & Mitigation | | Ablation Studies |
+| B. Vision B pixels (row 6) | EXP-72 | Results & Analysis (explainability) | | Results |
+| B. Reasoner inputs (row 9) | EXP-74 | | Evaluation & Results | Ablation Studies |
+| B. Retriever tokens (row 10) | EXP-71 | | Solution Architecture | |
+| B. Verifier surrogate (row 11) | EXP-73 | | Evaluation & Results | |
+| B. Vision error surrogates (rows 12, 13) | EXP-80 | Results & Analysis | | |
+| C. t-tests | EXP-69 | Training Strategy & Evaluation | Evaluation & Results | Results |
+| D. BiomedCLIP and subtypes | EXP-82, EXP-83 | Model Architecture & Implementation; Results & Analysis | | Ablation Studies |
+| E. Subgroups | EXP-80 | Results & Analysis | Ethical Issues | Discussion |
+| F. Non-Claude judge | EXP-81 | | Evaluation & Results | Results |
+| G. Retrieval re-test | EXP-79 | | Solution Architecture | Ablation Studies |
+| H. ONNX export | EXP-78 | Model Architecture & Implementation | | |
+| I. Reproducibility | replay bundle | Links | Links (code quality & reproducibility) | |
+
+This is a suggestion for the report sessions, not a fixed outline (`docs/REPORT_OUTLINE.md` decides).
 
 ## A. Clinician pack (EXP-67, DEC-34)
 
@@ -55,6 +83,11 @@ at presentation (AUC 0.73 [0.63, 0.82]): mostly the predicted core volume (48%) 
 age (14%); centre 7%, sex 4%. Vision B's false alarms are not (AUC 0.34 [0.24, 0.43], below chance, the usual sign of no
 signal under cross-validation), so no SHAP values are reported for them.
 
+**Still running (no results yet):** row 1, Vision A's input channels (EXP-75, notebook 15, figure
+`fig_visionA_channel_shap`); row 9, the reasoner's input groups for Gemma 3 4B prompted and tuned against the rule engine
+(EXP-74, notebook 55, figure `fig_reasoner_shap`); the RSNA half of row 5 (EXP-76, notebook 26). Their sentences are
+written once the numbers are in, whatever they show.
+
 ## C. Student's t-tests (EXP-69, DEC-36; `docs/PHASE5_TTESTS.md` §7)
 
 34 of 35 tests (T9 waits for task D), case-level, paired or Welch, Holm over the family, a rank test beside each; every
@@ -63,6 +96,19 @@ reported bootstrap was recomputed and matched first (figure `fig_ttests_forest`)
   nnU-Net's Dice gain and the model ranking; they do not support a volume gain, an effect of vision errors on
   hallucination, or any subgroup difference, and they weaken the tuned model's higher critical rate."
 - **Must be said:** the data had been seen before the tests were fixed; T7 is post hoc on saved held-out results.
+
+## D. BiomedCLIP and per-subtype probes (EXP-82, EXP-83, DEC-33; waiting for the Kaggle run)
+
+Method fixed before any score (`src/strokecopilot/analysis/biomedclip.py`, notebook 27): BiomedCLIP's image embeddings
+of a seeded 60,000-slice training sample, as a linear probe and zero-shot with two fixed prompts, against EXP-6's
+ResNet-50, every scan scored by EXP-6's top-2 aggregation; on RSNA validation, scan AUC and specificity at 96%
+sensitivity, and per-patient Brier scores paired with EXP-6 for T9. Per-subtype linear probes on EXP-6's frozen features.
+On the Mac, the probe and zero-shot calls on the 129 ISLES'24 development scans against EXP-6's 68 flags (EXP-83).
+Figure `fig_biomedclip`, drawn when the files are in. **No results yet.**
+- **Sentence:** written once the numbers are in, whichever model comes out ahead.
+- **Limits, always:** the operating point is in-sample on validation for every model alike; BiomedCLIP is not
+  fine-tuned (a probe on frozen embeddings), so this compares representations, not best achievable models; subtype
+  probes see EXP-6's features only; the RSNA test split was not read.
 
 ## E. Subgroups (EXP-80, DEC-37)
 
@@ -78,6 +124,22 @@ cases (20):** every group is too small to conclude anything.
   women, which our small sample cannot confirm or rule out."
 - **Limits:** 129 development cases from two centres; one patient's sex not recorded; synthetic scenarios do not carry
   centre; no adjustment for infarct size.
+
+## F. A non-Claude judge (EXP-81, DEC-38)
+
+EXP-41's 100 human-labelled claims re-judged by GPT-6 Luna (`openai/gpt-6-luna` through OpenRouter; no family shared
+with any of the six reasoners), with the same `judge_v3` prompt, τ 0.6 and reasoning effort, from an empty judge cache
+(469 judge calls, $0.29, no provider errors; figure `fig_judge_agreement`). The two judges flag the same 97 of 100 claims
+(κ 0.94; 95 of 100 with the same verdict type). Agreement with the human consensus is the same for both: Haiku 0.61
+(weighted 0.87), Luna 0.62 (0.87); per reasoner model the two match except Sonnet's claims (Haiku 0.63, Luna 0.67). All
+three disagreements are on Sonnet's claims, where Haiku flagged and Luna did not, and the humans sided with Luna on two.
+- **Sentence (902, evaluation):** "Re-judging the 100 human-labelled claims with a judge from a different model family
+  (GPT-6 Luna) changed 3 of 100 verdicts (κ 0.94) and left agreement with the humans unchanged (0.62 against 0.61), so the
+  verifier's limited agreement with people comes from what it checks, not from which model judges; and the Claude judge
+  was, if anything, stricter on the Claude reasoner."
+- **Must be said with it:** metric points 19 and 20 were adjusted on these same labels (EXP-41); 100 claims, about 25
+  per model, so per-model differences are small-sample; the code checks are shared by both judges, so this tests the
+  judge, not the whole verifier.
 
 ## G. Retrieval, tested properly (EXP-79, DEC-37)
 
@@ -121,20 +183,3 @@ faster).
   without an API key: a 3 MB bundle of saved answers and verifier caches is rescored offline and checked against every
   reported rate."
 - **Still Parsa's:** the submission tag and its release, and markers' access to the repository.
-
-## F. A non-Claude judge (EXP-81, DEC-38)
-
-EXP-41's 100 human-labelled claims re-judged by GPT-6 Luna (`openai/gpt-6-luna` through OpenRouter; no family shared
-with any of the six reasoners), with the same `judge_v3` prompt, τ 0.6 and reasoning effort, from an empty judge cache
-(469 judge calls, $0.29, no provider errors; figure `fig_judge_agreement`). The two judges flag the same 97 of 100 claims
-(κ 0.94; 95 of 100 with the same verdict type). Agreement with the human consensus is the same for both: Haiku 0.61
-(weighted 0.87), Luna 0.62 (0.87); per reasoner model the two match except Sonnet's claims (Haiku 0.63, Luna 0.67). All
-three disagreements are on Sonnet's claims, where Haiku flagged and Luna did not, and the humans sided with Luna on two.
-- **Sentence (902, evaluation):** "Re-judging the 100 human-labelled claims with a judge from a different model family
-  (GPT-6 Luna) changed 3 of 100 verdicts (κ 0.94) and left agreement with the humans unchanged (0.62 against 0.61), so the
-  verifier's limited agreement with people comes from what it checks, not from which model judges; and the Claude judge
-  was, if anything, stricter on the Claude reasoner."
-- **Must be said with it:** metric points 19 and 20 were adjusted on these same labels (EXP-41); 100 claims, about 25
-  per model, so per-model differences are small-sample; the code checks are shared by both judges, so this tests the
-  judge, not the whole verifier.
-

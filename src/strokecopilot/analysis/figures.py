@@ -61,6 +61,12 @@ CAPTIONS = {
         "EXP-81 (DEC-38, task F): agreement with the human consensus on EXP-41's 100 claims, per reasoner model, for the "
         "Claude Haiku 5.5 judge and for GPT-6 Luna (no family shared with any reasoner). Metric points 19 and 20 were "
         "adjusted on these labels."),
+    "fig_biomedclip": (
+        "EXP-82 and EXP-83 (DEC-33, task D): on RSNA validation, scan AUC and specificity at the threshold reaching 96% "
+        "sensitivity (in-sample for every model alike) for EXP-6 and for BiomedCLIP as a linear probe and zero-shot, "
+        "each scan scored by EXP-6's top-2 aggregation; ISLES'24 flags are of the 129 presumed bleed-free development "
+        "scans. Right: per-subtype probes on EXP-6's frozen features beside EXP-6's own 'any' score. Report only; the "
+        "RSNA test split was not read."),
 }
 
 SHORT = {"claude-sonnet-5-5": "Sonnet 5.5", "qwen3.5-27b": "Qwen3.5-27B", "gemma-3-27b": "Gemma 3 27B",
@@ -201,6 +207,10 @@ def main(argv=None):
     if rsna.exists() or isles.exists():
         names += visionb_window_figure(json.loads(rsna.read_text()) if rsna.exists() else None,
                                        json.loads(isles.read_text()) if isles.exists() else None, [out, isles.parent])
+    clip, clip_isles = Path("runs/EXP-82_biomedclip/metrics.json"), Path("runs/EXP-83_biomedclip_isles/metrics.json")
+    if clip.exists():
+        names += biomedclip_figure(json.loads(clip.read_text()),
+                                   json.loads(clip_isles.read_text()) if clip_isles.exists() else None, [out, clip.parent])
     pixel = Path("runs/EXP-72_visionB_pixel_shap/pixel_shap_examples.png")
     if pixel.exists():
         import shutil
@@ -431,6 +441,58 @@ def judge_figure(metrics, out):
     ax.legend(loc="lower left", frameon=False, fontsize=7.5)
     fig.tight_layout()
     return _write(fig, out, "fig_judge_agreement")
+
+
+MODEL_WORDS = {"exp6": "EXP-6 ResNet-50", "probe": "BiomedCLIP, linear probe", "zero_shot": "BiomedCLIP, zero-shot"}
+
+
+def _dots(ax, names, series, labels, xlabel, title, xlim):
+    """Dot rows (a truncated axis needs dots, not bars): names top to bottom, one offset dot per series."""
+    n = len(series)
+    for k, (vals, lab) in enumerate(zip(series, labels)):
+        off = (n - 1 - 2 * k) * 0.12
+        ys = [len(names) - 1 - i + off for i in range(len(names))]
+        keep = [(y, v) for y, v in zip(ys, vals) if v is not None]
+        ax.plot([v for _, v in keep], [y for y, _ in keep], "o", ms=6.5, color=THREE[k % 3], mec="white", mew=1.1,
+                label=lab, zorder=2 + k, ls="none")
+        for y, v in keep:
+            ax.text(v + 0.02 * (xlim[1] - xlim[0]), y, f"{v:.3f}", va="center", ha="left", fontsize=6.5, color=INK_2)
+    ax.set_yticks(range(len(names)))
+    ax.set_yticklabels(list(reversed(names)), fontsize=7.5)
+    ax.tick_params(axis="y", length=0)
+    ax.grid(axis="y", visible=False)
+    ax.set_xlim(*xlim)
+    ax.set_xlabel(xlabel)
+    ax.set_title(title, fontsize=9, color=INK, loc="left")
+
+
+def biomedclip_figure(metrics, isles, out):
+    """Task D (EXP-82, and EXP-83 when present): scan AUC and specificity at 96% sensitivity for the three models on RSNA
+    validation; per-subtype scan AUC of the subtype probes beside EXP-6's 'any' score."""
+    plt = _plt()
+    models = [m for m in ("exp6", "probe", "zero_shot") if m in metrics["models"]]
+    subtypes = sorted(metrics.get("subtypes", {}))
+    fig, axes = plt.subplots(1, 2 if subtypes else 1, figsize=(9.6 if subtypes else 5.2, 3.3))
+    axes = np.atleast_1d(axes)
+    names = [MODEL_WORDS[m] for m in models]
+    if isles:
+        names = [f"{w}\nISLES'24 flags {isles['flagged'][m]}/{isles['scans']}" if m in isles["flagged"] else w
+                 for w, m in zip(names, models)]
+    vals = [[metrics["models"][m][k] for m in models] for k in ("scan_auc", "specificity")]
+    lo = min(v for s in vals for v in s if v is not None)
+    _dots(axes[0], names, vals, ["scan AUC", "specificity at 96% sensitivity"], "",
+          f"Haemorrhage, RSNA validation ({metrics['val_scans']:,} scans)", (min(0.5, np.floor(lo * 20) / 20), 1.04))
+    axes[0].legend(loc="upper center", bbox_to_anchor=(0.5, -0.24), ncol=2, frameon=False, fontsize=7)
+    if subtypes:
+        s = metrics["subtypes"]
+        sv = [[s[t]["probe_scan_auc"] for t in subtypes], [s[t]["exp6_any_scan_auc"] for t in subtypes]]
+        lo = min(v for row in sv for v in row if v is not None)
+        _dots(axes[1], [f"{t} ({s[t]['scans_positive']})" for t in subtypes], sv,
+              ["subtype probe on EXP-6's features", "EXP-6's 'any' score"], "scan AUC for that subtype",
+              "Per subtype (positive scans)", (min(0.5, np.floor(lo * 20) / 20), 1.04))
+        axes[1].legend(loc="upper center", bbox_to_anchor=(0.5, -0.24), ncol=2, frameon=False, fontsize=7)
+    fig.tight_layout()
+    return _write(fig, out, "fig_biomedclip")
 
 
 if __name__ == "__main__":
