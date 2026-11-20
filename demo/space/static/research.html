@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The record · Stroke Decision Copilot</title>
+<meta name="description" content="Every experiment, result and decision behind the Stroke Decision Copilot: the vision models, the rulebook, six language models, the verifier and the held-out test. A research prototype. Not for clinical use.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23ff4d57'/%3E%3Cpath d='M9 17h4l2-6 3 11 2-5h3' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<!-- The record page (DEC-32 §3.2, §3.3, §3.5): methods, every result chart, every documented experiment, the case
+     explorer, limits and credits. -->
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="pages.css">
+<script src="common.js" defer></script>
+<script src="charts.js" defer></script>
+<script src="record.js" defer></script>
+</head>
+<body data-tone="6">
+<div class="banner" role="note"><strong>Research prototype — not for clinical use.</strong><span> No output here is medical advice. All cases are synthetic or de-identified research data.</span></div>
+<div class="aurora" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
+<div class="grain" aria-hidden="true"></div>
+<nav class="nav" aria-label="Pages">
+  <a class="brand" href="index.html"><i></i><span>Stroke Decision Copilot</span></a>
+  <div class="links"><a href="index.html" data-page="index.html">The story</a><a href="run.html" data-page="run.html">Live run</a><a href="research.html" data-page="research.html">The record</a></div>
+</nav>
+
+<main class="page">
+  <header class="page-head">
+    <p class="kicker">The record</p>
+    <h1>Every test we ran.</h1>
+    <p class="dek">The story follows one patient. This page is everything behind it: how the system is built, each experiment and what it
+      found, the results as charts, the decisions taken along the way, every answered case, and the limits.</p>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" id="toc" aria-label="On this page">
+      <a href="#overview">What was built</a><a href="#vision">The vision models</a><a href="#results">Results</a>
+      <a href="#experiments">Every experiment</a><a href="#decisions">Decisions</a><a href="#cases">Every answer</a><a href="#about">Limits and credit</a>
+    </nav>
+    <div>
+      <section class="section" id="overview" aria-labelledby="overview-title">
+        <p class="num">01 · Overview</p>
+        <h2 id="overview-title">What was built</h2>
+        <p class="section-lede">A pipeline of five parts. Each one is tested on its own, then all together on patients none of it had seen.</p>
+        <ol class="pipe">
+          <li><b>Core and penumbra</b>An nnU-Net, trained five times on different folds of ISLES'24, outlines the tissue already lost. Tissue at risk is the guideline's own rule: Tmax over 6 seconds.</li>
+          <li><b>Bleed check</b>A ResNet-50 trained on RSNA scans reads the plain CT for any bleed, which rules out the clot-busting drug.</li>
+          <li><b>The rulebook</b>The 2026 guideline rewritten in the team's own words as 47 passages, and a program that applies them to a case.</li>
+          <li><b>The reasoner</b>A language model reads the scan's numbers, a triage note and the whole rulebook, and decides on each treatment with cited reasons.</li>
+          <li><b>The verifier</b>Every answer is split into claims, and each claim is traced to the scan, the note or a passage. What does not trace is a hallucination.</li>
+        </ol>
+        <div class="tilerow" id="overview-tiles" aria-live="polite"></div>
+      </section>
+
+      <section class="section" id="vision" aria-labelledby="vision-title">
+        <p class="num">02 · Vision</p>
+        <h2 id="vision-title">The two vision models</h2>
+        <p class="section-lede">What the language model is told about a scan comes from these two models, so their errors matter downstream.</p>
+        <h3>Vision A: outlining the core</h3>
+        <div class="tilerow" id="va-tiles"></div>
+        <p class="muted small" id="va-note"></p>
+        <div class="card" style="margin:12px 0 24px"><h3>How often the core lands on the wrong side of a cut-off</h3>
+          <p class="sub">Volumes matter more than outlines: the rules cut at 21, 31, 51 and 70 mL.</p><div id="va-cutoffs"></div></div>
+        <h3>Vision B: the bleed check</h3>
+        <div class="tilerow" id="vb-tiles"></div>
+        <p class="muted small" id="vb-note"></p>
+      </section>
+
+      <section class="section" id="results" aria-labelledby="results-title">
+        <p class="num">03 · Results</p>
+        <h2 id="results-title">The results, as charts</h2>
+        <p class="section-lede">Hallucination rates are the verifier's, and the human check below shows they are upper bounds:
+          people confirmed 18 of its 54 flags. The comparison between models holds. Hover or tap any mark; every chart has its numbers as a table.</p>
+        <div class="result-grid" id="result-grid"></div>
+      </section>
+
+      <section class="section" id="experiments" aria-labelledby="experiments-title">
+        <p class="num">04 · Experiments</p>
+        <h2 id="experiments-title">Every experiment</h2>
+        <p class="section-lede" id="record-note">Each numbered experiment, what it asked, how it was run and what it found, grouped by the part of the system it tested.</p>
+        <div class="rec-tools">
+          <label class="visually-hidden" for="rec-search">Search the experiments</label>
+          <input id="rec-search" type="search" placeholder="Search: Dice, SHAP, EXP-37, held-out, retrieval…">
+          <button class="btn small" type="button" id="rec-toggle">Open all</button>
+          <span class="rec-count" id="rec-count" aria-live="polite"></span>
+        </div>
+        <div id="groups"><p class="muted">Loading the record…</p></div>
+      </section>
+
+      <section class="section" id="decisions" aria-labelledby="decisions-title">
+        <p class="num">05 · Decisions</p>
+        <h2 id="decisions-title">The decisions behind it</h2>
+        <p class="section-lede">Choices fixed along the way, so that results could not be tuned after the fact.</p>
+        <div class="decs-list" id="decs-list"></div>
+      </section>
+
+      <section class="section" id="cases" aria-labelledby="cases-title">
+        <p class="num">06 · Cases</p>
+        <h2 id="cases-title">Read every answer</h2>
+        <p class="section-lede">Every answer here was produced earlier with the same prompt and verifier. Click any claim to light up
+          what it rests on: a number in the imaging contract, a line of the note, or a rulebook passage. Claims the verifier
+          flagged are marked <span class="flag-chip">✕ flagged</span> with the reason.</p>
+        <div class="explorer">
+          <aside class="case-list" aria-label="Cases">
+            <div class="tabs" role="tablist" id="case-tabs"></div>
+            <label class="search"><span class="visually-hidden">Filter cases</span>
+              <input id="case-filter" type="search" placeholder="Filter by route, e.g. DAWN, basilar, INR"></label>
+            <ul id="case-items" class="case-items"></ul>
+          </aside>
+          <div class="case-view" id="case-view"><p class="muted">Pick a case on the left.</p></div>
+        </div>
+      </section>
+
+      <section class="section" id="about" aria-labelledby="about-title">
+        <p class="num">07 · Limits and credit</p>
+        <h2 id="about-title">Limits and credit</h2>
+        <div class="about-grid">
+          <div>
+            <h3>What it is not</h3>
+            <p class="muted">A research prototype built for a university course. It is not a medical device, has not been validated
+              clinically, and must never be used to decide anyone's treatment. The rulebook is the team's reading of the
+              guideline and has not been reviewed by a clinician.</p>
+            <h3>Limits we report</h3>
+            <ul id="limits-list">
+              <li>The "core" is a model trained on final infarct, not acute core, in a cohort that was reperfused.</li>
+              <li>Real cases have no ASPECTS and mostly an unknown occlusion site, so the rules leave many decisions undetermined.</li>
+              <li>The bleed detector flags about half of ISLES'24's presumed bleed-free scans: a domain shift, not an RSNA failure.</li>
+              <li>Hallucination rates are the verifier's; humans confirmed about a third of its flags.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Data and credit</h3>
+            <ul>
+              <li><strong>ISLES'24</strong> (Zenodo 17652035), CC BY-NC-SA 4.0: Riedel et al., <em>ISLES'24 – A Real-World
+                Longitudinal Multimodal Stroke Dataset</em>, arXiv:2408.11142; de la Rosa et al., arXiv:2408.10966. Cases are
+                shown by alias only. This site is shared under the same licence.</li>
+              <li><strong>RSNA Intracranial Haemorrhage</strong> (Kaggle): aggregate numbers only, no images. Flanders et al.,
+                <em>Radiol Artif Intell</em> 2020;2:3.</li>
+              <li><strong>Guideline:</strong> 2026 AHA/ASA acute ischaemic stroke guideline, DAWN and DEFUSE-3. The rulebook is in
+                our own words with pointers to the sources; no guideline text is reproduced.</li>
+              <li><strong>Models:</strong> Claude Sonnet 5.5 and Haiku 5.5 (Anthropic), Qwen3.5-27B, Gemma 3 27B and 4B,
+                MedGemma 27B; nnU-Net v2; ResNet-50.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+<footer class="foot"><p>Research prototype — not for clinical use. · Stroke Decision Copilot, MAAI 901/902, UOWD.</p></footer>
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live run · Stroke Decision Copilot</title>
+<meta name="description" content="Build a stroke case and watch Claude Sonnet 5.5 answer it live while the verifier checks every claim. A research prototype. Not for clinical use.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23ff4d57'/%3E%3Cpath d='M9 17h4l2-6 3 11 2-5h3' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<!-- The live run page (DEC-32 §4): the scenario builder, the run drawn step by step, and a recorded replay. -->
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="pages.css">
+<script src="common.js" defer></script>
+<script src="runviz.js" defer></script>
+<script src="run.js" defer></script>
+</head>
+<body data-tone="4">
+<div class="banner" role="note"><strong>Research prototype — not for clinical use.</strong><span> No output here is medical advice. All cases are synthetic or de-identified research data.</span></div>
+<div class="aurora" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
+<div class="grain" aria-hidden="true"></div>
+<nav class="nav" aria-label="Pages">
+  <a class="brand" href="index.html"><i></i><span>Stroke Decision Copilot</span></a>
+  <div class="links"><a href="index.html" data-page="index.html">The story</a><a href="run.html" data-page="run.html">Live run</a><a href="research.html" data-page="research.html">The record</a></div>
+</nav>
+
+<main class="page">
+  <header class="page-head">
+    <p class="kicker">Live run</p>
+    <h1>Write the next patient.</h1>
+    <p class="dek">Set the timing, the patient and the scan. The project's own note generator writes the triage note, then
+      <strong>Claude Sonnet 5.5</strong> answers live and the verifier checks every claim, exactly as in the evaluation.
+      There is no free text: every value stays inside the ranges the system was tested on.</p>
+    <p style="margin:1.2rem 0 0"><span class="live-badge" id="live-badge"><i></i><span id="live-status">Checking whether live runs are on…</span></span></p>
+  </header>
+
+  <section class="section" aria-labelledby="how-title">
+    <p class="num">What you will watch</p>
+    <h2 id="how-title">Six steps, drawn as they happen</h2>
+    <ol class="how">
+      <li><b>The note</b>A generator writes the triage note from your settings.</li>
+      <li><b>The rulebook</b>A program applies the 47 passages and gives its own verdict.</li>
+      <li><b>The decision</b>Sonnet 5.5 reads the note, the numbers and every passage.</li>
+      <li><b>The claims</b>Its answer is split into single claims.</li>
+      <li><b>The check</b>Each claim is traced to the scan, the note or a passage.</li>
+      <li><b>The score</b>What held, what was flagged, and whether it matched the rulebook.</li>
+    </ol>
+  </section>
+
+  <section class="section" id="try" aria-labelledby="try-title">
+    <p class="num">The builder</p>
+    <h2 id="try-title">Build a case</h2>
+    <p class="section-lede">If a live run cannot be served, you get the closest precomputed case and the reason. You can also replay a recorded run, which calls nothing.</p>
+    <div class="patient" id="patient" aria-live="polite">
+      <div class="ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="bg" cx="50" cy="50" r="42"/><circle class="fg" id="p-ring" cx="50" cy="50" r="42"/></svg><span id="p-time"></span></div>
+      <div><p class="who" id="p-who"></p><div class="facts" id="p-facts"></div></div>
+    </div>
+    <div class="builder">
+      <form id="builder" class="controls" novalidate>
+        <div class="preset-row">
+          <label>Start from<select id="preset"><option value="">Default values</option></select></label>
+        </div>
+        <fieldset><legend>Timing</legend><div class="fields" id="f-timing"></div></fieldset>
+        <fieldset><legend>Patient</legend><div class="fields" id="f-patient"></div></fieldset>
+        <fieldset><legend>Imaging (what the vision models would report)</legend><div class="fields" id="f-imaging"></div></fieldset>
+        <fieldset><legend>Medicines and history</legend><div class="fields" id="f-history"></div></fieldset>
+        <div class="run-row">
+          <button class="btn primary" type="submit" id="run">Run it live</button>
+          <button class="btn" type="button" id="replay">▶ Replay a recorded run</button>
+        </div>
+        <p class="error" id="builder-error" role="alert" hidden></p>
+      </form>
+      <div class="run-panel" id="run-panel">
+        <div class="rv-idle" id="rv-idle">
+          <p class="kicker">The run, step by step</p>
+          <p class="muted small">Press <strong>Run it live</strong> and each step is drawn here as the server reports it: the note, the
+            rulebook's verdicts, the decisions, then every claim as it is checked. Or press <strong>Replay a recorded run</strong> to
+            watch one first; no model is called.</p>
+          <ol class="rv-preview" aria-hidden="true"><li>Note</li><li>Rulebook</li><li>Deciding</li><li>Claims</li><li>Checking</li><li>Score</li></ol>
+        </div>
+        <div class="rv" id="runviz" hidden></div>
+        <p class="visually-hidden" id="rv-status" aria-live="polite"></p>
+        <div id="run-result"></div>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="foot"><p>Research prototype — not for clinical use. · Stroke Decision Copilot, MAAI 901/902, UOWD. · <a href="research.html#about">Data, credit and limits</a></p></footer>
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+</body>
+</html>

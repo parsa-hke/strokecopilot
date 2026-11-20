@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (Space redesign: a story, a live-run page and the record)
+Presentation only (DEC-32 Space). No number, result, chart meaning, schema or server code changed. Two earlier attempts in this session (a dark neon restyle with a rotatable brain) were rejected by Parsa and are not in the tree.
+- **Method:** Parsa asked for the `design-thinking` skill (installed to `~/.claude/skills`). Direction was settled before code: three hero directions (`demo/space/concepts/v2`, brief in `BRIEF.md`), then a story prototype (`v3`), then the approved version (`v4`).
+- **The site is now three pages** with a shared navigation and the fixed banner on each. Dark only; the light theme and the theme button are gone.
+  - **`index.html`, the story, "Two hours, thirty minutes":** one scripted patient (fixture `fx01`) followed through the system in seven chapters, scroll-driven.
+    - The twist is real: in EXP-37 Sonnet 5.5 reached the rulebook's answer but cited `AHA2026-bp-before-ivt-placeholder`, which is in neither the prompt nor the rulebook, and the verifier flagged it.
+    - Three reader challenges, scored on the last screen: tap the stroke on the plain CT (checked against the model's marks on the D-10 overlay), guess the model's answer, and mark the eight claims before the verifier does.
+    - Also: an onset dial driven by scroll, scan views with a wipe, a rule the reader runs by feeding the facts (the unseen M2 dominance stays locked), all six models' answers on her case, a citation lookup, a metric switch, and a case file that fills up.
+    - The story says what is scripted (the patient and her scan numbers) and what is real (the D-10 image, the answers, every statistic).
+  - **`run.html`, the live run:** the scenario builder, a patient summary with a time ring that updates with the inputs, the run drawn step by step from the server's events (`runviz.js`), a recorded replay of the story's case, and the full answer. `?preset=` opens a preset, so the story's last screen can hand over her case.
+    - On a cached or precomputed answer, steps 3–6 carry a tag naming the source. The score counts agree, differ and undetermined separately.
+  - **`research.html`, the record:** the pipeline, the two vision models (with the cut-off chart), the nine result charts, every experiment, the decisions, the case explorer, and limits and credit.
+    - The experiments come from a new `static/record.json`: 75 experiments in 11 groups, 38 decisions and 24 limits, compiled by a sub-agent from the plan, this changelog and the phase documents, and searchable on the page.
+    - Where documents disagree it uses the newest entry and notes the correction (for example EXP-42 and EXP-48 show the rescored rates). It contains no case IDs, names or keys.
+    - Checked by sample: 16 headline figures across six experiments found in the documents, and the headline rates match `charts.json`. Not read in full by a person yet; Parsa to read before upload.
+    - It includes plain cost totals for seven experiments and Phase 5 results.
+- **Code:** `app.js` split into `common.js` (helpers and the answer view), `run.js` and `record.js`, with the logic unchanged; `story.js`/`story.css` are new; `site.css` holds the shared look and maps the old colour tokens onto it, so `charts.js` is untouched. `styles.css`, `app.js` and the brain are removed.
+- **DEC-32 §3 differs in one detail and needs Parsa's word:** it says the story walks a real case by alias. The story now follows the scripted fixture, with real case D-10 for the image only. Cut-off crossings and Item 2 moved from the story to the record page. DEC-32 itself is not edited.
+- **Checked** in the local preview (`space-heldout`, no key): every chapter and challenge, replay and fallback runs, charts, explorer and the record's search; desktop and 375 px; no horizontal overflow, no console errors. The preview pane was hidden, so scenes were stepped by script. The live and cache paths were exercised with a stand-in runner that emits the real event sequence (no model called): steps, times, result and re-enabled button all correct. A real live run with the key is untested. Space tree rebuilt (375 files), scan clean. Not uploaded.
+- **Tests:** 910 passed. **Spend:** none.
+- **Notion sync:** Tasks: Space redesign (story, live-run page, record page). Built locally; upload waits for Parsa. Decisions: DEC-32 §3 (story case) to confirm.
+
 ## 2026-11-20 — Claude Code session (EXP-74 done: SHAP row 9, the small reasoners; task B complete)
 - **EXP-74** (`analysis.reasoner_shap`; notebook 55 `shap` on a Colab A100, 4ea7972; `runs/EXP-74_reasoner_shap/` on the Mac and Drive, answers on Drive; figure `fig_reasoner_shap`):
   - 1,280 requests per model: base 1,280 valid in 1,675 s; tuned 1,277 in 1,149 s.

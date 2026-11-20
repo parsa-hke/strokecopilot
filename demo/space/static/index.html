@@ -4,141 +4,188 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stroke Decision Copilot</title>
-<meta name="description" content="A research prototype that reads stroke imaging and a triage note, recommends thrombolysis and thrombectomy against a guideline rulebook, and checks every claim it makes. Not for clinical use.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232a78d6'/%3E%3Cpath d='M9 17h4l2-6 3 11 2-5h3' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="styles.css">
-<script src="charts.js" defer></script>
-<script src="app.js" defer></script>
+<meta name="description" content="Two hours, thirty minutes: one stroke case followed through two vision models, a language model and the verifier that checks its working. A research prototype. Not for clinical use.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23ff4d57'/%3E%3Cpath d='M9 17h4l2-6 3 11 2-5h3' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<!-- The story page (DEC-32 §3.1). A scripted patient (fixture fx01) followed through the real system: the real answer
+     Sonnet 5.5 gave and the real flags the verifier raised. Three reader challenges. No third-party code. -->
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="story.css">
+<script src="common.js" defer></script>
+<script src="story.js" defer></script>
 </head>
-<body>
-<div class="banner" role="note" aria-label="Research prototype — not for clinical use">
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16"><path d="M10 2 19 18H1Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 8v4.5M10 14.6v.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-  <strong>Research prototype — not for clinical use.</strong>
-  <span class="banner-more">No output here is medical advice. All cases are synthetic or de-identified research data.</span>
-</div>
+<body data-tone="0">
+<div class="banner" role="note"><strong>Research prototype — not for clinical use.</strong><span> No output here is medical advice. All cases are synthetic or de-identified research data.</span></div>
+<div class="progress" aria-hidden="true"><i id="progress"></i></div>
+<div class="aurora" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
+<div class="grain" aria-hidden="true"></div>
 
-<header class="top">
-  <a class="brand" href="#top" aria-label="Stroke Decision Copilot, home">
-    <svg aria-hidden="true" viewBox="0 0 32 32" width="26" height="26"><circle cx="16" cy="16" r="14" fill="var(--accent)"/><path d="M9 17h4l2-6 3 11 2-5h3" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <span>Stroke Decision Copilot</span>
-  </a>
-  <nav aria-label="Sections">
-    <a href="#story">How it works</a>
-    <a href="#cases">Cases</a>
-    <a href="#results">Results</a>
-    <a href="#try">Try it</a>
-    <a href="#about">About</a>
-  </nav>
-  <button class="theme" type="button" aria-label="Switch light or dark theme" title="Theme">◐</button>
-</header>
+<nav class="nav over" aria-label="Pages">
+  <a class="brand" href="index.html"><i></i><span>Stroke Decision Copilot</span></a>
+  <div class="links"><a href="index.html" data-page="index.html">The story</a><a href="run.html" data-page="run.html">Live run</a><a href="research.html" data-page="research.html">The record</a></div>
+</nav>
 
-<main id="top">
-  <section class="hero">
-    <p class="eyebrow">MAAI 901/902 group project · UOWD · 2026</p>
-    <h1>Can a language model recommend stroke treatment <em>and show its working</em>?</h1>
-    <p class="lede">Two vision models read a CT scan. A language model reads their numbers and a triage note,
-      then decides on clot-busting drugs and clot removal against a rulebook written from the 2026 guideline.
-      A verifier then checks <strong>every claim</strong> it makes against the scan's numbers, the note and the rulebook.</p>
-    <div class="hero-stats" id="hero-stats" aria-live="polite"></div>
-    <div class="hero-cta">
-      <a class="btn primary" href="#try">Build a case and run it</a>
-      <a class="btn" href="#cases" id="browse-cases">Browse the answered cases</a>
-    </div>
+<nav class="rail" id="rail" aria-label="Chapters"></nav>
+
+<!-- the case file: fills up as the story goes -->
+<aside class="hud" id="hud">
+  <button class="hud-pill" id="hud-pill" type="button" aria-expanded="false" aria-controls="hud-panel">
+    <span class="dot"></span><span id="hud-clock">13:30</span><span class="sep"></span><span>Case file</span>
+    <span class="pips" id="hud-pips" aria-label="Challenges done"><i></i><i></i><i></i></span>
+  </button>
+  <div class="hud-panel" id="hud-panel" hidden><h3>Case file</h3><dl id="hud-list"></dl></div>
+</aside>
+
+<main>
+  <section class="cover" id="cover" data-title="Start" data-tone="0">
+    <p class="kicker">Stroke Decision Copilot · MAAI 901/902 · UOWD</p>
+    <h1><span class="t" id="cover-t">0 h 00</span><span class="h">Two hours,<br>thirty minutes.</span></h1>
+    <p class="dek">One patient. One scan. One decision about two treatments. Follow her case through two vision models, a language model
+      and the verifier that checks its working, and see where the story turns.</p>
+    <div class="meta"><span>7 chapters</span><span>3 challenges for you</span><span>about 4 minutes</span></div>
+    <a class="go" href="#ch1"><span>Start the clock</span><i></i></a>
+    <p class="fine">The patient is scripted. The system, its answer and its mistake are real.</p>
   </section>
 
-  <section id="story" class="story" aria-labelledby="story-title">
-    <h2 id="story-title">How it works, step by step</h2>
-    <div class="story-grid">
-      <ol class="steps" id="steps"></ol>
-      <div class="stage" aria-live="polite"><div class="stage-card" id="stage"></div></div>
-    </div>
-  </section>
-
-  <section id="cases" class="cases" aria-labelledby="cases-title">
-    <h2 id="cases-title">Case explorer</h2>
-    <p class="section-lede">Every answer here was produced earlier with the same prompt and verifier. Click any claim to light up
-      what it rests on: a number in the imaging contract, a line of the note, or a rulebook passage. Claims the verifier
-      flagged are marked <span class="flag-chip">✕ flagged</span> with the reason.</p>
-    <div class="explorer">
-      <aside class="case-list" aria-label="Cases">
-        <div class="tabs" role="tablist" id="case-tabs"></div>
-        <label class="search"><span class="visually-hidden">Filter cases</span>
-          <input id="case-filter" type="search" placeholder="Filter by route, e.g. DAWN, basilar, INR"></label>
-        <ul id="case-items" class="case-items"></ul>
-      </aside>
-      <div class="case-view" id="case-view"><p class="muted">Pick a case on the left.</p></div>
-    </div>
-  </section>
-
-  <section id="results" class="results" aria-labelledby="results-title">
-    <h2 id="results-title">What we found</h2>
-    <p class="section-lede">Hallucination rates are the verifier's, and the human check below shows they are upper bounds:
-      people confirmed 18 of its 54 flags. The comparison between models holds.</p>
-    <div class="result-grid" id="result-grid"></div>
-  </section>
-
-  <section id="try" class="try" aria-labelledby="try-title">
-    <h2 id="try-title">Try it: build a case</h2>
-    <p class="section-lede">Set the patient and the scan. The project's own note generator writes the triage note, then
-      <strong>Claude Sonnet 5.5</strong> answers live and the verifier checks it, exactly as in the evaluation. There is no
-      free text: every value stays inside the ranges the system was tested on. If a live run cannot be served, you get the
-      closest precomputed case and the reason.</p>
-    <div class="builder">
-      <form id="builder" class="controls" novalidate>
-        <div class="preset-row">
-          <label>Start from<select id="preset"><option value="">Default values</option></select></label>
-        </div>
-        <fieldset><legend>Timing</legend><div class="fields" id="f-timing"></div></fieldset>
-        <fieldset><legend>Patient</legend><div class="fields" id="f-patient"></div></fieldset>
-        <fieldset><legend>Imaging (what the vision models would report)</legend><div class="fields" id="f-imaging"></div></fieldset>
-        <fieldset><legend>Medicines and history</legend><div class="fields" id="f-history"></div></fieldset>
-        <div class="run-row">
-          <button class="btn primary" type="submit" id="run">Run it live</button>
-          <span class="muted small" id="live-status"></span>
-        </div>
-        <p class="error" id="builder-error" role="alert" hidden></p>
-      </form>
-      <div class="run-panel" id="run-panel">
-        <ol class="progress" id="progress" aria-live="polite"></ol>
-        <div id="run-result"></div>
+  <!-- 1 -->
+  <header class="chap" data-tone="1"><span class="num">01</span><h2>The words stop</h2><p>13:30. A lunch table. A sentence that will not finish.</p></header>
+  <section class="scrolly" id="ch1" data-title="01 · The words stop" data-tone="1">
+    <div class="stage"><div class="frame" id="viz-clock">
+      <div class="frame-top"><span>Onset clock</span><span class="live"><i></i>running</span></div>
+      <div class="dial">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="d-bg" cx="100" cy="100" r="88"/><circle class="d-fill" id="d-fill" cx="100" cy="100" r="88"/>
+          <line class="d-scan" x1="180" y1="100" x2="196" y2="100" transform="rotate(200 100 100)"/>
+        </svg>
+        <div class="dial-in"><div class="time" id="clk-time">13:30</div><div class="since" id="clk-since">onset</div></div>
       </div>
+      <div class="dial-leg"><span><i class="k red"></i>time used of the drug's 4.5-hour window</span><span><i class="k tick"></i>16:00, the scan</span></div>
+    </div></div>
+    <div class="steps">
+      <article class="step"><p class="ts">13:30</p><p>A 68-year-old woman is at lunch with her family. Without warning her right arm goes weak, and she cannot
+        <span class="scramble" data-text="find her words">find her words</span>.</p></article>
+      <article class="step"><p>An ambulance brings her in. In a stroke, the clock decides what can still be done. The clot-busting drug is for the first
+        <strong>four and a half hours</strong>; after that the rulebook stops recommending it.</p></article>
+      <article class="step"><p class="ts">16:00</p><p>She is in the scanner, <strong>two and a half hours</strong> after it began. Her stroke score is 8, and before today she was fully independent.
+        Two hours of the window are left.</p></article>
     </div>
   </section>
 
-  <section id="about" class="about" aria-labelledby="about-title">
-    <h2 id="about-title">About this project</h2>
-    <div class="about-grid">
-      <div>
-        <h3>What it is not</h3>
-        <p>A research prototype built for a university course. It is not a medical device, has not been validated
-          clinically, and must never be used to decide anyone's treatment. The rulebook is the team's reading of the
-          guideline and has not been reviewed by a clinician.</p>
-        <h3>Limits we report</h3>
-        <ul>
-          <li>The "core" is a model trained on final infarct, not acute core, in a cohort that was reperfused.</li>
-          <li>Real cases have no ASPECTS and mostly an unknown occlusion site, so the rules leave many decisions undetermined.</li>
-          <li>The bleed detector flags about half of ISLES'24's presumed bleed-free scans: a domain shift, not an RSNA failure.</li>
-          <li>Hallucination rates are the verifier's; humans confirmed about a third of its flags.</li>
-        </ul>
+  <!-- 2 -->
+  <header class="chap" data-tone="2"><span class="num">02</span><h2>The scan</h2><p>16:00. What the machine sees, and what you can.</p></header>
+  <section class="scrolly" id="ch2" data-title="02 · The scan" data-tone="2">
+    <div class="stage"><div class="frame" id="viz-scan">
+      <div class="frame-top"><span id="scan-label">Plain CT · ISLES'24 case D-10</span><span class="badge" id="scan-badge">Challenge 1 of 3</span></div>
+      <div class="viewer" id="viewer" tabindex="0" aria-label="A CT slice of a brain. Tap where you think the stroke is.">
+        <img class="base" id="scan-base" src="/api/bank/img/story_ncct.png" alt="Plain CT slice of a brain" width="360" height="360" fetchpriority="high">
+        <img class="top" id="scan-top" src="/api/bank/img/story_overlay.png" alt="The same slice with the predicted core in red and tissue at risk in amber" width="360" height="360">
+        <div class="scanline" id="scanline"></div>
+        <div class="pin" id="pin" hidden></div>
+        <div class="handle" id="wipe-handle" hidden><i></i></div>
+        <p class="prompt" id="scan-prompt">Tap where you think the stroke is</p>
       </div>
-      <div>
-        <h3>Data and credit</h3>
-        <ul>
-          <li><strong>ISLES'24</strong> (Zenodo 17652035), CC BY-NC-SA 4.0: Riedel et al., <em>ISLES'24 – A Real-World
-            Longitudinal Multimodal Stroke Dataset</em>, arXiv:2408.11142; de la Rosa et al., arXiv:2408.10966. Cases are
-            shown by alias only. This page is shared under the same licence.</li>
-          <li><strong>RSNA Intracranial Haemorrhage</strong> (Kaggle): aggregate numbers only, no images. Flanders et al.,
-            <em>Radiol Artif Intell</em> 2020;2:3.</li>
-          <li><strong>Guideline:</strong> 2026 AHA/ASA acute ischaemic stroke guideline, DAWN and DEFUSE-3. The rulebook is in
-            our own words with pointers to the sources; no guideline text is reproduced.</li>
-          <li><strong>Models:</strong> Claude Sonnet 5.5 and Haiku 5.5 (Anthropic), Qwen3.5-27B, Gemma 3 27B and 4B,
-            MedGemma 27B; nnU-Net v2; ResNet-50.</li>
-        </ul>
-      </div>
+      <div class="series" id="series" role="group" aria-label="Scan view"></div>
+      <p class="result" id="scan-result" aria-live="polite"></p>
+      <div class="chips" id="scan-chips" aria-live="polite"></div>
+    </div></div>
+    <div class="steps">
+      <article class="step"><p class="ts">Challenge 1</p><p>This is a plain CT, the first thing the scanner returns. Somewhere in it a stroke is under way.
+        <strong>Tap the scan where you think it is.</strong> <span class="aside">A real research scan (ISLES'24, case D-10) stands in for hers.</span></p></article>
+      <article class="step"><p>Here is what the first model marked: the <strong class="red">core</strong>, tissue already lost, inside a wider area still at risk. The white line is where the damage finally settled.
+        Early on, a stroke barely shows on a plain CT. <span class="aside" id="va-fact"></span></p></article>
+      <article class="step"><p>A second model reads the plain scan for bleeding, because a bleed rules the drug out. <span class="aside" id="vb-fact"></span></p></article>
+      <article class="step"><p>Our patient is scripted, so her numbers are written by hand in the format the two models produce: a tiny core, a small area at risk,
+        a clot in a branch artery called <strong>M2</strong>, and no bleed. These numbers are all the language model will ever see of a scan.</p></article>
     </div>
+  </section>
+
+  <!-- 3 -->
+  <header class="chap" data-tone="3"><span class="num">03</span><h2>The rulebook</h2><p>47 passages. You run the rule.</p></header>
+  <section class="scrolly" id="ch3" data-title="03 · The rulebook" data-tone="3">
+    <div class="stage"><div class="frame" id="viz-book">
+      <div class="frame-top"><span>Rulebook · 47 passages</span><span class="filters" id="filters"></span></div>
+      <div class="tiles" id="tiles" role="list" aria-label="The 47 rulebook passages"></div>
+      <div class="reader" id="reader" aria-live="polite"><p class="rid">Tap any passage to read it.</p><p class="rtext"></p></div>
+      <div class="runner" id="runner" hidden>
+        <p class="r-title" id="r-title"></p>
+        <div class="r-facts" id="r-facts"></div>
+        <div class="r-out"><span class="r-arrow" aria-hidden="true">→</span><span class="r-verdict" id="r-verdict">?</span><span class="r-why" id="r-why"></span></div>
+      </div>
+    </div></div>
+    <div class="steps">
+      <article class="step"><p class="ts">The rulebook</p><p>The guideline cannot be copied, so the team rewrote every criterion in its own words: <strong>47 passages</strong>, each pointing to its source.
+        Tap one to read it.</p></article>
+      <article class="step"><p>A program applies them first, with no language model involved. Run it yourself: <strong>tap each of her facts</strong> to feed it to the rule for the clot-busting drug.</p></article>
+      <article class="step"><p>Now clot removal. Feed the facts again. One piece is missing: whether her M2 branch is the dominant one, which this system cannot see.
+        The rulebook answers <strong>undetermined</strong> instead of guessing.</p></article>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <header class="chap" data-tone="4"><span class="num">04</span><h2>Your call</h2><p>The model has the file. Guess before it speaks.</p></header>
+  <section class="scrolly" id="ch4" data-title="04 · Your call" data-tone="4">
+    <div class="stage"><div class="frame" id="viz-call">
+      <div class="frame-top"><span>Claude Sonnet 5.5</span><span class="badge">Challenge 2 of 3</span></div>
+      <p class="q">What will the language model recommend?</p>
+      <div class="ask" id="ask"></div>
+      <button class="lock" id="lock" type="button" disabled>Lock in my guess</button>
+      <div class="reveal" id="reveal" hidden></div>
+      <div class="others" id="others" hidden></div>
+    </div></div>
+    <div class="steps">
+      <article class="step"><p class="ts">Challenge 2</p><p>Now the language model, Claude Sonnet 5.5, gets the same file: the scan's numbers, the triage note and all 47 passages.
+        Before it answers, <strong>make your guess</strong>.</p></article>
+      <article class="step"><p>Its answer: <strong>give the drug; do not attempt removal</strong>. On the drug it matches the rulebook. On removal the rulebook was undetermined, so either answer is accepted.</p></article>
+      <article class="step"><p>Five other models read the same file. All six would give the drug. One small model would also attempt the removal.</p></article>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <header class="chap" data-tone="5"><span class="num">05</span><h2>The marking</h2><p>A right answer is not the end. You mark it first.</p></header>
+  <section class="scrolly" id="ch5" data-title="05 · The marking" data-tone="5">
+    <div class="stage"><div class="frame" id="viz-mark">
+      <div class="frame-top"><span id="mk-count">Claims</span><span class="badge" id="mk-badge">Challenge 3 of 3</span></div>
+      <p class="prompt2" id="mk-prompt">Tap every claim you would not trust.</p>
+      <ol class="claims" id="claims"></ol>
+      <div class="lookup" id="lookup" hidden><div class="lk-strip" id="lk-strip"></div><p class="lk-say" id="lk-say"></p></div>
+      <p class="result" id="mk-result" aria-live="polite"></p>
+    </div></div>
+    <div class="steps">
+      <article class="step"><p class="ts">Challenge 3</p><p>Everything the model wrote is split into single claims, <strong>eight</strong> of them here. You are the verifier.
+        <strong>Tap any claim you would not trust.</strong></p></article>
+      <article class="step"><p>The real verifier checks each one: numbers against the scan, patient facts against the note, and every cited passage against the 47 in the rulebook.</p></article>
+      <article class="step"><p><strong class="red">Two fail.</strong> To justify the drug, Sonnet cited a passage that <strong>does not exist</strong>. The rulebook has a passage with a similar name.
+        The model wrote one that is not in the book.</p></article>
+      <article class="step"><p>The right decision, resting on an invented source. That is what this project measures: not only whether a model is right, but whether its working can be trusted.</p></article>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <header class="chap" data-tone="6"><span class="num">06</span><h2>The bigger picture</h2><p>One patient is an anecdote. Here is everyone.</p></header>
+  <section class="scrolly" id="ch6" data-title="06 · The bigger picture" data-tone="6">
+    <div class="stage"><div class="frame" id="viz-big">
+      <div class="frame-top"><span id="big-label">All cases</span><span class="filters" id="metric"></span></div>
+      <div class="pane" id="pane-cases"><div class="dots" id="dots"></div><p class="cap" id="dots-cap"></p></div>
+      <div class="pane" id="pane-bars" hidden><div class="bars" id="bars"></div><p class="cap" id="bars-cap"></p></div>
+      <div class="pane" id="pane-human" hidden><div class="flags" id="flags"></div><p class="cap" id="flags-cap"></p></div>
+    </div></div>
+    <div class="steps">
+      <article class="step"><p class="ts">The bigger picture</p><p>The same test ran on <strong id="n-cases">195</strong> cases: hand-written fixtures, scripted scenarios, and real patients from a research dataset.
+        Hover any dot.</p></article>
+      <article class="step"><p>Six language models answered them. Sonnet's claims were flagged least often; a small model, more than ten times as often. Switch the measure above the chart.</p></article>
+      <article class="step"><p>Then the verifier itself was checked. People agreed with <strong id="n-conf">18 of its 54</strong> flags, so its rates are upper bounds: it errs on the side of suspicion.</p></article>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="finale" id="ch7" data-title="Your turn" data-tone="7">
+    <p class="kicker">Your turn</p>
+    <h2>Write the<br>next patient.</h2>
+    <div class="score" id="score"></div>
+    <p class="dek">Set the timing, the scan and the history. Sonnet 5.5 answers live, and the verifier marks it while you watch.</p>
+    <div class="cta"><a class="btn primary" href="run.html?preset=fx01_thrombolysis_clear">Run her case live</a><a class="btn" href="run.html">Build your own case</a><a class="btn" href="research.html#cases">Read all <span id="n-cases2">195</span> answers</a><a class="btn" href="research.html">See every test we ran</a></div>
   </section>
 </main>
-<footer class="foot"><p>Research prototype — not for clinical use. · Stroke Decision Copilot, MAAI 901/902, UOWD.</p></footer>
-<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+<footer class="foot"><p>Research prototype — not for clinical use. · Stroke Decision Copilot, MAAI 901/902, UOWD. · <a href="research.html#about">Data, credit and limits</a></p></footer>
+<div class="tip" id="tip" hidden></div>
 </body>
 </html>
