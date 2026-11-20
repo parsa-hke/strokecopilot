@@ -363,3 +363,18 @@ def test_biomedclip_scan_and_calibration_helpers():
     y = (x[:, 0] > 0).astype(int)
     clf = LogisticRegression().fit(x, y)
     assert np.allclose(bc.probe_predict(bc.probe_json(clf), x), clf.predict_proba(x)[:, 1])
+
+
+def test_t9_row_is_paired_and_labelled(tmp_path):
+    import json as _json
+
+    from strokecopilot.analysis import ttest_plan as tp
+    rng = np.random.default_rng(3)
+    exp6 = rng.uniform(0, 0.2, 50)
+    path = tmp_path / "t9.json"
+    path.write_text(_json.dumps({"exp6": exp6.tolist(), "probe": (exp6 + 0.03 + rng.normal(0, 0.01, 50)).tolist()}))
+    row = tp.t9_row(path)
+    assert row["id"] == "T9" and row["form"] == "paired" and row["n"] == 50 and row["mean_difference"] > 0
+    path.write_text(_json.dumps({"exp6": [0.1], "probe": [0.1, 0.2]}))
+    with pytest.raises(ValueError):
+        tp.t9_row(path)

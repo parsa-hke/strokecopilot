@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (ready for the runs' results: figures for rows 1, 5 and 9 and F; T9 wired in)
+- **Figures waiting for their runs** (`analysis.figures`; each drawn from the dummy data and checked by eye; exported by `python -m strokecopilot.analysis.figures` once a run's `metrics.json` is in `runs/`):
+  - `fig_visionA_channel_shap` (row 1): mean |Shapley| per input, for volume and for Dice.
+  - `fig_reasoner_shap` (row 9): rules against the base and tuned 4B, per input group and treatment.
+  - `fig_visionB_window_shap` (row 5): mean Shapley value per window, by group, on RSNA and on ISLES'24.
+  - `fig_judge_agreement` (F): Haiku and GPT-6 Luna against the humans, per reasoner model, with the judge–judge κ.
+  - The three-colour set passes the dataviz validator; green's contrast warning is handled by a legend and direct labels.
+  - Fixed on the dummies: no labels on empty bars, and overlapping judge dots are offset.
+- **T9 wired in:** `ttest_plan.t9_row` reads task D's `t9_brier.json` (paired per-patient Brier, no IDs). The next t-test run adds T9 and recomputes Holm over all 35. Tested.
+- **F:** running, slower than the dummy (about 1.5 min per case on real-case cells with reasoning); about 2 h more; the cost stays well under the $1 cap.
+- **Tests:** `tests/test_analysis.py` (30). pytest: 909 passed. **Spend:** none new.
+
 ## 2026-11-20 — Claude Code session (Phase 5 tasks D and F: DEC-33 and DEC-38; F running, D ready for Kaggle)
 - **DEC-33 (D) and DEC-38 (F)** added to plan §2 (Parsa, 20 Nov 2026).
 - **F, the non-Claude judge (EXP-81; `analysis.rejudge`):**

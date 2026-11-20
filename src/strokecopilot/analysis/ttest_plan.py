@@ -171,6 +171,23 @@ def subgroup_rows(vision_rows, notes_dir):
     return out
 
 
+T9_FILE = Path("runs/EXP-82_biomedclip/t9_brier.json")
+
+
+def t9_row(path=T9_FILE):
+    """T9 (DEC-36): BiomedCLIP's linear probe minus EXP-6, per-patient mean Brier score of the calibrated scan
+    probability on RSNA validation, paired (task D writes the two lists in the same patient order, without IDs)."""
+    d = json.loads(Path(path).read_text())
+    if len(d["probe"]) != len(d["exp6"]):
+        raise ValueError("T9: the two Brier lists differ in length")
+    row = ttests.paired(d["probe"], d["exp6"], "BiomedCLIP probe minus EXP-6 ResNet-50, Brier per patient")
+    row.update(id="T9", measure="per-patient Brier score (calibrated scan probability)",
+               existing={"source": "task D (EXP-82)", "kind": "AUCs, no paired interval"})
+    row["agreement_with_existing"] = None
+    row["agrees_with_existing"] = None
+    return row
+
+
 def run(drive, rates_json=None):
     """Every test that can run now, checked, then Holm over them as one family. Returns the rows."""
     drive = Path(drive)
@@ -179,6 +196,8 @@ def run(drive, rates_json=None):
     if rates_json and Path(rates_json).exists():
         rows += heldout_rows(rates_json)
     rows += subgroup_rows(vrows, drive / "artifacts" / "isles24_notes_v1")
+    if T9_FILE.exists():
+        rows.append(t9_row())
     return ttests.adjust(rows)
 
 

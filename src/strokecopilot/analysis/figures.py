@@ -45,6 +45,22 @@ CAPTIONS = {
         "EXP-80 (DEC-37, task E): Vision A's Dice and wrong-side rate and Vision B's bleed-flag rate on the 129 development "
         "cases, by age band, sex, centre and onset-information pattern; case-bootstrap (Dice) and Wilson intervals. "
         "Unadjusted: infarct size differs between groups. Groups under 10 cases are left out."),
+    "fig_visionA_channel_shap": (
+        "EXP-75 (DEC-35, SHAP row 1): exact Shapley values of nnU-Net's five inputs (NCCT, CBF, CBV, MTT, Tmax with its "
+        "mask) on the 129 development cases, each predicted by its validating fold model for all 32 combinations; mean "
+        "|value| for the predicted core volume and for Dice. Reliance, not ablation: no model was trained without an input."),
+    "fig_reasoner_shap": (
+        "EXP-74 (DEC-35, SHAP row 9, amended): exact Shapley values of six input groups on 24 synthetic scenarios (the "
+        "bleed fixed), for the rule engine and for Gemma 3 4B prompted and LoRA-tuned on the same 64 versions of each "
+        "scenario; mean |value| for reaching the full-input decision."),
+    "fig_visionB_window_shap": (
+        "EXP-76 and EXP-77 (DEC-35, SHAP row 5): exact Shapley values of the three CT windows on the calibrated scan "
+        "probability; mean value by group on RSNA validation and on ISLES'24's 129 development scans. An absent window is "
+        "set to its RSNA training mean. Reliance, not ablation."),
+    "fig_judge_agreement": (
+        "EXP-81 (DEC-38, task F): agreement with the human consensus on EXP-41's 100 claims, per reasoner model, for the "
+        "Claude Haiku 5.5 judge and for GPT-6 Luna (no family shared with any reasoner). Metric points 19 and 20 were "
+        "adjusted on these labels."),
 }
 
 SHORT = {"claude-sonnet-5-5": "Sonnet 5.5", "qwen3.5-27b": "Qwen3.5-27B", "gemma-3-27b": "Gemma 3 27B",
@@ -177,6 +193,14 @@ def main(argv=None):
     sub = Path("runs/EXP-80_subgroups/metrics.json")
     if sub.exists():
         names += subgroups_figure(json.loads(sub.read_text()), [out, sub.parent])
+    for run, draw in (("runs/EXP-75_visionA_channel_shap", visiona_channel_figure), ("runs/EXP-74_reasoner_shap", reasoner_shap_figure),
+                      ("runs/EXP-81_rejudge", judge_figure)):
+        if (Path(run) / "metrics.json").exists():
+            names += draw(json.loads((Path(run) / "metrics.json").read_text()), [out, run])
+    rsna, isles = Path("runs/EXP-76_visionB_window_shap/metrics.json"), Path("runs/EXP-77_visionB_window_shap_isles/metrics.json")
+    if rsna.exists() or isles.exists():
+        names += visionb_window_figure(json.loads(rsna.read_text()) if rsna.exists() else None,
+                                       json.loads(isles.read_text()) if isles.exists() else None, [out, isles.parent])
     pixel = Path("runs/EXP-72_visionB_pixel_shap/pixel_shap_examples.png")
     if pixel.exists():
         import shutil
@@ -295,6 +319,118 @@ def subgroups_figure(metrics, out):
     axes[0].set_yticklabels([f"{lab} (n={d['cases']})" for g, lab, d in reversed(rows)], fontsize=8)
     fig.tight_layout()
     return _write(fig, out, "fig_subgroups_vision")
+
+
+THREE = (SLOTS[0], SLOTS[1], SLOTS[2])  # validated as a set (dataviz validator, light; labels carry the contrast)
+
+
+def _hbars(ax, names, series, labels, xlabel, title, fmt="{:.2f}"):
+    """Grouped horizontal bars: names top to bottom, one bar per series, a value label at each bar's end."""
+    n = len(series)
+    h = 0.8 / n
+    for k, (vals, lab) in enumerate(zip(series, labels)):
+        ys = [len(names) - 1 - i + (n - 1 - 2 * k) * h / 2 for i in range(len(names))]
+        ax.barh(ys, vals, height=h * 0.92, color=THREE[k % 3], label=lab)
+        for y, v in zip(ys, vals):
+            if abs(v) < 0.005:
+                continue  # no label on an empty bar
+            ax.text(v + (0.01 * max(max(s) for s in series) if v >= 0 else -0.01), y, fmt.format(v), va="center",
+                    ha="left" if v >= 0 else "right", fontsize=6.5, color=INK_2)
+    ax.set_yticks(range(len(names)))
+    ax.set_yticklabels(list(reversed(names)))
+    ax.tick_params(axis="y", length=0)
+    ax.grid(axis="y", visible=False)
+    ax.set_xlabel(xlabel)
+    ax.set_title(title, fontsize=9, color=INK, loc="left")
+
+
+def visiona_channel_figure(metrics, out):
+    plt = _plt()
+    players = metrics["players"]
+    fig, axes = plt.subplots(1, 2, figsize=(8.6, 2.8), sharey=True)
+    for ax, key, xlabel, fmt in ((axes[0], "pred_ml", "mean |Shapley value|, mL", "{:.1f}"),
+                                 (axes[1], "dice", "mean |Shapley value|, Dice", "{:.3f}")):
+        vals = [metrics[key]["mean_abs"][p] for p in players]
+        _hbars(ax, players, [vals], [None], xlabel,
+               f"{'Predicted core volume' if key == 'pred_ml' else 'Dice'} (all inputs {metrics[key]['full_mean']:.3g}, "
+               f"none {metrics[key]['none_mean']:.3g})", fmt)
+        ax.set_xlim(0, max(vals) * 1.25 or 1)
+    fig.suptitle(f"Vision A: which inputs nnU-Net relies on (development cases: {metrics['complete']})", fontsize=9,
+                 color=INK, x=0.01, ha="left")
+    fig.tight_layout()
+    return _write(fig, out, "fig_visionA_channel_shap")
+
+
+def reasoner_shap_figure(metrics, out):
+    plt = _plt()
+    s = metrics["summary"]
+    groups = metrics["groups"]
+    base, tuned = "gemma-3-4b", "gemma-3-4b-tuned"
+    fig, axes = plt.subplots(1, 2, figsize=(9, 3.4), sharey=True)
+    for ax, d in zip(axes, ("thrombolysis", "thrombectomy")):
+        series = [[s[base][d]["rules_mean_abs"][g] for g in groups], [s[base][d]["model_mean_abs"][g] for g in groups],
+                  [s[tuned][d]["model_mean_abs"][g] for g in groups]]
+        _hbars(ax, groups, series, ["rule engine", "Gemma 3 4B", "Gemma 3 4B tuned"], "mean |Shapley value|",
+               d.capitalize())
+        ax.set_xlim(0, 1.1)
+    axes[1].legend(loc="lower right", frameon=False, fontsize=7.5)
+    fig.suptitle(f"What the rules and the small reasoners rely on ({s[base]['scenarios_complete']} and "
+                 f"{s[tuned]['scenarios_complete']} complete scenarios)", fontsize=9, color=INK, x=0.01, ha="left")
+    fig.tight_layout()
+    return _write(fig, out, "fig_reasoner_shap")
+
+
+def visionb_window_figure(rsna, isles, out):
+    plt = _plt()
+    windows = ("brain", "subdural", "bone")
+    panels = []
+    if rsna:
+        g = rsna["groups"]
+        panels.append(("RSNA validation", [k for k in ("bleed", "no bleed", "false positive") if k in g], g))
+    if isles:
+        g = isles["groups"]
+        panels.append(("ISLES'24 development (all presumed bleed-free)", list(g), g))
+    fig, axes = plt.subplots(1, len(panels), figsize=(4.6 * len(panels), 2.9), sharey=False)
+    axes = np.atleast_1d(axes)
+    for ax, (title, names, g) in zip(axes, panels):
+        series = [[g[n]["mean_phi"][w] for n in names] for w in windows]
+        labels = [f"{n} ({g[n]['scans']})" for n in names]
+        _hbars(ax, labels, series, list(windows), "mean Shapley value, calibrated probability", title)
+        ax.axvline(0, color=INK_2, lw=0.8)
+        ax.set_xlim(-0.25, 1.0)
+    axes[-1].legend(loc="lower right", frameon=False, fontsize=7.5, title="window", title_fontsize=7.5)
+    fig.tight_layout()
+    return _write(fig, out, "fig_visionB_window_shap")
+
+
+def judge_figure(metrics, out):
+    plt = _plt()
+    names = {"claude-sonnet-5-5": "Sonnet 5.5", "qwen/qwen3.5-27b": "Qwen3.5-27B", "gemma-3-27b": "Gemma 3 27B",
+             "medgemma-27b-text": "MedGemma 27B"}
+    h, n = metrics["haiku_vs_humans"], metrics["new_judge_vs_humans"]
+    models = sorted(h["per_model"])
+    rows = [("all claims", h["all"], n["all"])] + [(names.get(m, m), h["per_model"][m], n["per_model"][m]) for m in models]
+    fig, ax = plt.subplots(figsize=(6.4, 0.42 * len(rows) + 1.0))
+    for i, (lab, a, b) in enumerate(rows):
+        y = len(rows) - 1 - i
+        ax.plot([a["agreement"], b["agreement"]], [y + 0.12, y - 0.12], color=GRID, lw=2, zorder=1)
+        ax.plot([a["agreement"]], [y + 0.12], "o", ms=7, color=THREE[0], mec="white", mew=1.2, zorder=2,
+                label="Claude Haiku 5.5" if i == 0 else None)
+        ax.plot([b["agreement"]], [y - 0.12], "o", ms=7, color=THREE[1], mec="white", mew=1.2, zorder=3,
+                label="GPT-6 Luna" if i == 0 else None)
+        ax.text(1.01, y, f"n={a['n']}", va="center", fontsize=7, color=INK_2)
+    ax.set_yticks(range(len(rows)))
+    ax.set_yticklabels([r[0] for r in reversed(rows)])
+    ax.set_xlim(0, 1)
+    ax.tick_params(axis="y", length=0)
+    ax.grid(axis="y", visible=False)
+    ax.set_xlabel("agreement with the human consensus (flag = error)")
+    jj = metrics["judge_vs_judge"]
+    ax.set_title(f"Two judges on the same {metrics['claims']} claims: judge-judge agreement {jj['agreement']:.2f}, κ {jj['kappa']:.2f}",
+                 fontsize=9, color=INK, loc="left")
+    ax.legend(loc="lower left", frameon=False, fontsize=7.5)
+    fig.tight_layout()
+    return _write(fig, out, "fig_judge_agreement")
 
 
 if __name__ == "__main__":
