@@ -5,8 +5,8 @@ Drive `artifacts/figures/` (PNG and SVG; captions in that folder's `README.md`) 
 named doc and run folder. Everything here is report only: nothing was retrained and nothing feeds the contract, the
 pipeline or the Space (DEC-31, DEC-34). No held-out case was used except T7, labelled post hoc.
 
-Status on 20 Nov 2026: A, C (34 of 35 tests), E, G and H done; B in progress (rows 1, 5 and 9 running on Colab
-and Kaggle); I in progress; D and F to come.
+Status on 20 Nov 2026: A, C (34 of 35 tests), E, F, G and H done; B in progress (rows 1, 5 and 9 running on
+Colab and Kaggle); D ready for Kaggle; I in progress.
 
 ## A. Clinician pack (EXP-67, DEC-34)
 
@@ -121,4 +121,20 @@ faster).
   without an API key: a 3 MB bundle of saved answers and verifier caches is rescored offline and checked against every
   reported rate."
 - **Still Parsa's:** the submission tag and its release, and markers' access to the repository.
+
+## F. A non-Claude judge (EXP-81, DEC-38)
+
+EXP-41's 100 human-labelled claims re-judged by GPT-6 Luna (`openai/gpt-6-luna` through OpenRouter; no family shared
+with any of the six reasoners), with the same `judge_v3` prompt, τ 0.6 and reasoning effort, from an empty judge cache
+(469 judge calls, $0.29, no provider errors; figure `fig_judge_agreement`). The two judges flag the same 97 of 100 claims
+(κ 0.94; 95 of 100 with the same verdict type). Agreement with the human consensus is the same for both: Haiku 0.61
+(weighted 0.87), Luna 0.62 (0.87); per reasoner model the two match except Sonnet's claims (Haiku 0.63, Luna 0.67). All
+three disagreements are on Sonnet's claims, where Haiku flagged and Luna did not, and the humans sided with Luna on two.
+- **Sentence (902, evaluation):** "Re-judging the 100 human-labelled claims with a judge from a different model family
+  (GPT-6 Luna) changed 3 of 100 verdicts (κ 0.94) and left agreement with the humans unchanged (0.62 against 0.61), so the
+  verifier's limited agreement with people comes from what it checks, not from which model judges; and the Claude judge
+  was, if anything, stricter on the Claude reasoner."
+- **Must be said with it:** metric points 19 and 20 were adjusted on these same labels (EXP-41); 100 claims, about 25
+  per model, so per-model differences are small-sample; the code checks are shared by both judges, so this tests the
+  judge, not the whole verifier.
 

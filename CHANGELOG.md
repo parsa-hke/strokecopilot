@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (EXP-81 done: task F, the non-Claude judge)
+- **EXP-81** (`analysis.rejudge`; `runs/EXP-81_rejudge/` on the Mac and Drive; figure `fig_judge_agreement`): EXP-41's 100 labelled claims re-judged by `openai/gpt-6-luna` through OpenRouter, with `judge_v3`, τ 0.6 and effort medium, from an empty judge cache.
+  - 469 judge calls; 0.81 M input and 0.42 M output tokens (0.24 M of them reasoning); **$0.29** (cap $1); no provider errors.
+  - **Judge against judge:** the same flag on 97 of 100 claims, κ **0.94**; Haiku flags 54, Luna 51; 95 of 100 have the same verdict type.
+  - **Against the humans:** Haiku 0.61 (weighted 0.87), Luna **0.62** (0.87).
+    - Per reasoner model, Haiku against Luna: Sonnet 0.63 / 0.67, Gemma 3 27B 0.68 / 0.68, MedGemma 0.62 / 0.62, Qwen 0.50 / 0.50.
+  - **The 3 disagreements are all on Sonnet's claims:** Haiku flagged and Luna did not; the humans sided with Luna on 2. So there's no sign that the Claude judge favoured the Claude reasoner; if anything it was stricter. 3 claims are too few to conclude anything.
+  - **Reading:** the verifier's limited agreement with people (0.61) comes from what it checks, not from the judge model.
+  - **Stated with it:** points 19 and 20 were adjusted on these labels; about 25 claims per model.
+- **Spend this session (Phase 5):** OpenRouter $0.30 (F, dummy included). Nothing else paid.
+- **Notion sync:** Experiments: EXP-81 (Done, figures above). Tasks: Phase 5 task F (Done).
+
 ## 2026-11-20 — Claude Code session (ready for the runs' results: figures for rows 1, 5 and 9 and F; T9 wired in)
 - **Figures waiting for their runs** (`analysis.figures`; each drawn from the dummy data and checked by eye; exported by `python -m strokecopilot.analysis.figures` once a run's `metrics.json` is in `runs/`):
   - `fig_visionA_channel_shap` (row 1): mean |Shapley| per input, for volume and for Dice.
