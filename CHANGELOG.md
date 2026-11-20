@@ -22,6 +22,16 @@ Presentation only (DEC-32 Space). No number, result, chart meaning, schema or se
 - **Shipped on Parsa's word:** commit 38ea989 pushed to `main`; uploaded to the Space as 98b213bc with `static/app.js` and `static/styles.css` deleted there. The bundled package gained only the Phase 5 analysis modules; `demo/` and `nlp/` are unchanged since the last upload.
   - **On the public Space after the rebuild:** the three pages and `record.json` are served, the old files return 404, and `/healthz` shows the key present and live runs on.
   - **One live run through the public page** (default case): answered live in 50.6 s, 25 claims, 2 flagged, 0 critical; every step drew with its time; no console errors.
+- **After Parsa's review of the live site:**
+  - **Costs removed from the record** on his word: the cost sentences of EXP-9, 14, 38, 39, 40 and 81, EXP-64's total, the demo summary's figure and DEC-21's budget clause. Committed (cef56a6), and `static/record.json` alone uploaded to the Space (4ca93510). Checked on the public file: no dollar sign, "USD" or "Cost".
+  - **The live-run page redesigned as a short game, local only, not committed or uploaded** (Parsa found the first version complex; he wants to see this one before it ships). One board, four screens:
+    - pick one of six patient cards (five fixtures and a random scenario), with the full builder behind "Fine-tune this patient";
+    - place three bets (drug, removal, whether the verifier flags a claim);
+    - watch the run with one step in focus at a time (`runviz.js` gained a focus mode);
+    - a result screen that scores the bets, shows every claim, and awards badges.
+    - Points and eight badges are kept in the browser only (`localStorage`). The builder's values, the server calls, the limits and the fallback are unchanged.
+    - Checked with the fallback, a recorded run, and a stand-in runner emitting the real event sequence; desktop and 375 px; no console errors.
+  - **Seen while testing, not changed (server side, predates this work):** with live runs off, the fallback for some stored cases picks a different nearest case, because stored values do not survive the builder's slider steps (for example `fx02` falls back to `scenario-077`). The page says so when it happens.
 - **Tests:** 910 passed. **Spend:** $0.1083 (the one live run; daily cap $5).
 - **Notion sync:** Tasks: Space redesign (story, live-run page, record page) — Done, live on the Space. Decisions: DEC-32 §3 (story case) to confirm with Parsa; not amended.
 

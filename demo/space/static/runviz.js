@@ -23,6 +23,8 @@
     const clock = h("span", "rv-clock", ""), bar = h("div", "rv-bar"), fill = h("i"); bar.append(fill);
     const P = {};
     const panel = (k, title) => { const s = h("section", "rv-p"); s.append(h("h5", null, title)); P[k] = s; return s; };
+    const PANEL = { note: "note", rules: "rules", reasoner: "reasoner", extractor: "claims", judge: "claims", score: "score" };
+    const focus = (k) => Object.entries(P).forEach(([name, p]) => p.classList.toggle("cur", name === k));   // one step in view, where the page asks for it
     const note = h("pre", "rv-note"), vchips = h("div", "rv-vchips");
     const rulesBox = h("div", "rv-rules"), pass = h("div", "rv-pass"), decs = h("div", "rv-decs");
     const claims = h("div", "rv-claims"), claimText = h("p", "rv-claimtext"), score = h("div", "rv-score");
@@ -53,6 +55,7 @@
       step(key, status, t) {
         const li = items[key]; if (!li) return;
         li.className = status;
+        if (status === "running" && PANEL[key]) focus(PANEL[key]);
         if (status === "done" && t != null) li.lastChild.textContent = `${Math.round(t)} s`;
         if (status === "pre") li.lastChild.textContent = "–";
         const idx = STEPS.findIndex(([k]) => k === key);
@@ -104,6 +107,7 @@
         if (slots.length) return;
         for (let i = 0; i < n; i++) { const s = h("span", "rv-claim"); s.tabIndex = 0; claims.append(s); slots.push(s); await wait(30); s.classList.add("in"); }
       },
+      say(text) { P.claims.classList.add("on"); claimText.textContent = text; },
       judging(calls) {
         P.claims.classList.add("on"); claimText.textContent = calls ? `${calls} checks so far…` : "Checking…";
         if (pulse || reduce() || !slots.length) return;
@@ -116,7 +120,10 @@
         const cited = new Set((view.claims || []).flatMap((c) => (c.sources || []).filter((s) => s.type === "passage").map((s) => s.id)));
         P.reasoner.classList.add("on");
         tiles.forEach(([id, t]) => { t.classList.remove("scan"); t.classList.toggle("cited", cited.has(id)); });
+        if (!decs.childElementCount) { focus("reasoner"); await wait(300); }
         await api.decisions(view.recommendation);
+        if (label) await wait(700);
+        focus("claims");
         const list = view.claims || [];
         if (slots.length !== list.length) { claims.replaceChildren(); slots = []; await api.claimSlots(list.length); }
         for (let i = 0; i < list.length; i++) {
@@ -128,6 +135,7 @@
           s.addEventListener("pointerenter", show); s.addEventListener("focus", show);
         }
         claimText.textContent = "Hover or tab to any square to read its claim.";
+        await wait(500); focus("score");
         P.score.classList.add("on");
         const k = view.counts || {}, dec = DECISIONS.map((d) => (view.decisions || {})[d] || {});
         const agree = dec.filter((x) => x.agrees === true).length, differ = dec.filter((x) => x.agrees === false).length, open = dec.length - agree - differ;
