@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-11-21 — Claude Code session (task I done: submission tag v1.0.0 and its release)
+- **Tag:** annotated `v1.0.0` on `a0cb697`, pushed. Held back on Parsa's word until the Space redesign was on `main`, so the tag includes it. Matches `CITATION.cff` version 1.0.0 (its `date-released` stays 20 Nov 2026, the content's freeze date).
+- **Release:** "v1.0.0: submission" on GitHub, with `replay_bundle.tar.gz` (3,235,909 bytes) attached. The notes say what is in it, how to replay, the sha256 and that no data or weights are included.
+- **Checked at the tag** in a clean worktree (`PYTHONPATH` on the worktree's `src`): 910 tests passed, 1 skipped; the bundle on Drive matches `BUNDLE_SHA256` and `replay run` prints "OK: every cell matches its reported rates"; the asset downloaded back from the release has the same sha256.
+- **Docs:** hand-over status and section I marked done.
+- **Still open:** the repository is private, so markers need collaborator access or a public repository (Parsa's choice).
+- **Spend:** none.
+- **Notion sync:** Tasks: Phase 5 task I (Done; link the release). Decisions: none.
+
 ## 2026-11-20 — Claude Code session (Space redesign: a story, a live-run page and the record)
 Presentation only (DEC-32 Space). No number, result, chart meaning, schema or server code changed. Two earlier attempts in this session (a dark neon restyle with a rotatable brain) were rejected by Parsa and are not in the tree.
 - **Method:** Parsa asked for the `design-thinking` skill (installed to `~/.claude/skills`). Direction was settled before code: three hero directions (`demo/space/concepts/v2`, brief in `BRIEF.md`), then a story prototype (`v3`), then the approved version (`v4`).

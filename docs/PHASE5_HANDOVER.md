@@ -5,8 +5,8 @@ Drive `artifacts/figures/` (PNG and SVG; captions in that folder's `README.md`) 
 named doc and run folder. Everything here is report only: nothing was retrained and nothing feeds the contract, the
 pipeline or the Space (DEC-31, DEC-34). No held-out case was used except T7, labelled post hoc.
 
-Status on 20 Nov 2026: A to H done (A's pack is ready; no answers yet); I in progress (the submission tag and
-release are Parsa's); J is this file.
+Status on 21 Nov 2026: A to I done (A's pack is ready; no answers yet); J is this file. The submission is tagged
+`v1.0.0` (commit `a0cb697`) with the replay bundle as a release asset.
 
 ## Where each result goes (task J)
 
@@ -216,14 +216,19 @@ faster).
   alone, so latency depends on memory as much as on compute here. The weights stay private to the team (DATA_USE); the
   `.onnx` file is on Drive only.
 
-## I. Reproducibility (DEC-37; in progress)
+## I. Reproducibility (DEC-37; done 21 Nov 2026)
 
 - **Replay bundle:** `python -m strokecopilot.pipeline.replay run --bundle replay_bundle.tar.gz` rebuilds the
   hallucination table for the fixtures and the 150 scenarios, all six models, with and without the rulebook, from saved
   answers and verifier caches, with no API key: all 20 cells match their reported rates exactly (about 3 s). 3.2 MB,
-  reproducible (sha256 recorded in the code), no patient data. To be attached to the submission tag's release.
+  reproducible (sha256 recorded in the code), no patient data. Attached to the release of the submission tag.
 - **README** rewritten (results, quick start, every notebook, the Space); **MIT licence** and **CITATION.cff** added.
 - **Sentence (902, code and reproducibility):** "Anyone can rebuild our hallucination table for the synthetic cases
   without an API key: a 3 MB bundle of saved answers and verifier caches is rescored offline and checked against every
   reported rate."
-- **Still Parsa's:** the submission tag and its release, and markers' access to the repository.
+- **Submission tag and release (21 Nov 2026):** annotated tag `v1.0.0` on `a0cb697` (after the Space redesign) and
+  the GitHub release "v1.0.0: submission" with `replay_bundle.tar.gz` attached. Checked at the tag in a clean
+  worktree: 910 tests passed, 1 skipped; the bundle matches its sha256 (`44c8d3ab…b799`) and every replay cell its
+  reported rate; the asset downloaded back from the release has the same sha256.
+- **Still Parsa's:** markers' access. The repository is private, so the release and the bundle are visible only to
+  collaborators until markers are added or the repository is made public.
