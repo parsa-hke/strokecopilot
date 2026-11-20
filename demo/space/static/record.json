@@ -183,7 +183,7 @@
           "id": "EXP-14",
           "title": "nnU-Net fold 0, 300 epochs",
           "asked": "How well does nnU-Net outline the infarct on the first fold, against the threshold baseline?",
-          "method": "nnU-Net 3d_fullres trained for 300 epochs on a rented RTX 4090, scored on the 26 development cases of fold 0. Cost 2.14 USD.",
+          "method": "nnU-Net 3d_fullres trained for 300 epochs on a rented RTX 4090, scored on the 26 development cases of fold 0.",
           "result": "Dice 0.218 ± 0.249 (median 0.111) and absolute volume error 19.6 ± 23.3 mL, against the threshold baseline's 0.123 and 20.5 mL on the same 26 cases. Wrong side of 21/31/51/70 mL: 5/5/3/3 of 26. 9 of 26 cases score 0.",
           "numbers": [
             {
@@ -1071,7 +1071,7 @@
           "id": "EXP-9",
           "title": "Reasoner on the five fixtures",
           "asked": "Does the reasoner reach the expected decisions on the five hand-written test cases?",
-          "method": "Claude Sonnet 5.5, prompt v1 with the whole rulebook; five fixtures, twice each. Cost about $0.37.",
+          "method": "Claude Sonnet 5.5, prompt v1 with the whole rulebook; five fixtures, twice each.",
           "result": "0 format failures, and all 18 judged decisions match the expected ones.",
           "numbers": [
             {
@@ -1153,7 +1153,7 @@
           "id": "EXP-38",
           "title": "Reasoner prompt v1 against v2",
           "asked": "Does a prompt rewritten from the first verifier findings reduce errors?",
-          "method": "The 5 fixtures with the rulebook, Claude Sonnet 5.5, verified with the paid runs' settings. Cost $0.95.",
+          "method": "The 5 fixtures with the rulebook, Claude Sonnet 5.5, verified with the paid runs' settings.",
           "result": "Both 10/10 decisions right, with no format failures or omissions. v2 writes 154 claims against v1's 339, with 13 flagged (8.4%) against 27 (8.0%); wrong numbers, invented findings and faulty derivations 0 against 9.",
           "numbers": [
             {
@@ -1182,7 +1182,7 @@
           "id": "EXP-39",
           "title": "Reasoner prompt v3",
           "asked": "Does one changed sentence (cite only passages about the decision's own treatment) remove v2's citation flags?",
-          "method": "v3 on the 5 fixtures with EXP-38's settings. Cost $0.35.",
+          "method": "v3 on the 5 fixtures with EXP-38's settings.",
           "result": "10/10 decisions, 142 claims, 5 flagged (3.5%) against v2's 13 (8.4%), 4 critical against 9, and no rule_ids citation flags against 4. No wrong numbers, invented findings or faulty derivations.",
           "numbers": [
             {
@@ -1211,7 +1211,7 @@
           "id": "EXP-40",
           "title": "Gold answers checked by the verifier",
           "asked": "Do the rule-derived model answers used for fine-tuning pass the full verifier?",
-          "method": "30 gold answers built in code from the rule engine, one or more from each pair of decision routes, checked live by the verifier. Cost $0.56.",
+          "method": "30 gold answers built in code from the rule engine, one or more from each pair of decision routes, checked live by the verifier.",
           "result": "Round 1: 500 claims, 15 flagged (3.0%), 4 critical, all from three template faults. Round 2, after the fixes: 507 claims, 0 flagged, 45 of 45 decisions right.",
           "numbers": [
             {
@@ -1633,7 +1633,7 @@
           "id": "EXP-81",
           "title": "A judge from outside the Claude family",
           "asked": "Does the verifier's limited agreement with people come from which model judges?",
-          "method": "EXP-41's 100 human-labelled claims re-judged by GPT-6 Luna through an API, with the same judge prompt, threshold and reasoning effort, from an empty judge cache so no Haiku verdict is reused. 469 judge calls, $0.29.",
+          "method": "EXP-41's 100 human-labelled claims re-judged by GPT-6 Luna through an API, with the same judge prompt, threshold and reasoning effort, from an empty judge cache so no Haiku verdict is reused. 469 judge calls.",
           "result": "The two judges flag the same 97 of 100 claims (κ 0.94). Agreement with the humans: Haiku 0.61 (weighted 0.87), Luna 0.62 (0.87). The 3 disagreements are all on Sonnet's claims: Haiku flagged and Luna did not, and the humans sided with Luna on 2.",
           "numbers": [
             {
@@ -2247,22 +2247,18 @@
     {
       "id": "demo",
       "title": "The public demo",
-      "summary": "The demo is a public web page (DEC-32) with the pipeline's story, a case explorer where every claim links to its source, the results as charts, and a scenario builder that runs the reasoner and verifier live. It serves 195 cases (5 fixtures, 150 scenarios, 20 development and 20 held-out cases, by alias only). In a load test with live runs switched off, 50 of 50 visitors got a result with 0 errors, and one live run on the deployed page took 51.6 s and cost $0.108.",
+      "summary": "The demo is a public web page (DEC-32) with the pipeline's story, a case explorer where every claim links to its source, the results as charts, and a scenario builder that runs the reasoner and verifier live. It serves 195 cases (5 fixtures, 150 scenarios, 20 development and 20 held-out cases, by alias only). In a load test with live runs switched off, 50 of 50 visitors got a result with 0 errors, and one live run on the deployed page took 51.6 s.",
       "experiments": [
         {
           "id": "EXP-64",
           "title": "Live dummy for the demo",
-          "asked": "How long does one live run take and what does it cost, with a cold and a warm prompt cache?",
+          "asked": "How long does one live run take, with a cold and a warm prompt cache?",
           "method": "Five live scenario-builder runs covering five decision routes, with synthetic inputs: Claude Sonnet 5.5 with prompt v3 and the rulebook, then the verifier.",
-          "result": "5 of 5 live runs succeeded, $0.4485 in all. Times: 77 s, 45 s, 55 s, 68 s and 153 s. Sonnet agreed with the rules on every determined decision.",
+          "result": "5 of 5 live runs succeeded. Times: 77 s, 45 s, 55 s, 68 s and 153 s. Sonnet agreed with the rules on every determined decision.",
           "numbers": [
             {
               "label": "Live runs succeeded",
               "value": "5 of 5"
-            },
-            {
-              "label": "Total cost",
-              "value": "$0.4485"
             },
             {
               "label": "Fastest / slowest run",
@@ -2417,7 +2413,7 @@
     {
       "id": "DEC-21",
       "title": "A rented GPU for the long runs",
-      "text": "Vision A training (nnU-Net on ISLES'24) runs on a GPU pod rented per job, one RTX 4090, as an amendment to DEC-3. Budget: 8–15 USD of GPU rental for the whole project; every run ends by destroying its pod. Vision A trains 300 epochs per fold, all five folds, fold 0 first."
+      "text": "Vision A training (nnU-Net on ISLES'24) runs on a GPU pod rented per job, one RTX 4090, as an amendment to DEC-3. Every run ends by destroying its pod. Vision A trains 300 epochs per fold, all five folds, fold 0 first."
     },
     {
       "id": "DEC-22",
