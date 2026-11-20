@@ -21,7 +21,7 @@ CAPTIONS = {
     "fig_ttests_forest": (
         "EXP-69 (DEC-36): the paired NLP comparisons, mean difference of per-case rates with its 95% t interval (Student's "
         "paired t-test, dot) beside the reported paired case bootstrap of the pooled rate (open circle). The case is the "
-        "unit. Holm-adjusted p over the 34 tests run is in the run's report; the data had been seen before the tests "
+        "unit. Holm-adjusted p over all 35 tests is in the run's report; the data had been seen before the tests "
         "were fixed."),
     "fig_confidence_v2_shap": (
         "EXP-70 (DEC-35, SHAP row 3): share of mean |SHAP value| (exact, LinearExplainer) of confidence.core v2's four "
@@ -400,12 +400,12 @@ def visionb_window_figure(rsna, isles, out):
         panels.append(("RSNA validation", [k for k in ("bleed", "no bleed", "false positive") if k in g], g))
     if isles:
         g = isles["groups"]
-        panels.append(("ISLES'24 development (all presumed bleed-free)", list(g), g))
+        panels.append(("ISLES'24 development, all presumed bleed-free", list(g), g))
     fig, axes = plt.subplots(1, len(panels), figsize=(4.6 * len(panels), 2.9), sharey=False)
     axes = np.atleast_1d(axes)
     for ax, (title, names, g) in zip(axes, panels):
         series = [[g[n]["mean_phi"][w] for n in names] for w in windows]
-        labels = [f"{n} ({g[n]['scans']})" for n in names]
+        labels = [f"{n.replace(' (presumed bleed-free)', '')} ({g[n]['scans']})" for n in names]
         _hbars(ax, labels, series, list(windows), "mean Shapley value, calibrated probability", title)
         ax.axvline(0, color=INK_2, lw=0.8)
         ax.set_xlim(-0.25, 1.0)

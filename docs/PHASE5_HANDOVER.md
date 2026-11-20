@@ -5,8 +5,8 @@ Drive `artifacts/figures/` (PNG and SVG; captions in that folder's `README.md`) 
 named doc and run folder. Everything here is report only: nothing was retrained and nothing feeds the contract, the
 pipeline or the Space (DEC-31, DEC-34). No held-out case was used except T7, labelled post hoc.
 
-Status on 20 Nov 2026: A, C (34 of 35 tests), E, F, G and H done; B in progress (rows 5 and 9 running on
-Colab and Kaggle); D running on Kaggle (dummy passed); I in progress; J is this file, kept current as runs come in.
+Status on 20 Nov 2026: A, C, D, E, F, G and H done; B in progress (row 9 running on Colab); I in progress; J is
+this file, kept current as runs come in.
 
 ## Where each result goes (task J)
 
@@ -75,9 +75,16 @@ median 50% of the attribution in brain tissue (Grad-CAM 76%), brain over bone in
   Vision B's false alarms on ISLES'24 come from brain tissue, not from the skull base."
 - **Limit:** a reference distribution of unflagged ISLES'24 slabs; SHAP weights bone edges more (26% vs 9%).
 
-**Vision B windows on ISLES'24, EXP-77.** The brain window alone flags all 129 scans; with all three windows, 68. On the
-flagged scans the subdural and bone windows fail to pull the probability down, as they do on unflagged scans (−0.07,
-−0.10). The RSNA half (EXP-76) and its figure follow the full Kaggle run.
+**Vision B's three CT windows, EXP-76 (RSNA) and EXP-77 (ISLES'24)** (`fig_visionB_window_shap`). Exact Shapley values
+over the 8 window combinations; all three reproduce EXP-6 and EXP-50's 68 flags. On RSNA validation the brain window
+carries 67% of the scan AUC above chance, subdural 23%, bone 10%. At DEC-28's threshold the brain window alone flags
+almost every scan on both datasets (RSNA specificity 0.017; ISLES'24 129 of 129), so the context windows' job is to pull
+clean scans back down. On clean RSNA scans they do (subdural −0.05, bone −0.10); on RSNA's own 152 false alarms they
+do not (+0.06, −0.03), and ISLES'24's 68 flags show the same pattern (+0.02, −0.02).
+- **Sentence (901, results and challenges):** "Shapley values over the three CT windows show that the haemorrhage model's
+  false alarms on ISLES'24 follow the same pattern as its false alarms on its own RSNA data, where the subdural and bone
+  windows fail to pull a clean scan's probability down; the domain shift changes how often this happens, not how."
+- **Limits:** reliance, not ablation (an absent window is set to its RSNA training mean); group means.
 
 **Retriever, EXP-71** (`fig_retrieval_token_shap`). Number tokens carry at least their share of bge's similarity in 10
 of the 12 key passages.
@@ -95,30 +102,48 @@ age (14%); centre 7%, sex 4%. Vision B's false alarms are not (AUC 0.34 [0.24, 0
 signal under cross-validation), so no SHAP values are reported for them.
 
 **Still running (no results yet):** row 9, the reasoner's input groups for Gemma 3 4B prompted and tuned against the
-rule engine (EXP-74, notebook 55, figure `fig_reasoner_shap`); the RSNA half of row 5 (EXP-76, notebook 26). Their
-sentences are written once the numbers are in, whatever they show.
+rule engine (EXP-74, notebook 55, figure `fig_reasoner_shap`). Its sentence is written once the numbers are in, whatever
+they show.
 
 ## C. Student's t-tests (EXP-69, DEC-36; `docs/PHASE5_TTESTS.md` §7)
 
-34 of 35 tests (T9 waits for task D), case-level, paired or Welch, Holm over the family, a rank test beside each; every
+All 35 tests, case-level (T9 per patient), paired or Welch, Holm over the family, a rank test beside each; every
 reported bootstrap was recomputed and matched first (figure `fig_ttests_forest`).
-- **Sentence:** "Student's t-tests on per-case values, Holm-corrected over 34 tests, confirm the rulebook effect,
+12 hold after Holm, T9 among them (BiomedCLIP's probe against EXP-6: per-patient Brier 0.116 against 0.044, +0.073
+[+0.064, +0.081], 1,894 patients); adding T9 changed no other adjusted p-value.
+- **Sentence:** "Student's t-tests on per-case values, Holm-corrected over 35 tests, confirm the rulebook effect,
   nnU-Net's Dice gain and the model ranking; they do not support a volume gain, an effect of vision errors on
   hallucination, or any subgroup difference, and they weaken the tuned model's higher critical rate."
 - **Must be said:** the data had been seen before the tests were fixed; T7 is post hoc on saved held-out results.
 
-## D. BiomedCLIP and per-subtype probes (EXP-82, EXP-83, DEC-33; waiting for the Kaggle run)
+## D. BiomedCLIP and per-subtype probes (EXP-82, EXP-83, DEC-33)
 
 Method fixed before any score (`src/strokecopilot/analysis/biomedclip.py`, notebook 27): BiomedCLIP's image embeddings
 of a seeded 60,000-slice training sample, as a linear probe and zero-shot with two fixed prompts, against EXP-6's
-ResNet-50, every scan scored by EXP-6's top-2 aggregation; on RSNA validation, scan AUC and specificity at 96%
-sensitivity, and per-patient Brier scores paired with EXP-6 for T9. Per-subtype linear probes on EXP-6's frozen features.
-On the Mac, the probe and zero-shot calls on the 129 ISLES'24 development scans against EXP-6's 68 flags (EXP-83).
-Figure `fig_biomedclip`, drawn when the files are in. **No results yet.**
-- **Sentence:** written once the numbers are in, whichever model comes out ahead.
-- **Limits, always:** the operating point is in-sample on validation for every model alike; BiomedCLIP is not
-  fine-tuned (a probe on frozen embeddings), so this compares representations, not best achievable models; subtype
-  probes see EXP-6's features only; the RSNA test split was not read.
+ResNet-50, every scan scored by EXP-6's top-2 aggregation and Platt-calibrated on validation (figure `fig_biomedclip`).
+
+| On RSNA validation (2,166 scans; 879 bleeds) | EXP-6 ResNet-50 | BiomedCLIP probe | BiomedCLIP zero-shot |
+|---|---|---|---|
+| Scan AUC | **0.977** | 0.899 | 0.753 |
+| Specificity at 96% sensitivity | **0.882** | 0.416 | 0.162 |
+| Per-patient Brier score (T9, 1,894 patients) | **0.044** | 0.116 | — |
+| ISLES'24 development flags (129, presumed bleed-free; EXP-83) | **68** | 117 | 94 |
+
+- **T9:** the probe's Brier score is higher by +0.073 [+0.064, +0.081] (paired t, d_z 0.38; holds after Holm over 35).
+- **ISLES'24 (McNemar against EXP-6):** the probe flags 54 scans EXP-6 does not and misses 5 it flags (p < 0.0001);
+  zero-shot 40 and 14 (p 0.0005). At its operating point BiomedCLIP also flags most clean RSNA scans (58% probe, 84%
+  zero-shot), so its ISLES'24 flags mostly reflect that lower specificity.
+- **Per subtype:** a linear probe on EXP-6's frozen features detects each subtype at scan AUC 0.91 (epidural, 31
+  scans) to 0.98 (intraventricular, 389); EXP-6's own "any" score, used as a detector of one subtype, gives 0.77 to
+  0.93. So EXP-6's features carry the subtype, and a per-subtype output would cost one linear layer.
+- **Sentence (901, model choice):** "A frozen biomedical foundation model did worse than our ResNet-50 trained on RSNA
+  (scan AUC 0.90 as a linear probe and 0.75 zero-shot, against 0.98), was worse calibrated, and flagged more of
+  ISLES'24's presumed bleed-free scans (117 and 94 of 129, against 68): task-specific training wins here, and switching to
+  a general model does not remove the domain shift."
+- **Limits, always:** BiomedCLIP is not fine-tuned (a probe on frozen embeddings, 224 px), so this compares
+  representations, not best achievable models; the operating point is in-sample on validation for every model alike;
+  the AUCs have no intervals (T9 is the paired test); the "any" score was not trained to separate subtypes, so the
+  subtype comparison shows what the features hold, not a better model; the RSNA test split was not read.
 
 ## E. Subgroups (EXP-80, DEC-37)
 

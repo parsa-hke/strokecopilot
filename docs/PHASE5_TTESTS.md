@@ -108,13 +108,18 @@ computed in our own code (statsmodels is not installed), with a test against a w
 ## 7. Results (EXP-69, 20 Nov 2026)
 
 `runs/EXP-69_ttests/` on the Mac and Drive: `report.md` (every test), `metrics.json`, `qq_plots.png`; figure
-`fig_ttests_forest` in Drive `artifacts/figures/`. **34 of the 35 tests ran**; T9 waits for task D. Before any t
-statistic, every reported bootstrap result was recomputed from the same files and matched. Holm is over the 34 tests run;
-adding T9 can only raise the adjusted p-values, and no conclusion below is within that margin.
+`fig_ttests_forest` in Drive `artifacts/figures/`. **All 35 tests ran**: 34 on 20 Nov 2026, then T9 once task D's
+Kaggle run (EXP-82) was in, with Holm recomputed over all 35. Adding T9 changed no other adjusted p-value (its p is the
+smallest, so every other test keeps its Holm multiplier). Before any t statistic, every reported bootstrap result was
+recomputed from the same files and matched.
 
-- **Clear after Holm (11):** nnU-Net's Dice over the threshold (T1, +0.104 [+0.077, +0.131], d_z 0.67); the rulebook
+- **Clear after Holm (12):** nnU-Net's Dice over the threshold (T1, +0.104 [+0.077, +0.131], d_z 0.67); the rulebook
   effect for all four models (T3a–d, −9 to −15 points); Gemma 3 27B, MedGemma, Gemma 3 4B and the tuned 4B above
-  Sonnet (T5b–e); the tuned 4B below its base, overall and on held-out routes (T6a–b, −29 and −24 points).
+  Sonnet (T5b–e); the tuned 4B below its base, overall and on held-out routes (T6a–b, −29 and −24 points); and **T9**, BiomedCLIP's
+  linear probe against EXP-6 on RSNA validation, per-patient Brier score 0.116 against 0.044, difference +0.073
+  [+0.064, +0.081] over 1,894 patients (d_z 0.38, Holm p < 10⁻⁵⁴; Wilcoxon agrees). The differences are skewed
+  (skewness 1.2), but with 1,894 patients the t interval holds, and the rank test gives the same answer. Both models'
+  calibration was fitted on validation.
 - **Not clear after Holm:** nnU-Net's volume error against the threshold (T2, −1.6 mL [−4.6, +1.4], p 0.29, as DEC-25
   said); every predicted-against-ground-truth vision comparison (T4a–d; Gemma 3 27B's −4.9 points has p 0.046
   unadjusted, 0.82 after Holm); Qwen against Sonnet (T5a); the tuned 4B's critical rate (T6c); every development-against-
@@ -132,7 +137,8 @@ adding T9 can only raise the adjusted p-values, and no conclusion below is withi
   skewed (skewness up to 3.2), which is why the rank test sits beside every t-test. Rank tests and t-tests agree on
   every conclusion above.
 
-**For the reports, one sentence:** "Student's t-tests on per-case values, Holm-corrected over 34 tests, confirm the
-rulebook effect, nnU-Net's Dice gain and the model ranking; they do not support a volume gain, an effect of vision
+**For the reports, one sentence:** "Student's t-tests on per-case values, Holm-corrected over 35 tests, confirm the
+rulebook effect, nnU-Net's Dice gain, the model ranking and the ResNet-50's better-calibrated haemorrhage probabilities
+than BiomedCLIP's; they do not support a volume gain, an effect of vision
 errors on hallucination, or any subgroup difference, and they weaken the tuned model's higher critical rate."
 

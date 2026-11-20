@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (EXP-76, EXP-82 and EXP-83 done: row 5's RSNA half and task D; T9 run, all 35 t-tests)
+- **EXP-76, row 5 on RSNA validation** (notebook 26, Kaggle T4 x2, 4ea7972, 26.3 min; `runs/EXP-76_visionB_window_shap/` on the Mac and Drive; figure `fig_visionB_window_shap`, now with both datasets):
+  - The full combination reproduces EXP-6: scan AUC 0.9772, sensitivity 0.959, specificity 0.882 at DEC-28.
+  - **Scan AUC above chance (0.477):** brain 0.320 (67%), subdural 0.108 (23%), bone 0.049 (10%). Alone: brain 0.858, subdural 0.620, bone 0.563; brain with subdural 0.951; all three 0.977.
+  - At DEC-28 the brain window alone flags almost every scan (specificity 0.017).
+  - **Mean Shapley value per scan:** bleeds brain +0.73, subdural +0.12, bone +0.03; clean scans +0.23, −0.05, −0.10; RSNA's 152 false alarms +0.44, +0.06, −0.03.
+  - **Correction to EXP-77's reading:** "the brain window alone flags all 129 ISLES'24 scans" is the same effect seen on RSNA, a result of filling the absent windows with their means, not of ISLES'24. What carries over is that ISLES'24's 68 flags (+0.39, +0.02, −0.02) look like RSNA's own false alarms: the context windows fail to pull the probability down. The survey and hand-over notes now say so.
+  - The channel means are the dummy's (same seeded sample), so EXP-77 stands as run.
+- **EXP-82, task D on RSNA validation** (notebook 27, Kaggle T4 x2, 4ea7972, 17.4 min; `runs/EXP-82_biomedclip/`; figure `fig_biomedclip`):
+  - **Scan AUC:** EXP-6 0.977, BiomedCLIP linear probe 0.899, zero-shot 0.753. Specificity at 96% sensitivity: 0.882, 0.416, 0.162.
+  - **Per-subtype probes on EXP-6's frozen features:** scan AUC 0.91 (epidural, 31 scans) to 0.98 (intraventricular), against 0.77 to 0.93 for EXP-6's "any" score used as that subtype's detector.
+- **EXP-83, task D on ISLES'24** (Mac MPS; `runs/EXP-83_biomedclip_isles/`; no case ID saved): flags on the 129 development scans, EXP-6 68, probe 117 (McNemar 54 against 5, p < 0.0001), zero-shot 94 (40 against 14, p 0.0005).
+- **T9 run (EXP-69 rerun):** per-patient Brier score, probe 0.116 against EXP-6 0.044. Difference +0.073 [+0.064, +0.081] over 1,894 patients, d_z 0.38; holds after Holm; Wilcoxon agrees.
+  - All 35 tests have now run, and 12 hold after Holm. No other adjusted p-value changed, because T9 has the smallest p and every other test keeps its Holm multiplier.
+- **Plan §7:** the two Phase 3 Vision B lines (per-subtype outputs; BiomedCLIP, Item 1) are ticked as done through task D.
+- **Hand-over notes:** section D is written; row 5 combines both datasets; section C covers 35 tests. The README's Phase 5 paragraph gains BiomedCLIP's result. `config.json` is written for EXP-76, EXP-82 and EXP-83, since Kaggle writes none.
+- **Spend:** none (Kaggle allowance; the Mac).
+- **Notion sync:** Experiments: EXP-76, EXP-82, EXP-83 (Done, figures above); EXP-69 (updated: 35 tests). Tasks: Phase 5 task D (Done); task C (Done, all 35); task B (row 9 still running).
+
 ## 2026-11-20 — Claude Code session (EXP-75 done: SHAP row 1, Vision A's input channels; EXP-82 dummy passed)
 - **EXP-75** (`analysis.visiona_channel_shap`; notebook 15 on a Colab A100; `runs/EXP-75_visionA_channel_shap/` on the Mac and Drive, rows on Drive only; figure `fig_visionA_channel_shap`):
   - 4,128 predictions (129 cases × 32 combinations); median 0.3 s each.

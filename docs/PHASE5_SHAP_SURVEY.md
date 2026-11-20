@@ -204,7 +204,7 @@ Tmax and then on plain CT, more than on CBF, the map the rCBF < 30% baseline use
   between them, so Tmax's share may partly stand for the others; development cases, each scored by the fold model that
   did not train on it; means hide large case-to-case variation.
 
-**Row 5: ready to run (20 Nov 2026).**
+**Row 5 (the method):**
 - **Row 5, EXP-76 and EXP-77:** `notebooks/26_visionB_window_shap.ipynb` on Kaggle (`MODE = 'dummy'`, 200 validation
   scans, then `'run'`): every validation slice under the 8 window combinations, the RSNA training means from a seeded
   sample of 3,000 training slices, aggregates only. Then the ISLES'24 half on the Mac with those means
@@ -216,5 +216,25 @@ subdural 52, brain with bone 47, all three 68. On the 68 flagged scans the brain
 Shapley value +0.39 on the calibrated probability) and subdural and bone net out near zero (+0.02, −0.02); on the 61
 unflagged scans subdural and bone pull the probability down (−0.07, −0.10). So on ISLES'24's false alarms the two context
 windows fail to do what they do on clean scans, and together they flag more scans than either pair. Reliance, not
-ablation (DEC-35). The RSNA half (EXP-76) is waiting for its full Kaggle run.
+ablation (DEC-35). *Read with EXP-76 below: the brain window alone flags nearly every clean RSNA scan too, so that
+count reflects how an absent window is filled, not ISLES'24.*
+
+**Row 5, RSNA half: EXP-76 (done 20 Nov 2026; Kaggle T4 x2, 26.3 min; figure `fig_visionB_window_shap`).** Every RSNA
+validation scan (2,166; 879 with a bleed) under the 8 window combinations. All three windows reproduce EXP-6 (scan AUC
+0.9772, sensitivity 0.959 and specificity 0.882 at DEC-28).
+- **Discrimination:** of the scan AUC's 0.477 above chance, the brain window carries 0.320 (67%), subdural 0.108 (23%),
+  bone 0.049 (10%) (exact Shapley values of the AUC over the 8 combinations). Alone: brain 0.858, subdural 0.620, bone
+  0.563; brain with subdural 0.951, brain with bone 0.891, all three 0.977.
+- **At DEC-28's threshold the brain window alone flags almost everything:** sensitivity 0.999, specificity 0.017. So
+  each context window's job at the operating point is to pull clean scans back down, and EXP-77's "brain alone flags
+  all 129" is the same effect, not an ISLES'24 one.
+- **Per scan, mean Shapley value on the calibrated probability:** bleeds (879) brain +0.73, subdural +0.12, bone +0.03;
+  no bleed (1,287) brain +0.23, subdural −0.05, bone −0.10. On subdural bleeds the subdural window carries the most of
+  any subtype (+0.17, against +0.09 on intraventricular).
+- **RSNA's own false alarms (152) look like ISLES'24's:** brain +0.44, subdural +0.06, bone −0.03; the two context
+  windows do not pull the probability down as they do on clean scans. On ISLES'24's 68 flagged scans: +0.39, +0.02,
+  −0.02. So ISLES'24's false alarms follow the same pattern as the model's ordinary false alarms in its own domain; what
+  differs is how often it happens (68 of 129 against 152 of 1,287).
+- **Limits:** reliance, not ablation (an absent window is set to its training mean, which the network never saw);
+  group means; RSNA validation only (the test split was not read).
 
