@@ -24,7 +24,7 @@ Presentation only (DEC-32 Space). No number, result, chart meaning, schema or se
   - **One live run through the public page** (default case): answered live in 50.6 s, 25 claims, 2 flagged, 0 critical; every step drew with its time; no console errors.
 - **After Parsa's review of the live site:**
   - **Costs removed from the record** on his word: the cost sentences of EXP-9, 14, 38, 39, 40 and 81, EXP-64's total, the demo summary's figure and DEC-21's budget clause. Committed (cef56a6), and `static/record.json` alone uploaded to the Space (4ca93510). Checked on the public file: no dollar sign, "USD" or "Cost".
-  - **The live-run page redesigned as a short game** (Parsa found the first version complex). Shown to him locally first, then shipped on his word: commit 8b55f45, Space 090e8c39; after the rebuild the public page serves the game, live runs are on, and the pick and bet screens work with no console errors. No paid run was made through the game. One board, four screens:
+  - **The live-run page redesigned as a short game** (Parsa found the first version complex). Shown to him locally first, then shipped on his word: commit 8b55f45, Space 090e8c39; after the rebuild the public page serves the game, live runs are on, and the pick and bet screens work with no console errors. Then, on Parsa's word, one real live run through the public game ("The heavy scan"): answered live in 53.7 s, 34 claims, none flagged; the steps came into focus in turn, the bets were scored (one of three) and two badges were awarded; no console errors. One board, four screens:
     - pick one of six patient cards (five fixtures and a random scenario), with the full builder behind "Fine-tune this patient";
     - place three bets (drug, removal, whether the verifier flags a claim);
     - watch the run with one step in focus at a time (`runviz.js` gained a focus mode);
@@ -33,7 +33,7 @@ Presentation only (DEC-32 Space). No number, result, chart meaning, schema or se
     - Checked with the fallback, a recorded run, and a stand-in runner emitting the real event sequence; desktop and 375 px; no console errors.
   - **Also seen, not changed (server side):** each upload restarts the container, which resets the in-memory daily spend counter and the result cache (`/healthz` read $0.00 after this upload).
   - **Seen while testing, not changed (server side, predates this work):** with live runs off, the fallback for some stored cases picks a different nearest case, because stored values do not survive the builder's slider steps (for example `fx02` falls back to `scenario-077`). The page says so when it happens.
-- **Tests:** 910 passed. **Spend:** $0.1083 (the one live run; daily cap $5).
+- **Tests:** 910 passed. **Spend:** $0.2281 (two live runs on the Space: $0.1083 and $0.1198; daily cap $5).
 - **Notion sync:** Tasks: Space redesign (story, live-run game, record page) — Done, live on the Space. Decisions: DEC-32 §3 (story case) to confirm with Parsa; not amended. Follow-ups: fallback nearest-case for stored fixtures; daily spend counter resets on redeploy.
 
 ## 2026-11-20 — Claude Code session (EXP-74 done: SHAP row 9, the small reasoners; task B complete)
