@@ -383,7 +383,11 @@ def reasoner_shap_figure(metrics, out):
                   [s[tuned][d]["model_mean_abs"][g] for g in groups]]
         _hbars(ax, groups, series, ["rule engine", "Gemma 3 4B", "Gemma 3 4B tuned"], "mean |Shapley value|",
                d.capitalize())
-        ax.set_xlim(0, 1.1)
+        ax.set_xlim(0, max(max(v) for v in series) * 1.3 or 1)
+        for name, vals in (("Gemma 3 4B", series[1]), ("Gemma 3 4B tuned", series[2])):
+            if not any(vals):  # an empty bar would look like missing data
+                ax.text(0.98, 0.02, f"{name}: 0 for every input\n(no input changes its answer)", transform=ax.transAxes,
+                        ha="right", va="bottom", fontsize=7, color=INK_2)
     axes[1].legend(loc="lower right", frameon=False, fontsize=7.5)
     fig.suptitle(f"What the rules and the small reasoners rely on ({s[base]['scenarios_complete']} and "
                  f"{s[tuned]['scenarios_complete']} complete scenarios)", fontsize=9, color=INK, x=0.01, ha="left")

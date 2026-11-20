@@ -5,8 +5,8 @@ Drive `artifacts/figures/` (PNG and SVG; captions in that folder's `README.md`) 
 named doc and run folder. Everything here is report only: nothing was retrained and nothing feeds the contract, the
 pipeline or the Space (DEC-31, DEC-34). No held-out case was used except T7, labelled post hoc.
 
-Status on 20 Nov 2026: A, C, D, E, F, G and H done; B in progress (row 9 running on Colab); I in progress; J is
-this file, kept current as runs come in.
+Status on 20 Nov 2026: A to H done (A's pack is ready; no answers yet); I in progress (the submission tag and
+release are Parsa's); J is this file.
 
 ## Where each result goes (task J)
 
@@ -101,9 +101,18 @@ at presentation (AUC 0.73 [0.63, 0.82]): mostly the predicted core volume (48%) 
 age (14%); centre 7%, sex 4%. Vision B's false alarms are not (AUC 0.34 [0.24, 0.43], below chance, the usual sign of no
 signal under cross-validation), so no SHAP values are reported for them.
 
-**Still running (no results yet):** row 9, the reasoner's input groups for Gemma 3 4B prompted and tuned against the
-rule engine (EXP-74, notebook 55, figure `fig_reasoner_shap`). Its sentence is written once the numbers are in, whatever
-they show.
+**Small reasoners' inputs, EXP-74** (`fig_reasoner_shap`). Exact Shapley values of six input groups on 24 synthetic
+scenarios (64 versions each, the bleed fixed) for the rule engine and Gemma 3 4B, prompted and LoRA-tuned; the full-input
+versions reproduce EXP-47's answers (41 of 42 and 36 of 36 decisions). The base model recommends thrombolysis in every
+version, so no input moves its answer. The tuned model responds to its inputs: for thrombolysis it ranks time first, as
+the rules do (26% of its attribution against the rules' 43%); for thrombectomy it leans on the occlusion site (28%) and
+as much on thrombolysis contraindications (28%), which the rules never use for thrombectomy (0%).
+- **Sentence (902, fine-tuning and evaluation):** "Shapley values over the reasoner's inputs show that the base Gemma 3
+  4B recommends thrombolysis whatever it is told, while the LoRA-tuned model does respond to its inputs and ranks the
+  clock first for thrombolysis as the rules do, but also lets thrombolysis contraindications sway its thrombectomy
+  decision, which the rules never do."
+- **Limits:** 24 synthetic scenarios (21 and 18 complete; a format failure drops a scenario's game); the value shows what
+  moves the answer, not whether it is right; a hidden group is rendered as "not recorded".
 
 ## C. Student's t-tests (EXP-69, DEC-36; `docs/PHASE5_TTESTS.md` §7)
 

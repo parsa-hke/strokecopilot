@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (EXP-74 done: SHAP row 9, the small reasoners; task B complete)
+- **EXP-74** (`analysis.reasoner_shap`; notebook 55 `shap` on a Colab A100, 4ea7972; `runs/EXP-74_reasoner_shap/` on the Mac and Drive, answers on Drive; figure `fig_reasoner_shap`):
+  - 1,280 requests per model: base 1,280 valid in 1,675 s; tuned 1,277 in 1,149 s.
+  - Scoring rejects a few more answers on the schema, which leaves 7 and 10 format failures. Games with one are dropped: 21 of 24 scenarios complete for the base model, 18 for the tuned one.
+  - **Check:** the full-input versions reproduce EXP-47's answers on the same scenarios, 41 of 42 decisions (base) and 36 of 36 (tuned).
+  - **Base 4B:** recommends thrombolysis in every version of every scenario and thrombectomy in 94–100%, so no input moves its thrombolysis answer (all values 0). The little that moves its thrombectomy answer is mostly contraindications (41%).
+  - **Tuned 4B:** responds to its inputs, at about half the rules' total for thrombolysis (0.45 against 1.06) and a fifth for thrombectomy (0.21 against 0.99).
+    - Thrombolysis: time first, 26% (rules 43%).
+    - Thrombectomy: occlusion site 28% (rules 48%) and thrombolysis contraindications 28% (rules 0%).
+  - **Limits:** synthetic scenarios; the game shows what moves the answer, not its correctness; reliance, not ablation.
+  - In my first summary, a check comparing the models' `True`/`False` with the rules' `"yes"`/`"no"`/`"undetermined"` counted no matches. It was a type mismatch in that check only; the Shapley games compare a model with itself and were unaffected.
+- **Figures:** `fig_reasoner_shap` notes in the panel when a model's values are all zero, so an empty bar isn't read as missing data; the axis now fits the data.
+- **Task B done:** rows 1, 3, 5, 6, 8, 9, 10, 11, 12 and 13 have run; row 2 and row 9b were not run (optional under DEC-35).
+- **Spend:** none (Colab allowance).
+- **Notion sync:** Experiments: EXP-74 (Done, figure above). Tasks: Phase 5 task B (Done).
+
 ## 2026-11-20 — Claude Code session (EXP-76, EXP-82 and EXP-83 done: row 5's RSNA half and task D; T9 run, all 35 t-tests)
 - **EXP-76, row 5 on RSNA validation** (notebook 26, Kaggle T4 x2, 4ea7972, 26.3 min; `runs/EXP-76_visionB_window_shap/` on the Mac and Drive; figure `fig_visionB_window_shap`, now with both datasets):
   - The full combination reproduces EXP-6: scan AUC 0.9772, sensitivity 0.959, specificity 0.882 at DEC-28.

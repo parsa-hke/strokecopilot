@@ -204,6 +204,35 @@ Tmax and then on plain CT, more than on CBF, the map the rCBF < 30% baseline use
   between them, so Tmax's share may partly stand for the others; development cases, each scored by the fold model that
   did not train on it; means hide large case-to-case variation.
 
+**Row 9, the small reasoners: EXP-74 (done 20 Nov 2026; Colab A100, 1,280 requests per model; figure
+`fig_reasoner_shap`).** 24 synthetic scenarios, 64 versions each (every combination of six input groups, the bleed
+fixed), answered by Gemma 3 4B prompted and LoRA-tuned. The full-input versions reproduce EXP-47's answers on the same
+scenarios (41 of 42 decisions for the base model, 36 of 36 for the tuned one). Games with a format failure among their
+64 versions are dropped: 21 of 24 complete for the base model, 18 for the tuned one. The value is agreement with the
+model's own full-input decision, so it shows what moves an answer, not whether the answer is right.
+
+| Share of mean \|value\| | Thrombolysis: rules | base 4B | tuned 4B | Thrombectomy: rules | base 4B | tuned 4B |
+|---|---|---|---|---|---|---|
+| Total (sum of mean \|value\|) | 1.06 | **0** | 0.45 | 0.99 | 0.17 | 0.21 |
+| Time | 43% | — | 26% | 21% | 11% | 12% |
+| Occlusion site | 16% | — | 21% | 48% | 22% | 28% |
+| Patient (age, NIHSS, mRS) | 13% | — | 21% | 21% | 12% | 9% |
+| Contraindications | 15% | — | 11% | **0%** | **41%** | **28%** |
+| Perfusion | 11% | — | 16% | 5% | 8% | 17% |
+| ASPECTS | 2% | — | 5% | 4% | 5% | 6% |
+
+(Rules' shares on the tuned model's 18 complete scenarios; on the base model's 21 they are within 5 points.)
+- **The base 4B ignores its inputs.** It recommends thrombolysis in every version of every scenario and thrombectomy
+  in 94–100% of them, so no input moves its thrombolysis answer, and its thrombectomy answer rarely moves.
+- **The tuned 4B responds to its inputs, at about half the rules' sensitivity for thrombolysis and a fifth for
+  thrombectomy.** For thrombolysis it ranks time first, as the rules do, but spreads its reliance more evenly. For
+  thrombectomy it leans on the occlusion site, as the rules do, **and as much on the thrombolysis contraindications
+  (anticoagulants, INR, trauma, surgery, prior bleed), which the rules never use for thrombectomy**. The base model shows
+  the same misplaced reliance in the little that moves its thrombectomy answer (41%).
+- **Limits:** 24 synthetic scenarios, 18 and 21 complete; the game measures what moves the answer, not its
+  correctness; the bleed fixed and the first phrasing throughout; reliance, not ablation (a hidden group is rendered as
+  "not recorded", which the models may read differently from a value).
+
 **Row 5 (the method):**
 - **Row 5, EXP-76 and EXP-77:** `notebooks/26_visionB_window_shap.ipynb` on Kaggle (`MODE = 'dummy'`, 200 validation
   scans, then `'run'`): every validation slice under the 8 window combinations, the RSNA training means from a seeded
