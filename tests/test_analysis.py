@@ -224,3 +224,52 @@ def test_reasoner_shap_model_values_need_every_answer():
     values, full = rs.model_values([other] * 63 + [rec])
     assert full == {"thrombolysis": True, "thrombectomy": False} and values[0].tolist() == [0.0, 1.0]
     assert rs.model_values([rec, None] + [rec] * 62) == (None, None)
+
+
+def test_visiona_masking_keeps_the_crop_region_and_fills_as_dec35_says():
+    from strokecopilot.analysis import visiona_channel_shap as vs
+    rng = np.random.default_rng(0)
+    img = np.zeros((6, 4, 5, 6), dtype=np.float32)
+    img[:, 1:3, 1:4, 1:5] = rng.uniform(1, 9, size=(6, 2, 3, 4))
+    region = np.any(img != 0, axis=0)
+    x, r = vs.masked(img, 0, ncct_mean=40.0)  # every input absent
+    assert np.array_equal(r, region) and np.array_equal(np.any(x != 0, axis=0) | (x[4] == 0) & region, region)
+    assert np.all(x[0][region] == 40.0) and np.all(x[0][~region] == 0)
+    assert np.allclose(x[1][region], img[1][region].mean()) and np.ptp(x[2][region]) == 0
+    assert not x[4].any() and not x[5].any()
+    full, _ = vs.masked(img, vs.FULL, ncct_mean=40.0)
+    assert np.array_equal(full, img)
+    assert vs.wrong_side(19.0, 25.0) == 1 and vs.wrong_side(25.0, 29.0) == 0
+    assert vs.dice(np.zeros(3), np.zeros(3)) == 1.0
+
+
+def test_visiona_summary_is_exact_on_an_additive_game():
+    from strokecopilot.analysis import visiona_channel_shap as vs
+    worth = [5.0, 3.0, 0.0, 1.0, 10.0]
+    rows = {}
+    for case, ref in (("a", 30.0), ("b", 2.0)):
+        for m in range(vs.FULL + 1):
+            ml = sum(w for i, w in enumerate(worth) if m >> i & 1)
+            rows[(case, m)] = {"case": case, "mask": m, "pred_ml": ml, "ref_ml": ref, "dice": 0.5, "wrong_side": 0}
+    s = vs.summarise(rows, recorded_ml={"a": 19.0, "b": 19.0})
+    assert s["complete"] == 2 and s["full_coalition_reproduces_recorded"]["max_ml_difference"] == 0.0
+    assert np.allclose(list(s["pred_ml"]["mean_abs"].values()), worth)
+    assert s["dice"]["share"] is None  # a flat output has nothing to attribute
+
+
+def test_window_fill_and_summary():
+    import pandas as pd
+
+    from strokecopilot.analysis import visionb_window_shap as ws
+    img = np.full((2, 4, 4, 3), 200, dtype=np.uint8)
+    out = ws.fill_image(img, 0b101, [10.4, 20.6, 30.0])  # brain and bone present
+    assert out[..., 0].min() == 200 and np.all(out[..., 1] == 21) and out[..., 2].min() == 200
+    assert img[..., 1].min() == 200  # the input is not changed
+    rng = np.random.default_rng(0)
+    y = rng.random(40) < 0.4
+    # additive in the brain window only: brain carries everything
+    values = {m: np.where(y, 0.9, 0.05) * (m & 1) + 0.02 for m in range(ws.FULL + 1)}
+    s = ws.summarise(values, pd.DataFrame({"label": y}), 0.5)
+    assert s["groups"]["bleed"]["mean_abs_phi"]["brain"] > 0.8 and s["groups"]["bleed"]["mean_abs_phi"]["bone"] == 0
+    assert s["coalitions"]["1"]["auc"] == 1.0 and s["coalitions"]["0"]["auc"] == 0.5
+    assert math.isclose(sum(s["auc_shapley"].values()), 0.5)

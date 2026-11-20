@@ -180,3 +180,15 @@ median **50%** of the |attribution| in brain tissue, and brain over bone in **12
 weight than Grad-CAM (26% against 9%), as pixel-level gradients pick out high-contrast edges, and the two maps agree
 moderately (median Spearman 0.50, IQR 0.31–0.59, at 10 × 10). So a second, different method supports Item 2's reading:
 the false alarms come from brain tissue, not from skull-base slabs.
+
+**Rows 1 and 5: ready to run (20 Nov 2026), not yet run.**
+- **Row 1, EXP-75:** `notebooks/15_visionA_channel_shap.ipynb` on a Colab A100, `MODE = 'dummy'` (one case, all 32
+  combinations, with a check that the full combination reproduces its recorded volume) then `'run'`. Logic in
+  `analysis.visiona_channel_shap`: each case read with nnU-Net's own reader so the axes match training, absent inputs
+  filled only inside the case's nonzero region so nnU-Net crops the same box, rows saved to Drive as they come
+  (resumable). The Mac summarises (`python -m strokecopilot.analysis.visiona_channel_shap`).
+- **Row 5, EXP-76 and EXP-77:** `notebooks/26_visionB_window_shap.ipynb` on Kaggle (`MODE = 'dummy'`, 200 validation
+  scans, then `'run'`): every validation slice under the 8 window combinations, the RSNA training means from a seeded
+  sample of 3,000 training slices, aggregates only. Then the ISLES'24 half on the Mac with those means
+  (`python -m strokecopilot.analysis.visionb_window_shap --means <EXP-76 metrics.json>`), EXP-77.
+

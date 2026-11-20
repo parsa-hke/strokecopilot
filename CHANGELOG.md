@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (Phase 5 task B: SHAP rows 1 and 5 ready to run)
+- **Row 1, Vision A channels (EXP-75):** `analysis.visiona_channel_shap` and `notebooks/15_visionA_channel_shap.ipynb` (Colab A100).
+  - Five players (NCCT, CBF, CBV, MTT, Tmax with its mask), 32 combinations per development case, each predicted by its validating fold model with nnU-Net's validation settings.
+  - Absent inputs follow DEC-35 and are filled only inside the case's nonzero region, so the crop box never changes (checked per combination).
+  - The full combination is checked against EXP-27's recorded volume. Rows go to Drive as they come, so a disconnect loses nothing.
+  - Dummy first: one case.
+- **Row 5, Vision B windows (EXP-76 Kaggle, EXP-77 Mac):** `analysis.visionb_window_shap` and `notebooks/26_visionB_window_shap.ipynb`.
+  - Every RSNA validation slice under the 8 window combinations, with absent windows at their RSNA training means (a seeded sample of 3,000 training slices).
+  - The full combination must reproduce EXP-6's scan AUC.
+  - Only aggregates and the three means leave Kaggle. The ISLES'24 half runs on the Mac with those means.
+  - Dummy first: 200 validation scans.
+- **Not run yet:** both need a push, then Parsa's Colab and Kaggle runs. The Kaggle `metrics.json` must be downloaded into Drive `runs/EXP-76_visionB_window_shap/`.
+- **Tests:** `tests/test_analysis.py` (24). pytest: 903 passed. **Spend:** $0.
+- **Notion sync:** Experiments: EXP-75, EXP-76, EXP-77 (Planned).
+
 ## 2026-11-20 — Claude Code session (Phase 5 task B: SHAP row 9 ready for Colab)
 - **DEC-35 amended (Parsa, 20 Nov 2026), row 9:** the bleed stays fixed at its real value, because the frozen contract cannot say "unknown" for `haemorrhage.present`. The reasoner game has six groups (perfusion, occlusion site, ASPECTS, time, patient, contraindications), and the rules are scored on the same six. Recorded in plan §2 and the survey.
 - **`analysis.reasoner_shap`:**
