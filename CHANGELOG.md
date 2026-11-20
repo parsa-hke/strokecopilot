@@ -8,6 +8,7 @@
 - **Still open:** the repository is private, so markers need collaborator access or a public repository (Parsa's choice).
 - **Spend:** none.
 - **Notion sync:** Tasks: Phase 5 task I (Done; link the release). Decisions: none.
+- **Notion synced (21 Nov 2026, this session):** Experiments: EXP-67 to EXP-83 added (75 rows now, as on the record page; EXP-67 Planned, the rest Done); EXP-48's notes gain the rescored figures. Decisions: DEC-33 to DEC-38 added (Decided, Parsa, 20 Nov 2026), linked to their tasks; DEC-32 gains its 20 Nov amendment. Tasks: Phase 5 A to J added (A In progress, the rest Done); eight older tasks the plan ticks as done closed (confidence estimates, error analysis, per-subtype outputs, providers, paid runs, run arms, model comparison, labelling kit and labelling); the old clinician-review task points to EXP-67. Left open on purpose (plan items unticked): professors' confirmation, shared Drive folder, template notebook, onboarding and its checklist.
 
 ## 2026-11-20 — Claude Code session (Space redesign: a story, a live-run page and the record)
 Presentation only (DEC-32 Space). No number, result, chart meaning, schema or server code changed. Two earlier attempts in this session (a dark neon restyle with a rotatable brain) were rejected by Parsa and are not in the tree.
