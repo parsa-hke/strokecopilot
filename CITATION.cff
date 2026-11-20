@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below. Research prototype, not for clinical use."
+title: "Stroke Decision Copilot: vision-grounded, claim-verified treatment recommendations for acute ischaemic stroke"
+type: software
+authors:
+  - name: "The Stroke Decision Copilot team (MAAI 901/902, University of Wollongong in Dubai)"
+repository-code: "https://github.com/parsa-hke/strokecopilot"
+url: "https://huggingface.co/spaces/parsa-hke/stroke-copilot"
+license: MIT
+version: "1.0.0"
+date-released: "2026-11-20"
+keywords:
+  - stroke
+  - CT perfusion
+  - intracranial haemorrhage
+  - large language models
+  - hallucination
+  - claim verification
+references:
+  - type: dataset
+    title: "ISLES'24: Ischemic Stroke Lesion Segmentation Challenge 2024 (Zenodo record 17652035)"
+    license: CC-BY-NC-SA-4.0
+    notes: "Dataset paper arXiv:2408.11142; challenge paper arXiv:2408.10966."
+  - type: dataset
+    title: "RSNA Intracranial Hemorrhage Detection (Kaggle)"
+    notes: "Flanders et al., Radiology: Artificial Intelligence 2020;2(3). Used under the Kaggle competition rules."

@@ -192,3 +192,11 @@ the false alarms come from brain tissue, not from skull-base slabs.
   sample of 3,000 training slices, aggregates only. Then the ISLES'24 half on the Mac with those means
   (`python -m strokecopilot.analysis.visionb_window_shap --means <EXP-76 metrics.json>`), EXP-77.
 
+**Row 5, ISLES'24 half: EXP-77 (done 20 Nov 2026; Mac MPS, 5.7 min; means from EXP-76's sample).** All three windows
+reproduce EXP-50's 68 flags. The brain window alone flags all 129 scans; subdural or bone alone flag 1 and 0; brain with
+subdural 52, brain with bone 47, all three 68. On the 68 flagged scans the brain window carries the attribution (mean
+Shapley value +0.39 on the calibrated probability) and subdural and bone net out near zero (+0.02, −0.02); on the 61
+unflagged scans subdural and bone pull the probability down (−0.07, −0.10). So on ISLES'24's false alarms the two context
+windows fail to do what they do on clean scans, and together they flag more scans than either pair. Reliance, not
+ablation (DEC-35). The RSNA half (EXP-76) is waiting for its full Kaggle run.
+

@@ -1,5 +1,84 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (Phase 5 tasks E, G, H done; I drafted)
+- **G, retrieval re-test (EXP-79; `analysis.retrieval_check`; Mac CPU, $0).** EXP-7's 15 key fixture rules, four methods fixed before any score, top 8 per decision query:
+  - bge 5, BM25 6, a BM25 + bge hybrid (rank fusion) **8**, the hybrid reranked by `bge-reranker-base` 3;
+  - median best rank 12, 12, 8 and 14.
+  - EXP-7's queries were not saved, and the rebuilt ones do not reproduce its 9 of 15 with bge (5). So the counts compare methods on the same queries, as pre-stated.
+  - No method fixes the problem, and DEC-19 stands. The first run was stopped by Parsa mid-download, then rerun.
+- **E, subgroups (EXP-80; `analysis.subgroups`; saved results only, $0).** Figure `fig_subgroups_vision`.
+  - **Vision A:** Dice is lower at 80 and over (0.16 [0.10, 0.22] against 0.25 [0.19, 0.30]) and at centre 1 (0.18 against 0.29). Volume error is larger in women (31 [21, 42] against 16 [11, 23] mL). These are unadjusted and do not survive Holm in T8.
+  - **Vision B:** flags 47–61% of every group.
+  - **Reasoners on the scenarios:** no difference by age band, sex or onset pattern for any model.
+  - **Real cases:** too small in every group.
+- **SHAP rows 12–13 (EXP-80, surrogates):**
+  - Vision A's wrong-side errors: out-of-fold AUC 0.73 [0.63, 0.82]; predicted core 48%, Tmax > 6 s 20%, age 14%, centre 7%, sex 4%.
+  - Vision B's false alarms: AUC 0.34 [0.24, 0.43], no signal, so no SHAP values (as pre-stated).
+- **H, ONNX (EXP-78; `analysis.onnx_export`; Mac CPU, $0).**
+  - Opset 17; 94.0 MB against 94.3 MB. The `.onnx` is on Drive only, since the weights are private.
+  - Parity on 601 slabs of 20 ISLES'24 development scans: largest probability difference 8.8 × 10⁻⁶; all 20 DEC-28 calls the same.
+  - Latency: about 25 ms per slab at batch 1 in either runtime; batch 32 2.1 s (ONNX Runtime, 10 threads) against 6.7 s (PyTorch).
+  - The first timing overlapped a short test of mine, so it was rerun on a quiet Mac; the parity figures were identical.
+- **I, drafted, not yet built or committed:**
+  - README rewritten: results at a glance, quick start, every notebook, the Space;
+  - `LICENSE` (MIT, naming the team) and `CITATION.cff`;
+  - `pipeline/replay.py`: the no-API replay bundle, **built and verified**.
+    - Contents: the 20 fixture and scenario cells of the six models, 3.2 MB; no real or held-out case. The scan checks case IDs, RSNA IDs, keys, e-mail addresses and local paths.
+    - The build is reproducible: two builds give the same bytes, sha256 `44c8d3ab…b799`, recorded in the code.
+    - `replay run` rescores every cell offline in about 3 s, and all 20 match their reported rates exactly.
+    - On Drive in `artifacts/replay/`. Not yet attached to a release: that waits for the submission tag (Parsa).
+  - The `analysis` extra gains `rank-bm25`, `onnx`, `onnxruntime` and `onnxscript`.
+- **J:** `docs/PHASE5_HANDOVER.md` holds a paragraph, a sentence and the limits for each finished task.
+- **Notion sync:** Experiments: EXP-78, EXP-79, EXP-80 (Done). Tasks: Phase 5 E, G, H (Done); I (In progress).
+
+## 2026-11-20 — Claude Code session (EXP-77 done: row 5, ISLES'24 half; DEC-37 added)
+- **DEC-37 (Parsa, 20 Nov 2026)** added to plan §2:
+  - tasks E (subgroups, with SHAP rows 12–13), G (retrieval re-check) and H (ONNX), report only;
+  - task I: the replay bundle is a GitHub release asset on the submission tag, and the code is MIT-licensed.
+
+  Downloads allowed: `BAAI/bge-reranker-base`, `rank-bm25` 0.2.2, `onnx` 1.23.2, `onnxruntime` 1.32.0 and `onnxscript` 0.7.2.
+- **EXP-77, row 5 on ISLES'24** (`analysis.visionb_window_shap`; Mac MPS, 5.7 min, $0; no case ID saved; `runs/EXP-77_visionB_window_shap_isles/` on the Mac and Drive):
+  - All three windows reproduce EXP-50's 68 flags.
+  - Flags by windows present: brain alone 129, subdural alone 1, bone alone 0, brain + subdural 52, brain + bone 47, all three 68.
+  - On flagged scans: brain +0.39; subdural and bone net about zero.
+  - On unflagged scans: subdural −0.07, bone −0.10.
+  - The context windows fail to pull ISLES'24's false alarms down, as they do on clean scans.
+- **G's first run was stopped by Parsa** while it ran (the reranker download had barely started); restarted.
+- **Notion sync:** Decisions: DEC-37 (new, Decided, 20 Nov 2026). Experiments: EXP-77 (Done); EXP-78, EXP-79, EXP-80 (Planned).
+
+## 2026-11-20 — Claude Code session (EXP-76 dummy: row 5 checked on Kaggle)
+- **Notebook 26 `dummy`** (Parsa, Kaggle, commit `f33c55f`): 200 RSNA validation scans by seed, all 8 window combinations, 5.2 min including setup. Test split not opened.
+- **Checks:**
+  - the full-input scan AUC on the 200 is 0.9817 (EXP-6 0.977 on all validation; the full run must be within 0.005 of it);
+  - the save passed the ID check.
+- **First sign, 200 scans only:** on bleeds the brain window carries most of the attribution (mean |Shapley| on the calibrated probability 0.734), then subdural 0.144, then bone 0.059.
+- **Dummy file read** (Parsa downloaded it; on the Mac and Drive in `runs/EXP-76_visionB_window_shap_dummy/`, aggregates only):
+  - The brain window alone catches every bleed but flags almost every non-bleed (sensitivity 1.0, specificity 0.009). With subdural or bone added, specificity is 0.79-0.80; all three give 0.88.
+  - On non-bleeds the bone window's mean value is −0.10: it pushes them away from "bleed".
+  - AUC Shapley: brain 0.33, subdural 0.11, bone 0.05.
+  - With every window flat the probability is about 0, and single-window images are far from training, so this measures reliance (DEC-35).
+- **The window means are final:** the training sample does not depend on the mode (seed 20261120, 3,000 slices: 40.95, 33.83, 29.59 on the uint8 scale). So the ISLES'24 half (EXP-77) runs now with them.
+- **Next:** `MODE = 'run'` (Parsa); download its `metrics.json` into Drive `runs/EXP-76_visionB_window_shap/`.
+- **Notion sync:** Experiments: EXP-76 (Running: dummy done).
+
+## 2026-11-20 — Claude Code session (EXP-75 dummy: row 1 checked on Colab)
+- **Notebook 15 `dummy`** (Parsa, Colab, commit `f33c55f`): one development case of fold 0, all 32 combinations.
+- **Checks:**
+  - the full combination reproduces the case's recorded volume (EXP-27) within **0.003 mL**;
+  - median **0.26 s** per prediction (the first, warming up, 7.9 s); projected about 0.3 h of prediction for 129 x 32, plus per-case loading;
+  - 28 distinct volumes over the 32 versions.
+- **Checked:** CBV and MTT got almost equal values on this case (−6.9713 and −6.9710 mL). This is a coincidence of the weighted sums, not a masking fault: CBV-only and MTT-only versions predict different volumes in all 8 pairs.
+- **Next:** `MODE = 'run'` (Parsa).
+- **Notion sync:** Experiments: EXP-75 (Running: dummy done).
+
+## 2026-11-20 — Claude Code session (EXP-74 dummy: row 9 checked on Colab)
+- **Notebook 55 `shap_dummy`** (Parsa, Colab A100-SXM4-40GB, commit `7959f8a`): one scenario per model, 32 distinct requests each, all answered and valid.
+- **Scored on the Mac** (`analysis.reasoner_shap --limit 1`; `runs/EXP-74_reasoner_shap_dummy/` on the Mac and Drive): both games complete, with no format failures.
+  - First sign, from one scenario only: the rules' thrombectomy decision turns entirely on the occlusion site, while both 4B models give the same thrombectomy answer whatever is hidden.
+- **Timing** (from the notebook): base 4B served after 290 s, 32 requests in 55 s; tuned served after 160 s, 32 in 31 s. Projected for 1,280 requests each: about 37 and 21 minutes, about **65 minutes of A100** with both starts. $0.
+- **Next:** `MODE = 'shap'` (Parsa). Its run folder is new (`EXP-74_reasoner_shap`), so the dummy's answers are not reused.
+- **Notion sync:** Experiments: EXP-74 (Running: dummy done).
+
 ## 2026-11-20 — Claude Code session (Phase 5 task B: SHAP rows 1 and 5 ready to run)
 - **Row 1, Vision A channels (EXP-75):** `analysis.visiona_channel_shap` and `notebooks/15_visionA_channel_shap.ipynb` (Colab A100).
   - Five players (NCCT, CBF, CBV, MTT, Tmax with its mask), 32 combinations per development case, each predicted by its validating fold model with nnU-Net's validation settings.

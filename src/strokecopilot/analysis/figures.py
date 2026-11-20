@@ -41,6 +41,10 @@ CAPTIONS = {
         "case ID): brain window, Grad-CAM (Item 2) and |SHAP| by expected gradients, background 50 unflagged top slabs. "
         "Over all 136 top-2 slabs, median share in brain tissue: SHAP 50%, Grad-CAM 76%; bone 26% and 9%. ISLES'24, "
         "CC BY-NC-SA 4.0."),
+    "fig_subgroups_vision": (
+        "EXP-80 (DEC-37, task E): Vision A's Dice and wrong-side rate and Vision B's bleed-flag rate on the 129 development "
+        "cases, by age band, sex, centre and onset-information pattern; case-bootstrap (Dice) and Wilson intervals. "
+        "Unadjusted: infarct size differs between groups. Groups under 10 cases are left out."),
 }
 
 SHORT = {"claude-sonnet-5-5": "Sonnet 5.5", "qwen3.5-27b": "Qwen3.5-27B", "gemma-3-27b": "Gemma 3 27B",
@@ -170,6 +174,9 @@ def main(argv=None):
                             ("runs/EXP-73_surrogate_flags", surrogate_flags_figure, "metrics.json")):
         if (Path(run) / name).exists():
             names += draw(json.loads((Path(run) / name).read_text()), [out, run])
+    sub = Path("runs/EXP-80_subgroups/metrics.json")
+    if sub.exists():
+        names += subgroups_figure(json.loads(sub.read_text()), [out, sub.parent])
     pixel = Path("runs/EXP-72_visionB_pixel_shap/pixel_shap_examples.png")
     if pixel.exists():
         import shutil
@@ -264,6 +271,30 @@ def surrogate_flags_figure(metrics, out):
                  ha="left")
     fig.tight_layout()
     return _write(fig, out, "fig_surrogate_flags_shap")
+
+
+def subgroups_figure(metrics, out):
+    plt = _plt()
+    v = metrics["vision"]
+    rows = [(g, lab, d) for g in ("age band", "sex", "centre", "onset") for lab, d in v.get(g, {}).items() if not d["too_small"]]
+    panels = [("Vision A Dice", lambda d: (d["dice_mean"], d["dice_ci"])),
+              ("Vision A: core on the wrong side of a cut-off", lambda d: (d["wrong_side"] / d["cases"], d["wrong_side_ci"])),
+              ("Vision B: bleed flag (all presumed false)", lambda d: (d["bleed_flags"] / d["cases"], d["bleed_flags_ci"]))]
+    fig, axes = plt.subplots(1, 3, figsize=(10, 0.32 * len(rows) + 1.3), sharey=True)
+    for ax, (title, get) in zip(axes, panels):
+        for i, (g, lab, d) in enumerate(rows):
+            val, ci = get(d)
+            y = len(rows) - 1 - i
+            ax.plot(ci, [y, y], color=VISION_COLOR, lw=2, alpha=0.55, solid_capstyle="round")
+            ax.plot([val], [y], "o", ms=6, color=VISION_COLOR, mec="white", mew=1.2)
+        ax.set_title(title, fontsize=8.5, color=INK, loc="left")
+        ax.set_xlim(0, 1)
+        ax.grid(axis="y", visible=False)
+        ax.tick_params(axis="y", length=0)
+    axes[0].set_yticks(range(len(rows)))
+    axes[0].set_yticklabels([f"{lab} (n={d['cases']})" for g, lab, d in reversed(rows)], fontsize=8)
+    fig.tight_layout()
+    return _write(fig, out, "fig_subgroups_vision")
 
 
 if __name__ == "__main__":

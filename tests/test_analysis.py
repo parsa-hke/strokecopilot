@@ -273,3 +273,63 @@ def test_window_fill_and_summary():
     assert s["groups"]["bleed"]["mean_abs_phi"]["brain"] > 0.8 and s["groups"]["bleed"]["mean_abs_phi"]["bone"] == 0
     assert s["coalitions"]["1"]["auc"] == 1.0 and s["coalitions"]["0"]["auc"] == 0.5
     assert math.isclose(sum(s["auc_shapley"].values()), 0.5)
+
+
+def test_retrieval_tokens_and_rank_fusion():
+    from strokecopilot.analysis import retrieval_check as rc
+    assert rc.tokens("Within 4.5 h, ASPECTS 3-10 (COR 1)") == ["within", "4.5", "h", "aspects", "3", "10", "cor", "1"]
+    assert rc.rrf(["a", "b", "c"], ["c", "a", "d"]) == ["a", "c", "b", "d"]
+    keys = rc.key_rules()
+    assert sum(len(v) for v in keys.values()) == 15
+    qs = rc.queries()
+    assert set(qs) == set(keys) and all("Is thrombectomy indicated?" in q["thrombectomy"] for q in qs.values())
+    fake = lambda q: ["AHA2026-T8-ich"] + [f"x{i}" for i in range(50)]
+    r = rc.evaluate(fake, qs, {"fx03_haemorrhage_present": ["AHA2026-T8-ich"]})
+    assert r["found"]["top 5"] == 1 and r["of"] == 1 and r["best_ranks"] == [1]
+
+
+def test_onnx_normalisation_and_parity_counts():
+    from strokecopilot.analysis import onnx_export as ox
+    from strokecopilot.vision.haemorrhage.aggregate import Calibrator
+    img = np.zeros((2, 4, 4, 3), dtype=np.uint8)
+    x = ox.normalised(img)
+    assert x.shape == (2, 3, 4, 4) and math.isclose(float(x[0, 0, 0, 0]), -0.485 / 0.229, rel_tol=1e-5)
+    cal = Calibrator(method="topk", k=2, threshold=0.5)
+    p = np.array([0.9, 0.8, 0.1, 0.2, 0.1, 0.05])
+    r = ox.parity(p, p + 1e-6, [(0, 3), (3, 6)], cal)
+    assert r["same_dec28_call"] == 2 and r["flagged_torch"] == 1 and r["max_abs_prob_difference"] < 1e-5
+
+
+def test_subgroup_labels_and_small_groups():
+    from strokecopilot.analysis import subgroups as sg
+    from strokecopilot.nlp.notes.facts import Fact, FactSheet
+    sheet = FactSheet([Fact("age", "number", 82, "82-year-old"), Fact("sex", "text", "female", "woman"),
+                       Fact("wake_up_stroke", "bool", True, "Wake-up")])
+    assert sg.groups_from_facts(sheet, "1") == {"age band": "80 and over", "sex": "female", "onset": "wake-up",
+                                                "centre": "centre 1"}
+    rows = [{"case": f"c{i}", "dice": 0.5, "abs_error": 3.0, "wrong_side": i % 2, "flagged": 0} for i in range(12)]
+    groups = {f"c{i}": {"age band": "under 80" if i < 11 else "80 and over", "sex": "male", "onset": "known"}
+              for i in range(12)}
+    t = sg.vision_table(rows, groups)
+    assert t["age band"]["under 80"]["too_small"] is False and t["age band"]["80 and over"]["too_small"] is True
+    assert t["age band"]["80 and over"]["wrong_side_ci"] is None and t["age band"]["under 80"]["wrong_side"] == 5
+
+
+def test_replay_scan_and_unsafe_members(tmp_path):
+    import io
+    import tarfile
+
+    from strokecopilot.pipeline import replay
+    (tmp_path / "ok.json").write_text('{"a": 1}')
+    assert replay.problems_in(tmp_path) == []
+    (tmp_path / "bad.json").write_text('{"path": "/Users/someone/x", "who": "a@b.com"}')
+    found = replay.problems_in(tmp_path)
+    assert any("e-mail" in f for f in found) and any("local path" in f for f in found)
+    evil = tmp_path / "evil.tar.gz"
+    with tarfile.open(evil, "w:gz") as tar:
+        info = tarfile.TarInfo("../escape.txt")
+        info.size = 1
+        tar.addfile(info, io.BytesIO(b"x"))
+    with tarfile.open(evil) as tar, pytest.raises(ValueError, match="unsafe"):
+        replay._safe_extract(tar, tmp_path / "out")
+    assert sum(1 for _ in replay.cells()) == 4 * 4 + 2 * 2

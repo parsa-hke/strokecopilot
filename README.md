@@ -1,12 +1,13 @@
 # Stroke Decision Copilot
 
-MAAI 901 (Deep Learning for Visual Data) + MAAI 902 (NLP & LLMs) group project, MSc Applied AI, UOWD.
+MAAI 901 (Deep Learning for Visual Data) and MAAI 902 (NLP & LLMs) group project, MSc Applied AI, University of Wollongong in Dubai.
 
-Vision models read the stroke CT (haemorrhage on plain CT; core and penumbra on CT perfusion), a language model reasons over those findings, a triage note and the AHA/ASA guideline plus the DAWN and DEFUSE-3 trials, and a verifier checks every claim in its rationale against its sources. The research output is a hallucination-rate comparison across language models on a clinical decision task with known inputs.
+Vision models read the stroke CT (haemorrhage on plain CT; core and penumbra on CT perfusion). A language model reasons over those findings, a triage note and a rulebook written in our own words from the 2026 AHA/ASA guideline and the DAWN and DEFUSE-3 trials. A verifier then checks every claim in its rationale against its sources. The research output is a hallucination-rate comparison across six language models on a clinical decision task with known inputs, and how imaging errors carry through to treatment decisions.
 
 **Research prototype — not for clinical use.**
 
-The full plan is in [STROKE_COPILOT_PLAN.md](STROKE_COPILOT_PLAN.md); progress is in [CHANGELOG.md](CHANGELOG.md).
+- **Live demo:** [huggingface.co/spaces/parsa-hke/stroke-copilot](https://huggingface.co/spaces/parsa-hke/stroke-copilot): the pipeline story, a case explorer where every claim links to its source, the results as charts, and a scenario builder that runs the reasoner and the verifier live.
+- **Plan and decisions:** [STROKE_COPILOT_PLAN.md](STROKE_COPILOT_PLAN.md) (§2 lists every fixed decision). **Progress:** [CHANGELOG.md](CHANGELOG.md).
 
 ## How it fits together
 
@@ -20,24 +21,47 @@ guideline rulebook (whole) ─────────────────�
                                                            NLP B: verifier ──► every claim traced or flagged
 ```
 
-The vision and NLP sides meet only at [`schemas/vision_output.json`](schemas/vision_output.json). Until real vision outputs exist, the NLP side builds against the five hand-written cases in [`fixtures/`](fixtures/).
+The vision and NLP sides meet only at the contract, [`schemas/vision_output.json`](schemas/vision_output.json).
 
-## Install
+## Results at a glance
 
-On Colab (or anywhere):
+Development results are on 129 ISLES'24 cases (five folds, each case scored by the model that did not train on it) and on RSNA validation. Held-out results are on 20 ISLES'24 cases opened once, after the analyses were fixed in advance ([`docs/PHASE4_PREREGISTRATION.md`](docs/PHASE4_PREREGISTRATION.md)).
+
+| Component | Result |
+|---|---|
+| **Vision A** (nnU-Net 3d_fullres) | Dice 0.215 ± 0.046 against the rCBF < 30% threshold's 0.111 ± 0.031 (paired +0.104 [+0.078, +0.133]); absolute volume error 23.5 against 25.2 mL, not a clear difference. Held-out: Dice 0.18 (five-fold ensemble). |
+| **Vision B** (ResNet-50, RSNA) | Test split, opened once: scan AUC 0.9805 [0.974, 0.986], sensitivity 0.962, specificity 0.885 at the chosen threshold, ECE 0.015. On ISLES'24 it flags 68 of 129 presumed bleed-free scans, a domain shift traced to brain tissue, not the skull base (Grad-CAM and SHAP). |
+| **Hallucination rate** (with the rulebook; 5 fixtures, 150 scenarios, 20 real cases per model; verifier rates, upper bounds) | Sonnet 5.5 4.0%, Qwen3.5-27B 5.0%, Gemma 3 27B 17.1%, MedGemma 27B 17.7%, Gemma 3 4B 40.6%, Gemma 3 4B LoRA-tuned 13.3%. |
+| **Rulebook effect** | Giving the whole rulebook cuts false-content claims by 8 to 15 percentage points for every model. |
+| **Verifier validity** | Seeded errors: recall ≥ 0.80 on every sub-type, 1% false flags. 100 human-labelled claims: verifier–human agreement 0.61; humans confirmed 18 of its 54 flags; human–human κ 0.27. |
+| **End to end, held-out** (predicted vision) | Decisions right: Sonnet 22/23, Gemma 3 27B 22/23, MedGemma 21/21, Qwen 13/13 (9 format failures), tuned 4B 21/23, base 4B 3/23. Sonnet's one wrong decision came from a false bleed flag the verifier could not see. |
+
+**Phase 5 additions** (report only, after the freeze; some were still running on 20 Nov 2026): exact Shapley values of the rule engine's inputs (the occlusion site and the clock decide most treatments; the core volume rarely does), of Vision A's input channels and Vision B's CT windows, pixel attributions beside Grad-CAM, a surrogate of the verifier's flags, token attributions of the retriever, 34 Student's t-tests beside the bootstrap results, a subgroup analysis, a retrieval re-test, an ONNX export, and a clinician review pack. Summaries for the reports: [`docs/PHASE5_HANDOVER.md`](docs/PHASE5_HANDOVER.md).
+
+## Quick start
 
 ```bash
 pip install git+https://github.com/parsa-hke/strokecopilot.git
 ```
 
-For local development (NLP side and tests; vision training is Colab-only):
+For local development and the tests (no data needed, under a minute):
 
 ```bash
 pip install -e ".[dev]"
 pytest
 ```
 
-Validate a vision output:
+The extras group what each part needs: `isles` and `rsna` (data and vision), `retrieval`, `llm` (Anthropic and OpenAI-compatible clients), `space` (the demo server), `finetune`, and `analysis` (SHAP, surrogates and t-tests).
+
+**Reproduce the hallucination table without an API key.** The replay bundle holds the saved answers and verifier caches for the fixtures and the 150 synthetic scenarios (no patient data). Download `replay_bundle.tar.gz` from the [release](https://github.com/parsa-hke/strokecopilot/releases) of the submission tag, then:
+
+```bash
+python -m strokecopilot.pipeline.replay run --bundle replay_bundle.tar.gz
+```
+
+It checks the bundle's sha256, rescores every model and arm offline from the cached verdicts, checks each rate against the reported one, and prints the table.
+
+**Check a vision output against the contract:**
 
 ```python
 from strokecopilot.contract import load_vision_output
@@ -46,38 +70,42 @@ out = load_vision_output("fixtures/fx02_thrombectomy_large_mismatch.json")
 
 ## Data
 
-Nothing under `data/` or `runs/` is committed. Datasets live in the shared Google Drive folder `StrokeCopilot/`; see [data/README.md](data/README.md).
+Nothing under `data/` or `runs/` is committed, and no data or model weights are distributed. ISLES'24 (Zenodo record 17652035, CC BY-NC-SA 4.0) and the RSNA Intracranial Haemorrhage data (Kaggle, competition rules) must be obtained from their sources; the team kept them on a shared Google Drive and, for RSNA, on Kaggle only. The guideline and trial texts stay with their publishers: the reasoner sees only our own-words rulebook ([`corpus/RULEBOOK.md`](corpus/RULEBOOK.md)). Terms: [`docs/DATA_USE.md`](docs/DATA_USE.md).
 
 ## Notebooks
 
-Badges point at the notebooks once they exist.
+Thin: each calls the package. Colab notebooks open with the badge; Kaggle notebooks are uploaded to Kaggle with the RSNA datasets attached.
 
-| Notebook | Purpose | |
+| Notebook | What it does | Where |
 |---|---|---|
-| `00_download_isles24` | Phase 0: download ISLES'24 to Drive and verify md5 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/00_download_isles24.ipynb) |
-| `00_template` | Install, mount Drive, copy tarball, load one case | Not written yet; comes when the first teammate is brought in |
-| `01a_list_isles24` | Phase 1: list the ISLES'24 archive without extracting it | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01a_list_isles24.ipynb) |
-| `01b_clinical_isles24` | Phase 1: survey the ISLES'24 clinical columns | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01b_clinical_isles24.ipynb) |
-| `01c_unpack_split_survey` | Phase 1: working copy, fixed split, spot-check and grid evidence | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01c_unpack_split_survey.ipynb) |
-| `01_prep_isles24` | ISLES'24 raw → slim tarball | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01_prep_isles24.ipynb) |
-| `01d_check_slim` | Phase 1: read the tarball through the loader; label, MTT and Tmax questions | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/01d_check_slim.ipynb) |
-| `02_prep_rsna` | RSNA ICH → 320 px JPEG tar shards (runs on Kaggle) | Upload to Kaggle; this only runs there |
-| `02a_rsna_kaggle_timing` | Phase 0: time full RSNA on Kaggle | Upload to Kaggle; this one does not run on Colab |
-| `02b_rsna_read_speed` | Phase 1: check the RSNA shards and measure read speed on Kaggle | Upload to Kaggle; this only runs there |
-| `02c_rsna_repack` | Phase 1: store an RSNA shard as one file on Kaggle | Upload to Kaggle; this only runs there |
-| `10_visionA_nnunet` | Phase 2: nnU-Net v2 fold 0; dummy mode (EXP-2) checks timing and resume first, train mode is EXP-3 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/10_visionA_nnunet.ipynb) |
-| `11_visionA_thresholds` | Phase 2: threshold baseline (EXP-1) and occlusion-to-label distances | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/11_visionA_thresholds.ipynb) |
-| `11b_visionA_threshold_check` | Phase 2: checks the low EXP-1 Dice (infarct vs Tmax > 6 s, rCBF, MCA overlap) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/11b_visionA_threshold_check.ipynb) |
-| `20_visionB_train` | Phase 2: RSNA patient split and Vision B slice classifier with scan calibration; dummy mode (EXP-5) measures speed first | Upload to Kaggle; this only runs there |
-| `21_visionB_isles_check` | Phase 3: Vision B on ISLES'24 native NCCT, presumed false-positive rate and the top-scored scans | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/21_visionB_isles_check.ipynb) |
-| `22_visionB_operating_point` | Phase 3: cross-fitted Vision B threshold on the RSNA validation split; proposes the operating point | Upload to Kaggle; this only runs there |
-| `23_visionB_rsna_geometry` | Phase 3: RSNA training scans' slice spacing and field of view, measured from the shard index (CPU) | Upload to Kaggle; this only runs there |
-| `30_nlpA_corpus` | NLP A: corpus ingestion and retrieval | Not needed: the corpus is built in the repo (`python -m strokecopilot.nlp.corpus.ingest build`, DEC-18) and sent whole (DEC-19) |
-| `31_nlpA_reasoner` | Phase 2: reasoner on the five fixtures; dummy mode (EXP-8) checks schema, caching and cost first, run mode is EXP-9 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/31_nlpA_reasoner.ipynb) |
-| `40_nlpB_verifier` | Phase 2: verifier on the seeded errors; judge bake-off (Haiku vs Opus) and τ; dummy mode (EXP-10) first, run mode is EXP-11 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/40_nlpB_verifier.ipynb) |
-| `41_nlpB_model_comparison` | NLP B: hallucination table | Not written yet (Phase 2 or later) |
-| `50_end_to_end` | Phase 2 acceptance: fixture → reasoner → verifier → hallucination rate (EXP-12); real cases in Phase 4 | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/50_end_to_end.ipynb) |
+| `00_download_isles24` | Download ISLES'24 to Drive and verify it | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/00_download_isles24.ipynb) |
+| `00_template` | The team template: install, mount Drive, load one case | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/00_template.ipynb) |
+| `01a`–`01d`, `01_prep_isles24` | ISLES'24 listing, clinical survey, split, slim tarball and its check | Colab |
+| `02_prep_rsna`, `02a`–`02c` | RSNA preprocessing into shards, timing and read-speed checks | Kaggle |
+| `10_visionA_nnunet` | nnU-Net v2 training per fold | Colab (rented GPU for the long runs, DEC-21) |
+| `11_visionA_thresholds`, `11b` | The rCBF threshold baseline and its check | Colab |
+| `12`, `13_visionA_error_analysis*` | Vision A error analysis, fold 0 and all five folds | Colab |
+| `14_visionA_confidence` | `confidence.core` and `confidence.penumbra` | Colab |
+| `15_visionA_channel_shap` | Phase 5: Shapley values of Vision A's input channels | Colab A100 |
+| `20_visionB_train` | RSNA patient split and the ResNet-50 slice classifier | Kaggle |
+| `21_visionB_isles_check` | Vision B on ISLES'24: the domain-shift check | Colab |
+| `22_visionB_operating_point` | Cross-fitted operating point on RSNA validation | Kaggle |
+| `23_visionB_rsna_geometry` | RSNA slice spacing and field of view | Kaggle |
+| `24_visionB_false_alarms` | The pre-registered false-alarm rules on RSNA validation, Grad-CAM | Kaggle |
+| `25_visionB_rsna_test` | The RSNA test split, opened once | Kaggle |
+| `26_visionB_window_shap` | Phase 5: Shapley values of the three CT windows | Kaggle |
+| `31_nlpA_reasoner` | The reasoner on the five fixtures | Colab |
+| `40_nlpB_verifier`, `51_verifier_recheck`, `52_haiku_extractor_check` | Verifier: seeded errors, judge choice, re-checks | Colab |
+| `41_nlpB_model_comparison` | The hallucination table (C9) | Colab |
+| `42_nlpB_small_reasoner`, `54_finetune_colab`, `55_small_reasoner_colab` | The LoRA-tuned Gemma 3 4B: training, answers, report; Phase 5 reasoner SHAP | Colab A100 |
+| `50_end_to_end` | Fixture to reasoner to verifier, end to end | Colab |
+| `53_paid_runs_colab` | The Gemma 27B pair served with vLLM | Colab A100 |
+| `60_heldout_contracts` | The held-out contract path, checked on development cases first | Colab A100 |
 
 ## Repository layout
 
-`src/strokecopilot/` holds all logic (`data/`, `vision/`, `contract/`, `nlp/`, `pipeline/`, `demo/`); notebooks stay thin and call it. `schemas/` holds the contracts, `fixtures/` the hand-written test cases, `tests/` runs in under a minute without data. Full layout: plan §3.
+`src/strokecopilot/` holds all logic: `data/`, `vision/`, `contract/`, `nlp/` (corpus, notes, reasoner, verifier), `pipeline/` (runs, comparisons, held-out analysis, replay), `demo/` (the Space) and `analysis/` (Phase 5). `schemas/` holds the contracts, `fixtures/` the hand-written test cases, `corpus/` the rulebook, `prompts/` every prompt version, `docs/` the decisions' working papers, and `tests/` runs without data. Full layout: plan §3.
+
+## Licence and citation
+
+Code: [MIT](LICENSE). Data and model weights are not covered and not distributed (see above). Please cite with [CITATION.cff](CITATION.cff), and cite ISLES'24 (arXiv:2408.11142, arXiv:2408.10966) and RSNA ICH (Flanders et al., *Radiol Artif Intell* 2020) when you use their data.
