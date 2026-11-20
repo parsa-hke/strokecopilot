@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## 2026-11-20 — Claude Code session (Phase 5 tasks D and F: DEC-33 and DEC-38; F running, D ready for Kaggle)
+- **DEC-33 (D) and DEC-38 (F)** added to plan §2 (Parsa, 20 Nov 2026).
+- **F, the non-Claude judge (EXP-81; `analysis.rejudge`):**
+  - Parsa chose `openai/gpt-6-luna` through OpenRouter. It is outside all six reasoners' families, and it costs the same per token as Haiku 5.5 ($0.10/$0.50 per million).
+  - Settings: `judge_v3`, τ 0.6, reasoning effort medium. Each labelled claim's case is rescored in a fresh copy with an empty judge cache, so no Haiku verdict is reused.
+  - **Check first:** Haiku's saved verdicts reproduce EXP-41's verifier–human agreement exactly (0.61; weighted 0.87).
+  - **Dummy** (5 case-cells): 22 judge calls, $0.012, 2.8 min, no provider errors.
+  - **Full run** (97 case-cells) running; estimate about $0.25 against a $1 cap.
+- **D, BiomedCLIP and per-subtype probes (EXP-82 Kaggle, EXP-83 Mac; `analysis.biomedclip`, `notebooks/27_visionB_biomedclip.ipynb`):** the method is fixed in the module before any score.
+  - BiomedCLIP as a linear probe on 60,000 seeded training slices, and zero-shot with two fixed prompts.
+  - EXP-6's top-2 aggregation for every model, and Platt scaling on validation for each.
+  - Read-outs: scan AUC and the 96%-sensitivity operating point; per-subtype probes on EXP-6's frozen features; per-patient Brier scores for T9.
+  - ISLES'24 flags on the Mac from `probe.json`.
+  - **Checked on the Mac:**
+    - BiomedCLIP loads and embeds;
+    - EXP-6's split into pooled features plus classifier equals its own output;
+    - a tokenizer fallback was added, because `transformers` 5 removed a call `open_clip` 3.2.0 uses.
+  - `open_clip_torch` 3.2.0 is in the `analysis` extra; downloads were allowed by Parsa.
+  - **Not run yet:** notebook 27 needs a push, then Parsa's Kaggle dummy.
+- **Tests:** `tests/test_analysis.py` (29). pytest: 908 passed. **Spend so far:** OpenRouter $0.012 (the dummy).
+- **Notion sync:** Decisions: DEC-33 and DEC-38 (new, Decided, 20 Nov 2026). Experiments: EXP-81 (Running); EXP-82, EXP-83 (Planned).
+
 ## 2026-11-20 — Claude Code session (Phase 5 tasks E, G, H done; I drafted)
 - **G, retrieval re-test (EXP-79; `analysis.retrieval_check`; Mac CPU, $0).** EXP-7's 15 key fixture rules, four methods fixed before any score, top 8 per decision query:
   - bge 5, BM25 6, a BM25 + bge hybrid (rank fusion) **8**, the hybrid reranked by `bge-reranker-base` 3;

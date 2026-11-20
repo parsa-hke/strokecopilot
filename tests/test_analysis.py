@@ -333,3 +333,33 @@ def test_replay_scan_and_unsafe_members(tmp_path):
     with tarfile.open(evil) as tar, pytest.raises(ValueError, match="unsafe"):
         replay._safe_extract(tar, tmp_path / "out")
     assert sum(1 for _ in replay.cells()) == 4 * 4 + 2 * 2
+
+
+def test_biomedclip_scan_and_calibration_helpers():
+    import pandas as pd
+
+    from strokecopilot.analysis import biomedclip as bc
+    rng = np.random.default_rng(0)
+    rows = []
+    for s in range(60):
+        bleed = s % 3 == 0
+        for k in range(10):
+            rows.append({"series_id": f"s{s}", "patient_id": f"p{s // 2}", "any": int(bleed and k < 3),
+                         **{t: int(bleed and k < 3 and t == "subdural") for t in bc.SUBTYPES}})
+    slices = pd.DataFrame(rows)
+    p = np.clip(slices["any"] * 0.7 + rng.random(len(slices)) * 0.3, 0, 1)
+    scans = bc.scan_table(slices, p)
+    assert len(scans) == 60 and scans["label"].sum() == 20 and scans["subdural"].sum() == 20
+    ab = bc.platt(scans["score"], scans["label"])
+    prob = bc.apply_platt(ab, scans["score"])
+    op = bc.operating_point(prob, scans["label"])
+    assert op["sensitivity"] >= 0.96 and 0 <= op["specificity"] <= 1
+    scans["prob"] = prob
+    assert len(bc.per_patient_brier(scans, "prob")) == 30
+    rep = bc.subtype_report(slices, {t: p for t in bc.SUBTYPES}, p)
+    assert set(rep) == {"subdural"} and rep["subdural"]["scans_positive"] == 20
+    from sklearn.linear_model import LogisticRegression
+    x = rng.normal(size=(200, 5))
+    y = (x[:, 0] > 0).astype(int)
+    clf = LogisticRegression().fit(x, y)
+    assert np.allclose(bc.probe_predict(bc.probe_json(clf), x), clf.predict_proba(x)[:, 1])
