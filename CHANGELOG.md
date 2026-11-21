@@ -22,7 +22,11 @@
 - **Report changes:** numeric targets on the three goals and "met / not met" in the conclusion (the 0.96 sensitivity target predates the test split; the other two are worded as targets after the results, and the report says so); a table of what was ruled out for the ISLES'24 flags (EXP-16, 28, 29, 35, 49–51, 72, 76/77, 83); Wilson intervals in the cut-off table; the centre test; the 320-pixel JPEG storage named as an untested limit; the cover roles aligned with the contribution table; Figure 3a redrawn; "Item 2" gone from the attribution panel; floats moved so no page is near-empty. 2,996 words for sections 1 to 10 by `texcount`.
 - **Release:** `CITATION.cff` is 1.0.1; tag `v1.0.1` and its release carry the same replay bundle (unchanged, same sha256).
 - **pytest:** 921 passed.
-- **Open, all Parsa's:** the five "report sections" cells of the contribution table; Dr Dordevic's answers (word rule, RSNA "no copies", AI use); whether to make the repository public.
+- **Decided by Parsa, 22 Nov 2026:**
+  - **The repository is public.** Before the switch, a scan of the whole history found no key-like strings, no RSNA IDs, no data files and no e-mail addresses in tracked files. Now visible to anyone: `splits/folds.json` (the held-out list), ISLES'24 case IDs in `docs/DATA.md`, one notebook and five test files, and commit authors' e-mail addresses. Whether held-out IDs appear outside the split file was not checked (the check was blocked in this session). Checked without a login: the repository, the v1.0.1 release, its bundle and the workflow badge all open.
+  - **The contribution table's report-writing column:** Lorna and Mohammed drafted the 901 report, Hana and Bin the 902 report, Parsa did the final polish and improvements on both.
+- **README:** a badge for the `tests` workflow.
+- **Open, all Parsa's:** Dr Dordevic's answers (what the 3,000-word limit counts, the RSNA "no copies" clause, AI use); the DEC-36 note for EXP-86.
 - **Plan §7:** the report line stays unticked.
 - **Notion sync:** Experiments: EXP-85, EXP-86, EXP-87 (new, Done). Decisions: a note on DEC-36 for EXP-86, if Parsa agrees. Tasks: 901 report review (In progress).
 

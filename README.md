@@ -1,5 +1,7 @@
 # Stroke Decision Copilot
 
+[![tests](https://github.com/parsa-hke/strokecopilot/actions/workflows/tests.yml/badge.svg)](https://github.com/parsa-hke/strokecopilot/actions/workflows/tests.yml)
+
 MAAI 901 (Deep Learning for Visual Data) and MAAI 902 (NLP & LLMs) group project, MSc Applied AI, University of Wollongong in Dubai.
 
 Vision models read the stroke CT (haemorrhage on plain CT; core and penumbra on CT perfusion). A language model reasons over those findings, a triage note and a rulebook written in our own words from the 2026 AHA/ASA guideline and the DAWN and DEFUSE-3 trials. A verifier then checks every claim in its rationale against its sources. The research output is a hallucination-rate comparison across six language models on a clinical decision task with known inputs, and how imaging errors carry through to treatment decisions.
