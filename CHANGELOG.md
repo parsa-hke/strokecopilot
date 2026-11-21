@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 2026-11-22 — Claude Code session (MAAI901 report, second feedback round: EXP-85, EXP-86, EXP-87; CI green; v1.0.1)
+- **Scope:** Phase 5, the 901 report and the repo items of Parsa's second feedback list. The report stays in `reports/` (gitignored).
+- **Pushed and checked:** `443d9a4` is on `origin/main`, and its GitHub Actions run passed (run 44945060386, the first run of `tests.yml`).
+- **Three read-outs of saved results, report only, free, development data** (`analysis/report_figures.py`, 5 tests; run folders on the Mac only):
+  - **EXP-85, Vision B's threshold trade-off.** EXP-17's seven saved thresholds on RSNA validation (cross-fitted) against EXP-16's saved scores for the 129 ISLES'24 development scans:
+
+    | Threshold | RSNA sensitivity | RSNA specificity | ISLES'24 flagged (of 129) |
+    |---|---|---|---|
+    | 0.602 | 0.901 | 0.964 | 10 |
+    | 0.402 | 0.925 | 0.945 | 26 |
+    | 0.278 | 0.945 | 0.915 | 45 |
+    | 0.175 (DEC-28) | 0.961 | 0.878 | 68 |
+    | 0.125 | 0.968 | 0.858 | 87 |
+    | 0.046 | 0.980 | 0.719 | 116 |
+    | 0.007 | 0.990 | 0.361 | 129 |
+
+    It reproduces the recorded 45, 68 and 87. No threshold keeps sensitivity and clears the flags. The figure's left panel shows these operating points with the test split's point; it is **not a full ROC curve**, because per-scan RSNA scores are saved only on Kaggle and the test split is not to be opened again (DEC-22).
+  - **EXP-86, the centre gap in Dice, post hoc.** Centre 1 (86 cases) 0.179 against centre 2 (43) 0.288: Welch t = −2.34, df 72.4, p = 0.022, difference −0.109 [−0.201, −0.016]; Mann–Whitney p = 0.022. Unadjusted for infarct size, run after the gap had been seen, and **outside DEC-36's 35 tests**, whose results and Holm adjustment are unchanged. DEC-36 says no test is added after a t result is seen, so this needs Parsa's note on that decision.
+  - **EXP-87, fold 0's training curve from nnU-Net's logs** (300 epochs, two logs because of the resume). The 10-epoch mean of the validation loss is lowest over epochs 26–35 (−0.223) and −0.169 over the last 10, while the training loss falls from −0.18 to −0.70: overfitting. The moving-average pseudo-Dice peaks at epoch 155 (0.478) and ends at 0.475. The final checkpoint is the one used throughout (nnU-Net's default; DEC-31 D1).
+- **Report changes:** numeric targets on the three goals and "met / not met" in the conclusion (the 0.96 sensitivity target predates the test split; the other two are worded as targets after the results, and the report says so); a table of what was ruled out for the ISLES'24 flags (EXP-16, 28, 29, 35, 49–51, 72, 76/77, 83); Wilson intervals in the cut-off table; the centre test; the 320-pixel JPEG storage named as an untested limit; the cover roles aligned with the contribution table; Figure 3a redrawn; "Item 2" gone from the attribution panel; floats moved so no page is near-empty. 2,996 words for sections 1 to 10 by `texcount`.
+- **Release:** `CITATION.cff` is 1.0.1; tag `v1.0.1` and its release carry the same replay bundle (unchanged, same sha256).
+- **pytest:** 921 passed.
+- **Open, all Parsa's:** the five "report sections" cells of the contribution table; Dr Dordevic's answers (word rule, RSNA "no copies", AI use); whether to make the repository public.
+- **Plan §7:** the report line stays unticked.
+- **Notion sync:** Experiments: EXP-85, EXP-86, EXP-87 (new, Done). Decisions: a note on DEC-36 for EXP-86, if Parsa agrees. Tasks: 901 report review (In progress).
+
 ## 2026-11-21 — Claude Code session (MAAI901 report: review, three batches of fixes and a feedback round; EXP-84)
 - **Scope:** Phase 5, the 901 report only. The report is edited in `reports/maai901/` (gitignored, `.gitignore` gains `/reports/`); Overleaf stays the source of truth and Parsa uploads the changed files. **Nothing is committed or pushed.**
 - **Build and count:** pdflatex and biber on TeX Live 2026, as `main.tex` sets; `texcount` for words. The subject outline gives 2,500 to 3,000 words and does not say what counts.

@@ -7,8 +7,8 @@ authors:
 repository-code: "https://github.com/parsa-hke/strokecopilot"
 url: "https://huggingface.co/spaces/parsa-hke/stroke-copilot"
 license: MIT
-version: "1.0.0"
-date-released: "2026-11-20"
+version: "1.0.1"
+date-released: "2026-11-22"
 keywords:
   - stroke
   - CT perfusion
