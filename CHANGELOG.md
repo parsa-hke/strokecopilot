@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## 2026-11-21 — Claude Code session (MAAI901 report: review, three batches of fixes and a feedback round; EXP-84)
+- **Scope:** Phase 5, the 901 report only. The report is edited in `reports/maai901/` (gitignored, `.gitignore` gains `/reports/`); Overleaf stays the source of truth and Parsa uploads the changed files. **Nothing is committed or pushed.**
+- **Build and count:** pdflatex and biber on TeX Live 2026, as `main.tex` sets; `texcount` for words. The subject outline gives 2,500 to 3,000 words and does not say what counts.
+- **Review:** every printed number checked against its run, decision or code; none was wrong. A 27-item list by severity: one data-rule gap (ISLES'24 images with no attribution in the caption), no leak, and rubric gaps (the contract, contributions, the AI statement, visualisations, Phase 5 results unused).
+- **Applied, in order:**
+  - **Batch 1:** the figure attribution, the 0.175 flag sentence, an ECE row, "final infarct" in the conclusion, two bibliography fixes, build warnings.
+  - **Batch 3:** the contract paragraph with the ASPECTS and occlusion-site limits; Grad-CAM and the failed slice rules (Item 2); BiomedCLIP, ONNX and input Shapley values; the prototype caution; the release link; the RSNA test figure. New passages are in the house academic-writing voice.
+  - **Feedback round (Parsa, 21 Nov):** a contribution table and a sentence on the commit imbalance; a pipeline figure and a specification table for both models (nnU-Net 2.8.1's defaults and augmentations read from the tagged source); the 300-epoch choice beside fold 0's training curve; the EfficientNet-B3 sentence corrected (timed, never trained); the split's safeguards; the pre-registration cited; Table 4 with case-level mean and median on both sides (EXP-63, EXP-66); the bootstrap stated (5,000 paired resamples); the ISLES'24 winner's 21.2 ± 37.2 mL beside our 23.5 mL; four related-work sentences with four checked references; two multi-panel figures from existing ones (EXP-72, EXP-75, EXP-76/77, EXP-80); sections 5, 8.4 and 10 trimmed.
+- **EXP-84, new, report only (development cases, saved volumes, free):** `analysis/cutoff_accuracy.py` with 5 tests; `runs/EXP-84_cutoff_accuracy/` on the Mac only (config, metrics with counts only, the scatter figure). From EXP-27's per-case volumes, Vision A as a yes/no call at each cut-off:
+
+  | Cut-off (cases at or above) | nnU-Net sensitivity / specificity | Threshold | Always under, wrong |
+  |---|---|---|---|
+  | 21 mL (45) | 0.49 / 0.92 | 0.44 / 0.88 | 45 |
+  | 31 mL (38) | 0.42 / 0.93 | 0.34 / 0.96 | 38 |
+  | 51 mL (27) | 0.37 / 0.97 | 0.26 / 0.97 | 27 |
+  | 70 mL (22) | 0.32 / 0.98 | 0.27 / 0.99 | 22 |
+
+  It reproduces EXP-25's wrong-side counts (30/28/20/17 and 35/29/23/17). No held-out case was read. It replaces the wrong-side column of the report's five-fold table.
+- **The volume p-value, reconciled:** 0.35 is EXP-25's Wilcoxon signed-rank test and 0.29 is EXP-69's paired t-test (T2), on the same pairs. Both are right; the report now prints both with their names.
+- **Repo:** the `dev` extra now installs what the tests need (numpy, scipy, pandas, matplotlib, pydicom, nibabel, fastapi, httpx); ten tests gain `importorskip` for torch, scikit-learn, opencv, openai or sentence-transformers. In a fresh environment with only `.[dev]`: 747 passed, 23 skipped. `.github/workflows/tests.yml` added; it has not run, because nothing is pushed. README quick start says which tests skip.
+- **pytest (project environment):** 916 passed.
+- **Word count:** 2,996 for sections 1 to 10 (text, headings and captions by `texcount`), printed on the title page with that rule; 3,181 with the contributions and AI-use statements; about 3,730 if table cells count.
+- **Open, all Parsa's:**
+  - Dr Dordevic's answers on what the 3,000 limit counts and on the RSNA "no copies" clause;
+  - the "report sections" column of the contribution table (five red TBD marks) and the wording of the AI-use statement;
+  - opening the repository and re-tagging: not done. Before it: `splits/folds.json` (the held-out list) and development case IDs in `docs/DATA.md` and in history would become public;
+  - EXP-84 is not on Drive or in Notion yet, and has no Decisions row (report only under DEC-34);
+  - `references_verified.md` was never seen, so "as in ISLES 2018, small infarcts are missed more" rests on it; the guideline's page range is unchecked;
+  - the pixel-attribution figure still prints "Item 2" in its panel titles.
+- **Plan §7:** the report line stays unticked until the 902 report is done.
+- **Notion sync:** Experiments: EXP-84 (new, Done, table above). Tasks: 901 report review (In progress). Decisions: none recorded; a row for EXP-84 if Parsa wants one.
+
 ## 2026-11-21 — Claude Code session (task I done: submission tag v1.0.0 and its release)
 - **Tag:** annotated `v1.0.0` on `a0cb697`, pushed. Held back on Parsa's word until the Space redesign was on `main`, so the tag includes it. Matches `CITATION.cff` version 1.0.0 (its `date-released` stays 20 Nov 2026, the content's freeze date).
 - **Release:** "v1.0.0: submission" on GitHub, with `replay_bundle.tar.gz` (3,235,909 bytes) attached. The notes say what is in it, how to replay, the sha256 and that no data or weights are included.

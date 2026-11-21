@@ -1,0 +1,20 @@
+# Runs the test suite on every push to main and on every pull request. The tests need no data; tests of the heavier
+# parts (torch, timm, opencv, sentence-transformers, the LLM clients) skip themselves when those are not installed.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pytest -q

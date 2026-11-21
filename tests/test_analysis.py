@@ -167,6 +167,7 @@ def test_retrieval_pairs_and_digit_share():
 
 
 def test_surrogate_design_and_validation_on_synthetic_claims():
+    pytest.importorskip("sklearn")
     from strokecopilot.analysis import surrogate_flags as sf
     rng = np.random.default_rng(0)
     rows = []
@@ -289,6 +290,7 @@ def test_retrieval_tokens_and_rank_fusion():
 
 
 def test_onnx_normalisation_and_parity_counts():
+    pytest.importorskip("torch")
     from strokecopilot.analysis import onnx_export as ox
     from strokecopilot.vision.haemorrhage.aggregate import Calibrator
     img = np.zeros((2, 4, 4, 3), dtype=np.uint8)
@@ -336,6 +338,7 @@ def test_replay_scan_and_unsafe_members(tmp_path):
 
 
 def test_biomedclip_scan_and_calibration_helpers():
+    pytest.importorskip("sklearn")
     import pandas as pd
 
     from strokecopilot.analysis import biomedclip as bc

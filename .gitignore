@@ -54,3 +54,6 @@ flagged/
 
 # The Space build (DEC-32): generated, holds real-case notes by alias
 demo/space/build/
+
+# Course reports (Overleaf is the source of truth; never committed)
+/reports/

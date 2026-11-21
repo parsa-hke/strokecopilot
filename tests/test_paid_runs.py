@@ -25,6 +25,7 @@ def test_cells_follow_the_dec24_matrix():
 
 
 def test_the_small_reasoner_answers_the_dec30_arms_only():
+    pytest.importorskip("openai")
     small = pr.cells(pr.SMALL_MODELS)
     assert small == [(m, a) for m in ("gemma-3-4b", "gemma-3-4b-tuned")
                      for a in ("fixtures_rulebook", "scenarios_rulebook", "real_predicted")]

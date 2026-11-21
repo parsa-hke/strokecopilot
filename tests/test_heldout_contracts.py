@@ -8,6 +8,7 @@ import pytest
 pd = pytest.importorskip("pandas")
 nib = pytest.importorskip("nibabel")
 pytest.importorskip("scipy")
+pytest.importorskip("torch")  # contract/build.py imports the haemorrhage inference module
 
 from strokecopilot.contract import heldout as ho  # noqa: E402
 from strokecopilot.contract.validate import validate_vision_output  # noqa: E402

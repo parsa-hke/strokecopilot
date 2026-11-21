@@ -14,7 +14,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+# Everything `pytest` needs to collect and run the suite without data; tests of the heavier parts (torch, timm,
+# opencv, the LLM clients) skip themselves when those are not installed.
+dev = ["pytest>=7", "numpy", "scipy", "pandas", "matplotlib", "pydicom>=2.3", "nibabel", "fastapi>=0.115", "httpx"]
 rsna = ["numpy", "pandas", "pydicom>=2.3", "opencv-python-headless"]
 isles = ["numpy", "pandas", "openpyxl", "nibabel", "scipy", "matplotlib"]
 corpus = ["pypdf"]  # only for the local copy check

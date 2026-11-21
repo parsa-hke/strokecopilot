@@ -51,6 +51,8 @@ pip install -e ".[dev]"
 pytest
 ```
 
+The `dev` extra installs what the tests need. Tests of the heavier parts (torch, timm, opencv, sentence-transformers, the LLM clients) skip themselves until you install the matching extra; with every extra installed, all tests run.
+
 The extras group what each part needs: `isles` and `rsna` (data and vision), `retrieval`, `llm` (Anthropic and OpenAI-compatible clients), `space` (the demo server), `finetune`, and `analysis` (SHAP, surrogates and t-tests).
 
 **Reproduce the hallucination table without an API key.** The replay bundle holds the saved answers and verifier caches for the fixtures and the 150 synthetic scenarios (no patient data). Download `replay_bundle.tar.gz` from the [release](https://github.com/parsa-hke/strokecopilot/releases) of the submission tag, then:

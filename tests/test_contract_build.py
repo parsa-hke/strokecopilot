@@ -5,6 +5,7 @@ import json
 import pytest
 
 pd = pytest.importorskip("pandas")
+pytest.importorskip("torch")  # contract/build.py imports the haemorrhage inference module
 
 from strokecopilot.contract import build  # noqa: E402
 from strokecopilot.contract.validate import load_vision_output  # noqa: E402

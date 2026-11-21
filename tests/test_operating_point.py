@@ -182,6 +182,7 @@ def test_reasoning_text_is_filled_with_numbers_and_no_ids():
 
 
 def test_one_wilson_for_both_vision_b_checks():
+    pytest.importorskip("cv2")
     from strokecopilot.vision.haemorrhage import isles_check as ic
     from strokecopilot.vision.haemorrhage import stats
     assert op.wilson is stats.wilson and ic.wilson is stats.wilson

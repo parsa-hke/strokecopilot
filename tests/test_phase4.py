@@ -88,6 +88,7 @@ def test_cells_and_sensitivity_arms(tmp_path):
 
 
 def test_colab_pass_import_and_advance(tmp_path):
+    pytest.importorskip("sentence_transformers")
     dirs = fake_dirs(tmp_path)
     colab, mac = tmp_path / "drive_run", tmp_path / "mac_run"
     model = "gemma-3-4b"
@@ -105,6 +106,7 @@ def test_colab_pass_import_and_advance(tmp_path):
 
 
 def test_open_models_wait_for_colab(tmp_path):
+    pytest.importorskip("sentence_transformers")
     dirs = fake_dirs(tmp_path)
     rows = phase4.advance_all(["medgemma-27b-text"], dirs, STEMS, tmp_path / "run", llm_for=lambda m: None,
                               verifier=(None, None))
@@ -112,6 +114,7 @@ def test_open_models_wait_for_colab(tmp_path):
 
 
 def test_analyse_on_finished_cells_only(tmp_path):
+    pytest.importorskip("sentence_transformers")
     dirs = fake_dirs(tmp_path)
     run = tmp_path / "run"
     model = "gemma-3-4b"
