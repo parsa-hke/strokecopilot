@@ -6,7 +6,12 @@
   - Both PDFs matched the local builds. 901: 12 expected sections, 2,998 words. 902: 8 expected sections, 4,097 words. The repository is public, CI green, releases v1.0.1 and v1.0.2 exist, the Space runs.
   - **The two covers count differently:** 901's 2,998 includes 8 inline-maths items (2,990 without); 902's figure does not include its 10. By 901's rule the 902 report stood at 4,107, over the 4,100 cap, before the cut below.
   - **Slides against the 902 report:** slides 8, 9, 10 and 12 still say "upper bounds" (the report dropped it on 22 Nov); slide 12 shows 79 experiments, 38 decisions and 921 tests (now EXP-91, DEC-39, 952 tests); slide 8's "8 of 15" is EXP-79, which the report no longer carries; the slides spell "Mohamed" and "Benny" where the reports say "Mohammed Elzeiny" and "Bin Huang". The Space's pages also still say "upper bounds".
-  - **Small report items, not fixed:** the 901 cover's word-count note breaks after "tables,"; 902 §7.2's "all 18 fixture decisions" (two runs of 9, EXP-9) beside Table 2's 9/9; 901 §8.1's "1.6 mL lower" (the paired figure) beside Table 3's 25.2 and 23.5; 901 links release v1.0.1 and 902 links v1.0.2.
+  - **Small report items, found here and fixed later the same day on Parsa's word** (both reports rebuilt, 17 pages each; `reports/`, gitignored):
+    - the 901 cover's word-count note broke after "tables,"; it now breaks after "TeXcount;";
+    - 901 §8.1 said "1.6 mL lower" beside Table 3's 23.5 and 25.2, which subtract to 1.7. Both are right: the table holds fold means, and the paired difference is over cases (23.51 and 25.14 mL in `runs/EXP-25_nnunet_5fold/metrics.json`). The sentence now says "per-case volume error";
+    - 902 §7.2 said "all 18 fixture decisions" (EXP-9, two runs of 9) beside Table 2's 9/9; it now says "every judged fixture decision";
+    - 901's Section 12 links release v1.0.2, as the 902 report does (same replay bundle);
+    - counts after the fixes: 901 2,999 words by its rule, 902 4,087 by its own.
   - **No research paper** was found in the repository or beside the reports.
 - **DEC-34 amended (Parsa, 23 Nov 2026):** the clinician review is the rulebook and test-case review that the two clinicians answered. Brought in line with it:
   - the 902 report, §6.4's last sentence (`reports/maai902/`, gitignored): now 4,087 words by its own rule (4,097 by 901's), 17 pages; the 901 PDF is unchanged;
@@ -14,7 +19,7 @@
   - **the review itself is unchanged:** `instrument1_rulebook_review.md` and `instrument1_responses.csv` rebuild to the checksums recorded at approval, and the form's 171 items are the same, item for item. `forms_spec.json` and `build_forms.gs` hold that one form, so their checksums are new. The file names, the metrics file and the run folder on the Mac are untouched.
 - **Space:** `static/record.json` and `pkg/.../pipeline/clinician_pack.py` uploaded as one commit (Space 3ce74c0b, from 089f1d56); nothing else on the Space changed, and the project's leak scan passes on a tree built from this commit. Uploading restarts the Space, which resets its daily spend counter.
 - **pytest:** 952 passed (the pack's tests went from 6 to 3).
-- **Open:** the research paper; the slide and small report items above; the team's classification of C03, C04 and C10; Parsa's check of the acknowledgement's wording; the 4,100 approval in writing; `docs/team/README.md` still tells teammates to create a GitHub token; plan §7's Phase 5 lines stay unticked. Git history and the three release tags keep the earlier versions of the edited files.
+- **Open:** the research paper; the slide items above; the team's classification of C03, C04 and C10; Parsa's check of the acknowledgement's wording; the 4,100 approval in writing; `docs/team/README.md` still tells teammates to create a GitHub token; plan §7's Phase 5 lines stay unticked. Git history and the three release tags keep the earlier versions of the edited files.
 - **Notion sync:** Decisions: DEC-34 (amended 23 Nov 2026, Parsa). Experiments: EXP-67 (Done: the review answered and analysed; description to match DEC-34). Tasks: Phase 5 task A (In progress: classification of three disputed conventions).
 
 ## 2026-11-23 — Claude Code session (EXP-67's clinician review into the MAAI901 report)
