@@ -1,4 +1,4 @@
-"""EXP-67, instrument 1 (the rulebook and test-case review): the analysis fixed in `docs/CLINICIAN_PACK.md` §6 before
+"""EXP-67, the rulebook and test-case review: the analysis fixed in `docs/CLINICIAN_PACK.md` §6 before
 any answer came back. Two reviewers, 69 scored items (A01-A47 the passages, B1a-B5b the fixtures' expected answers,
 C01-C12 the rule conventions), each agree / disagree / unsure.
 
@@ -112,7 +112,7 @@ def agreement(r1, r2, part=None, n_boot=N_BOOT, seed=SEED):
 
 
 def summarise(reviewers, titles, n_boot=N_BOOT, seed=SEED):
-    """The whole §6 instrument-1 summary for two reviewers. No name is in it."""
+    """The whole §6 summary for two reviewers. No name is in it."""
     if len(reviewers) != 2:
         raise ValueError(f"The plan is for two reviewers; the file has {len(reviewers)}.")
     r1, r2 = (r["answers"] for r in reviewers)
@@ -137,7 +137,7 @@ def summarise(reviewers, titles, n_boot=N_BOOT, seed=SEED):
 def main(argv=None):
     import argparse
 
-    ap = argparse.ArgumentParser(description="EXP-67, instrument 1: the agreement analysis fixed in the clinician pack")
+    ap = argparse.ArgumentParser(description="EXP-67: the agreement analysis fixed in the clinician pack")
     ap.add_argument("responses")
     ap.add_argument("--out", default="runs/EXP-67_clinician_review")
     args = ap.parse_args(argv)

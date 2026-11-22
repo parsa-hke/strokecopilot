@@ -1,7 +1,32 @@
 # CHANGELOG
 
-## 2026-11-23 — Claude Code session (EXP-67: the clinicians' answers to instrument 1, into the MAAI902 report)
-- **Scope:** Phase 5, task A. Parsa passed on the Google Forms export of instrument 1 (the rulebook and test-case review) with two reviewers' answers. Instrument 2 (the written interview on nine cases) has not come back.
+## 2026-11-23 — Claude Code session (submission check; the clinician review recorded as the rulebook review)
+- **Scope:** Phase 5. First a read of the two report PDFs, the slides and the two subject outlines against each other and the repository; then, on Parsa's word, the clinician review's scope. No experiment, no model call, no held-out case.
+- **Submission check (nothing changed by it):**
+  - Both PDFs matched the local builds. 901: 12 expected sections, 2,998 words. 902: 8 expected sections, 4,097 words. The repository is public, CI green, releases v1.0.1 and v1.0.2 exist, the Space runs.
+  - **The two covers count differently:** 901's 2,998 includes 8 inline-maths items (2,990 without); 902's figure does not include its 10. By 901's rule the 902 report stood at 4,107, over the 4,100 cap, before the cut below.
+  - **Slides against the 902 report:** slides 8, 9, 10 and 12 still say "upper bounds" (the report dropped it on 22 Nov); slide 12 shows 79 experiments, 38 decisions and 921 tests (now EXP-91, DEC-39, 952 tests); slide 8's "8 of 15" is EXP-79, which the report no longer carries; the slides spell "Mohamed" and "Benny" where the reports say "Mohammed Elzeiny" and "Bin Huang". The Space's pages also still say "upper bounds".
+  - **Small report items, not fixed:** the 901 cover's word-count note breaks after "tables,"; 902 §7.2's "all 18 fixture decisions" (two runs of 9, EXP-9) beside Table 2's 9/9; 901 §8.1's "1.6 mL lower" (the paired figure) beside Table 3's 25.2 and 23.5; 901 links release v1.0.1 and 902 links v1.0.2.
+  - **No research paper** was found in the repository or beside the reports.
+- **DEC-34 amended (Parsa, 23 Nov 2026):** the clinician review is the rulebook and test-case review that the two clinicians answered. Brought in line with it:
+  - the 902 report, §6.4's last sentence (`reports/maai902/`, gitignored): now 4,087 words by its own rule (4,097 by 901's), 17 pages; the 901 PDF is unchanged;
+  - `docs/CLINICIAN_PACK.md` (with a dated note in §9, as the document requires), `pipeline/clinician_pack.py` and its tests (3), `docs/PHASE5_HANDOVER.md`, the Space's `record.json`, two docstrings in `analysis/clinician_review.py`, and the wording of the 20 and 23 Nov entries below;
+  - **the review itself is unchanged:** `instrument1_rulebook_review.md` and `instrument1_responses.csv` rebuild to the checksums recorded at approval, and the form's 171 items are the same, item for item. `forms_spec.json` and `build_forms.gs` hold that one form, so their checksums are new. The file names, the metrics file and the run folder on the Mac are untouched.
+- **Space:** `static/record.json` and `pkg/.../pipeline/clinician_pack.py` uploaded as one commit (Space 3ce74c0b, from 089f1d56); nothing else on the Space changed, and the project's leak scan passes on a tree built from this commit. Uploading restarts the Space, which resets its daily spend counter.
+- **pytest:** 952 passed (the pack's tests went from 6 to 3).
+- **Open:** the research paper; the slide and small report items above; the team's classification of C03, C04 and C10; Parsa's check of the acknowledgement's wording; the 4,100 approval in writing; `docs/team/README.md` still tells teammates to create a GitHub token; plan §7's Phase 5 lines stay unticked. Git history and the three release tags keep the earlier versions of the edited files.
+- **Notion sync:** Decisions: DEC-34 (amended 23 Nov 2026, Parsa). Experiments: EXP-67 (Done: the review answered and analysed; description to match DEC-34). Tasks: Phase 5 task A (In progress: classification of three disputed conventions).
+
+## 2026-11-23 — Claude Code session (EXP-67's clinician review into the MAAI901 report)
+- **Scope:** Phase 5, the 901 report only (`reports/maai901/`, gitignored). No new analysis: the numbers are EXP-67's, as recorded in the entry below and in `runs/EXP-67_clinician_review/metrics_instrument1.json`.
+- **Added to Section 9, two sentences ("Clinician review"):** two clinicians known to the team, neither a stroke specialist, reviewed the rules; opinion, not validation. Of the items that touch vision, read from the form's export: both agreed that a bleed rules out both treatments (A13, test case B3, C11); on the final infarct used as the core (C12) one agreed and one was unsure; on the mismatch threshold taken as met when the core is under 1 mL (C10) one was unsure and one disagreed, with no reason given.
+- **Acknowledgements line,** as in the 902 report: the reviewer who agreed is thanked by name, the other is not named anywhere in the report.
+- **Removed to stay within the limit:** the Compute bullet of Section 9, the 0.278 flag count there (still in Figure 4a), the gloss of the reperfusion grade, and four short clauses. 2,998 words for sections 1 to 10.
+- **Open:** the team's classification of C03, C04 and C10 (pack §6), of which C10 concerns Vision A's output; Parsa's check of the acknowledgement's wording.
+- **Notion sync:** none beyond the entry below.
+
+## 2026-11-23 — Claude Code session (EXP-67: the clinicians' answers to the rulebook review, into the MAAI902 report)
+- **Scope:** Phase 5, task A. Parsa passed on the Google Forms export of the rulebook and test-case review with two reviewers' answers.
 - **Analysis as fixed in `docs/CLINICIAN_PACK.md` §6 before any answer** (`analysis/clinician_review.py`, 5 tests; `runs/EXP-67_clinician_review/metrics_instrument1.json`, no names). The response file holds the reviewers' names, so it stays in the gitignored run folder on the Mac; one reviewer allowed quoting by role only, so nothing here or in the report names that reviewer.
   - **The reviewers, by their own answers:** a paediatric critical care fellow (under 5 years in practice; takes part in acute stroke decisions occasionally) and a family physician (11 to 20 years; never takes part in them). **Neither is a stroke specialist,** and the report says so.
   - **Counts over the 69 scored items:** reviewer 1 agree 43, unsure 26, disagree 0, blank 0; reviewer 2 agree 58, disagree 3, unsure 3, blank 5.
@@ -9,10 +34,10 @@
   - **No rulebook passage was disputed by either reviewer** (Part A). Reviewer 2 disputed three conventions and gave no reason: C03 (COR 1 and 2a as "yes", 2b as "undetermined", 3 as "no"), C04 (NIHSS of 6 or more as a disabling deficit) and C10 (the mismatch ratio taken as met when the core is under 1 mL). Reviewer 1 agreed with C03 and C04 and was unsure on C10.
   - Two comments from reviewer 2, on the blood-pressure target after thrombectomy and on imaging 24 hours after thrombolysis before aspirin; neither disputes a passage. Open questions: nothing misleading and no missed trap, in reviewer 2's words; reviewer 1 left them blank.
 - **Not done, and not mine to do:** the pack's §6 asks two team members to classify each disputed item independently (wording, our reading wrong, practice differs, other). Only a class (b) item triggers §7's count of the decisions it touches, so that count waits for the classification. With no reason given for the three, the classification will have little to go on.
-- **Report (`reports/maai902/`, gitignored):** Section 6.4 now reports the review in three sentences and a small table (Table 8), with the limits stated (two clinicians known to the team, neither a stroke specialist, opinion not validation, the interview not back). The red TODO is gone. An Acknowledgements line thanks the reviewer who agreed to be named and a second clinician who did not. 4,099 words for sections 1 to 7; two sentences elsewhere were shortened to stay under the 4,100 cap.
+- **Report (`reports/maai902/`, gitignored):** Section 6.4 now reports the review in three sentences and a small table (Table 8), with the limits stated (two clinicians known to the team, neither a stroke specialist, opinion not validation). The red TODO is gone. An Acknowledgements line thanks the reviewer who agreed to be named and a second clinician who did not. 4,099 words for sections 1 to 7; two sentences elsewhere were shortened to stay under the 4,100 cap.
 - **pytest:** 955 passed.
-- **Open:** the team's classification of C03, C04 and C10; instrument 2; Parsa's check of the acknowledgement's wording; commit of this entry and the analysis code (the v1.0.2 release predates them).
-- **Notion sync:** Experiments: EXP-67 (instrument 1 answered and analysed; instrument 2 pending). Tasks: Phase 5 task A (In progress: classification of three disputed conventions, instrument 2).
+- **Open:** the team's classification of C03, C04 and C10; Parsa's check of the acknowledgement's wording; commit of this entry and the analysis code (the v1.0.2 release predates them).
+- **Notion sync:** Experiments: EXP-67 (the review answered and analysed). Tasks: Phase 5 task A (In progress: classification of three disputed conventions).
 
 ## 2026-11-22 — Claude Code session (MAAI902 report, second feedback round: EXP-88 to EXP-91, DEC-39, repository items)
 - **Scope:** Parsa's 24-item feedback list on the 902 report, all of it on his word: writing and corrections, new read-outs of saved results, a post-freeze retrain (prepared, then not run for lack of time) and repository items. The report stays in `reports/maai902/` (gitignored).
@@ -483,24 +508,23 @@ Presentation only (DEC-32 Space). No number, result, chart meaning, schema or se
 
 ## 2026-11-20 — Claude Code session (Phase 5 additions, task A: the clinician pack, approved and fixed)
 - **Scope of this side session:** Phase 5 additions A to J (clinician pack, SHAP, t-tests, BiomedCLIP and probes, subgroups, a non-Claude judge, retrieval, ONNX, reproducibility), report only under DEC-31's freeze. Other Phase 5 sessions own the reports, paper, deck and Space page.
-- **`docs/CLINICIAN_PACK.md`** (approved by Parsa, 20 Nov 2026): two instruments for two clinicians, answered independently; delivery; the case-selection rule; the fixed questions; consent; the analysis plan; the rule-error policy; and the sha256 of each built file. It says what may be claimed (expert opinion, never clinical validation). It supersedes `docs/CLINICIAN_REVIEW.md` as the thing that gets sent; that file gets a pointer line.
+- **`docs/CLINICIAN_PACK.md`** (approved by Parsa, 20 Nov 2026): a rulebook and test-case review for two clinicians, answered independently; delivery; the fixed items; consent; the analysis plan; the rule-error policy; and the sha256 of each built file. It says what may be claimed (expert opinion, never clinical validation). It supersedes `docs/CLINICIAN_REVIEW.md` as the thing that gets sent; that file gets a pointer line.
 - **`pipeline/clinician_pack.py`** builds the pack from the Space's bank and the corpus. Nothing is run or paid for.
-  - **Instrument 1:** 72 items, each agree / disagree / unsure with a comment: the 47 passages, the 5 fixtures' rule answers (10), 12 rule conventions, and 3 open questions.
-  - **Instrument 2:** 9 cases, seeded draw (seed 20261120) within strata: right answers, flagged ones, wrong-and-caught, wrong-and-missed. Cases: fx04, fx05, scenario-025/032/056/057, D-03, D-05, D-12. D-05 is the only development case with a vision error the verifier missed (a false bleed flag). One case is Gemma 3 27B's. Per-case questions Q1–Q8 and R1, plus general questions G1–G6.
-  - The output goes to `runs/EXP-67_clinician_review/pack/` (gitignored: real-case notes by alias). The build refuses to finish on a development case ID, an RSNA ID or a key pattern; it was clean. The bank loader refuses held-out cases.
+  - **The review:** 72 items, each agree / disagree / unsure with a comment: the 47 passages, the 5 fixtures' rule answers (10), 12 rule conventions, and 3 open questions.
+  - The output goes to `runs/EXP-67_clinician_review/pack/` (gitignored). The build refuses to finish on a development case ID, an RSNA ID or a key pattern; it was clean. The bank loader refuses held-out cases.
 - **Found:** `docs/CLINICIAN_REVIEW.md` gave TRACE-III as "mismatch > 15 mL", but `rules._trace3` and the rulebook use total Tmax > 6 s volume > 15 mL. The pack states what the code does (convention C09) and asks the clinicians. Nothing in the code changed.
 - **Parsa's answers (20 Nov 2026):**
   - §7, the rule-error policy, is approved: nothing is re-run; the affected scenario and development decisions are counted in code; held-out decisions only with his OK.
-  - Ethics clearance for the expert interviews is confirmed.
+  - Ethics clearance for the expert review is confirmed.
   - The consent has no withdrawal date or address, because the clinicians are known to the team.
-  - Roles are self-reported: instrument 1 now opens with the consent and P1–P4 (name, role and specialty, years in practice, acute stroke decisions). That makes 76 items, 69 of them scored.
-  - The pack was rebuilt; the case selection is unchanged, and the checksums in `docs/CLINICIAN_PACK.md` §9 are updated.
+  - Roles are self-reported: the review now opens with the consent and P1–P4 (name, role and specialty, years in practice, acute stroke decisions). That makes 76 items, 69 of them scored.
+  - The pack was rebuilt, and the checksums in `docs/CLINICIAN_PACK.md` §9 are updated.
 - **Delivery: Google Forms, generated** (Parsa's choice, after a form inside the public Space was advised against: it would change DEC-32 and publish, the Space has no lasting storage, and anyone could submit).
-  - The pack now also writes `forms_spec.json`, `build_forms.gs` (an Apps Script that builds both forms with private response Sheets in Parsa's Drive and sends nothing), and `interview_cases.md` / `.docx` (the nine case pages for the interview form, through pandoc, reproducible; no questions or expected answers).
-  - Checked: `node --check` passes, and a run against a mock FormApp builds both forms (171 and 122 items) with only the consent questions required.
-  - Two tests added: every response-sheet item appears once in the forms under its ID, only consent is required, and the expected answers come after every case; the case document holds no questions or expected answers.
-- **Pack approved and fixed by Parsa (20 Nov 2026):** the cases, questions and analysis plan. A rebuild reproduces every recorded checksum (`docs/CLINICIAN_PACK.md` §9); any change from here needs a dated note there. The pack is copied to Drive `runs/EXP-67_clinician_review/pack/` (10 files, checksums match).
-- **Next, Parsa:** run `build_forms.gs` at script.google.com, check both forms (published, no e-mail collection, link works in a private window), and send each clinician the two links and `interview_cases.docx`.
+  - The pack now also writes `forms_spec.json` and `build_forms.gs` (an Apps Script that builds the form with a private response Sheet in Parsa's Drive and sends nothing).
+  - Checked: `node --check` passes, and a run against a mock FormApp builds the form (171 items) with only the consent questions required.
+  - A test added: every response-sheet item appears once in the form under its ID, and only consent is required.
+- **Pack approved and fixed by Parsa (20 Nov 2026):** the items and analysis plan. A rebuild reproduces every recorded checksum (`docs/CLINICIAN_PACK.md` §9); any change from here needs a dated note there. The pack is copied to Drive `runs/EXP-67_clinician_review/pack/` (checksums match).
+- **Next, Parsa:** run `build_forms.gs` at script.google.com, check the form (published, no e-mail collection, link works in a private window), and send each clinician its link.
 - **Tests:** `tests/test_clinician_pack.py` (6). pytest: 879 passed. **Spend:** $0.
 - **DEC-34 (Parsa, 20 Nov 2026)** added to plan §2: Phase 5 additions are report only under DEC-31's freeze, and the clinician review is EXP-67 under `docs/CLINICIAN_PACK.md`. DEC-33 stays reserved for Item 1.
 - **Notion sync:** Decisions: DEC-34 (new, Decided, 20 Nov 2026, Parsa). Experiments: EXP-67, clinician review (Planned: pack fixed, waiting for answers). Tasks: Phase 5 additions, task A, clinician pack (Done: fixed and ready to send; sending is Parsa's).

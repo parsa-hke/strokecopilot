@@ -1,4 +1,4 @@
-"""EXP-67, instrument 1: the agreement analysis of the clinician pack (§6), on a made-up response file."""
+"""EXP-67: the agreement analysis of the clinician pack (§6), on a made-up response file."""
 
 import csv
 

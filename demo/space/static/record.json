@@ -2277,13 +2277,13 @@
     {
       "id": "clinician",
       "title": "Clinician review",
-      "summary": "Two clinicians are to review the rulebook and test cases and give written opinions on nine of the system's answers, each working independently (DEC-34). The pack is fixed and approved but had not been sent when this record was compiled, so there are no answers. Whatever they say will be expert opinion from two people, never clinical validation.",
+      "summary": "Two clinicians are to review the rulebook and test cases, each working independently (DEC-34). The pack is fixed and approved but had not been sent when this record was compiled, so there are no answers. Whatever they say will be expert opinion from two people, never clinical validation.",
       "experiments": [
         {
           "id": "EXP-67",
           "title": "Clinician review pack",
-          "asked": "Do two clinicians agree that the rulebook reads the guideline correctly, and how do they judge the system's answers?",
-          "method": "Two instruments answered independently: a 76-item rulebook and test-case review (69 scored items) and a written interview on nine cases chosen by a seeded rule over fixed strata (right, flagged, wrong-and-caught, wrong-and-missed). Agreement will be reported as percent agreement, Cohen's κ and PABAK.",
+          "asked": "Do two clinicians agree that the rulebook reads the guideline correctly?",
+          "method": "A 76-item rulebook and test-case review (69 scored items), answered independently. Agreement will be reported as percent agreement, Cohen's κ and PABAK.",
           "result": "",
           "numbers": [
             {
@@ -2293,10 +2293,6 @@
             {
               "label": "Scored items",
               "value": "69"
-            },
-            {
-              "label": "Interview cases",
-              "value": "nine"
             }
           ],
           "status": "planned",
@@ -2478,7 +2474,7 @@
     {
       "id": "DEC-34",
       "title": "Phase 5 additions are report only",
-      "text": "Phase 5 additions are report only; DEC-31's freeze holds (nothing retrained, nothing feeds the contract, the pipeline or the Space). The first is the clinician review (EXP-67): two clinicians, two instruments answered independently. Their answers are expert opinion, never clinical validation."
+      "text": "Phase 5 additions are report only; DEC-31's freeze holds (nothing retrained, nothing feeds the contract, the pipeline or the Space). The first is the clinician review (EXP-67): two clinicians, a rulebook and test-case review answered independently. Their answers are expert opinion, never clinical validation."
     },
     {
       "id": "DEC-35",

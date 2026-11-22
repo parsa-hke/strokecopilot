@@ -1,61 +1,27 @@
-"""The clinician pack (Phase 5, task A): two instruments for two clinicians, fixed before anything is sent.
+"""The clinician pack (Phase 5, task A): the rulebook and test-case review for two clinicians, fixed before it is sent.
 
-Instrument 1, rulebook and fixture review: every rulebook passage, every fixture decision and every rule convention the
-code uses, each answered agree / disagree / unsure with a comment. The two clinicians answer independently, so their
-agreement can be reported (docs/CLINICIAN_PACK.md §6).
+Every rulebook passage, every fixture decision and every rule convention the code uses, each answered agree / disagree /
+unsure with a comment. The two clinicians answer independently, so their agreement can be reported
+(docs/CLINICIAN_PACK.md §6). Only the fixtures of the Space's bank are shown; held-out cases are never used, and the
+bank loader refuses one.
 
-Instrument 2, written interview: a fixed set of cases, chosen here by a seeded rule over strata (below), each shown with
-the reasoner's answer and the verifier's flags, then fixed questions. The selection rule, the seed and the questions are
-written down before anything is sent, so nobody can say the cases were picked to flatter the system.
-
-Case strata for instrument 2 (all from saved answers in the Space's bank; nothing is run):
-- F: 2 of the 5 fixtures, Sonnet 5.5;
-- S1: a scenario where Sonnet agrees with the rules on every determined decision and the verifier flags nothing;
-- S2: a scenario where Sonnet agrees with the rules and the verifier flags at least one claim;
-- S3: a scenario where Sonnet's decision differs from the rules;
-- D1, D2: development real cases on predicted vision, Sonnet; one without and one with a bleed flag in the contract;
-- V: a development case with a vision error the verifier missed (DEC-31 D3's definitions: the rules on the predicted
-  contract already disagree with the truth, Sonnet's answer is wrong against the truth, and no claim of that decision is
-  flagged);
-- M: a scenario where Gemma 3 27B's decision differs from the rules and the verifier caught it (a flagged claim of that
-  decision), so the clinicians also see a weaker open model and a caught error.
-Held-out cases are never used. Real development cases appear only by their Space alias (D-xx).
-
-Output (`write`): the two instruments as Markdown (the record), a response sheet per instrument as CSV, the selection
-with its pool sizes, and the Google Forms route chosen by Parsa (20 Nov 2026): `forms_spec.json`, `build_forms.gs` (an
-Apps Script that builds both forms from it) and `interview_cases.md` / `.docx` (the case pages the interview form points
-to, without questions or expected answers). A manifest records the sha256 of every file. Instrument 2 holds generated notes of real cases, so
-the output goes to a gitignored run folder, never to docs/.
+Output (`write`): the review as Markdown (the record), its response sheet as CSV, and the Google Forms route chosen by
+Parsa (20 Nov 2026): `forms_spec.json` and `build_forms.gs` (an Apps Script that builds the form from it). A manifest
+records the sha256 of every file. The output goes to a gitignored run folder, never to docs/.
 """
 
 import csv
 import hashlib
 import json
-import random
 from pathlib import Path
 
 from strokecopilot.config import CORPUS_DIR
 from strokecopilot.pipeline import heldout_analysis as ha
 
-SEED = 20261120
-SPACE_URL = "https://huggingface.co/spaces/parsa-hke/stroke-copilot"
-SONNET = "claude-sonnet-5-5"
-OTHER_MODEL = "gemma-3-27b"
-MODEL_NAMES = {SONNET: "Claude Sonnet 5.5", OTHER_MODEL: "Gemma 3 27B"}
 DECISIONS = ha.DECISIONS
 DISCLAIMER = ("Research prototype, not for clinical use. Your answers are expert opinion on a student research project. "
               "They are not a clinical validation, and we will not describe them as one.")
 RESPONSES = ("agree", "disagree", "unsure")
-SUBTYPE_WORDS = {
-    "wrong_number": "wrong number",
-    "invented_finding": "finding or fact with no source in the inputs",
-    "wrong_rule": "rule not stated in the rulebook",
-    "misapplied_rule": "rule applied outside its scope",
-    "faulty_derivation": "wrong calculation or comparison",
-    "uncited_rule": "true rule, but no rulebook passage cited",
-    "misattributed_source": "true, but the cited source does not support it",
-}
-
 # The conventions of nlp/verifier/rules.py (its docstring) and the stand-ins the evaluation rests on, in plain words.
 CONVENTIONS = (
     "Time windows count from symptom onset, or from last known well when onset was not witnessed. The guideline counts "
@@ -97,31 +63,6 @@ OPEN_QUESTIONS_1 = (
     "Anything else we should know?",
 )
 
-# Instrument 2's questions. Ratings use a five-point scale; Q6 and the general questions are as written.
-LIKERT = ("strongly disagree", "disagree", "neither", "agree", "strongly agree")
-CASE_QUESTIONS = (
-    ("Q1", "likert", "The thrombolysis recommendation is appropriate, given the information shown."),
-    ("Q2", "likert", "The thrombectomy recommendation is appropriate, given the information shown."),
-    ("Q3", "likert", "The rationale explains the recommendation in a way a clinician could check."),
-    ("Q4", "likert", "The uncertainties listed are the ones that matter for this patient."),
-    ("Q5", "likert_na", "The verifier's flags point to real problems in the answer (N/A if nothing was flagged)."),
-    ("Q6", "choice", "Did you notice a claim that is wrong or misleading but was not flagged? If yes, which?"),
-    ("Q7", "choice", "If this answer reached you in practice, you would: ignore it / use it only after checking every "
-                     "claim / use it after checking the flagged claims / rely on it."),
-    ("Q8", "open", "What, if anything, is wrong, missing or misleading here? What would you have recommended?"),
-)
-REVEAL_QUESTION = ("R1", "choice", "Having seen it, do you agree with our expected answer for this case? "
-                                   "(agree / disagree / unsure, with a comment)")
-GENERAL_QUESTIONS = (
-    ("G1", "likert_open", "A tool like this would be useful in acute stroke care. Where in the pathway, if anywhere?"),
-    ("G2", "open", "Under what conditions would you trust its recommendation, and when would you never?"),
-    ("G3", "open", "Does the claim-by-claim check with flagged claims help you, or does it add noise?"),
-    ("G4", "open", "On real acute-stroke scans, our imaging model flags about half as possible bleeds, almost all false "
-                   "alarms. How should a tool like this present an uncertain bleed finding?"),
-    ("G5", "open", "Which failure, seen here or imagined, worries you most?"),
-    ("G6", "open", "Anything else?"),
-)
-
 CONSENT = (
     "Taking part is voluntary, and you may skip any question. We will use your answers in three university "
     "assessments of the MAAI 901/902 group project at UOWD (two course reports and one research paper). We keep your "
@@ -135,7 +76,7 @@ CONSENT = (
     "May we thank you by name in the acknowledgements? [ ] yes [ ] no"
 )
 
-# Asked once, in instrument 1, so the report can describe the reviewers in their own words.
+# Asked at the start, so the report can describe the reviewers in their own words.
 ABOUT_YOU = (
     ("P1", "Your name (kept private unless you allow it above)."),
     ("P2", "Your current role and specialty (for example consultant neurologist, emergency physician, "
@@ -166,92 +107,34 @@ def load_bank(bank_dir):
     return cases
 
 
-# --------------------------------------------------------------------------------------- Case strata
+# ------------------------------------------------------------------------------------------ The review
 
-def _arm(case):
-    return case["arms"]["predicted"] if case["kind"] == "development" else case["arms"]["rulebook"]
-
-
-def _answer(case, model):
-    a = _arm(case)["answers"].get(model)
-    return a if a and a.get("available") else None
+def _quote(text):
+    return ["> " + line if line else ">" for line in text.strip().splitlines()]
 
 
-def _disagrees(answer):
-    """Decisions where the answer differs from a determined rule decision on the contract it was given."""
-    return [d for d, v in answer["decisions"].items() if v.get("rulebook") is not None and not v["agrees"]]
+def _fmt(x, unit=""):
+    if x is None:
+        return "not available"
+    return f"{x:g}{unit}" if isinstance(x, (int, float)) else str(x)
 
 
-def _caught(answer, decision):
-    return ha._flagged(answer["claims"], decision)[0]
+def _vision_table(v):
+    h = v["haemorrhage"]
+    rows = [
+        ("Haemorrhage on plain CT", f"{'yes' if h['present'] else 'no'} (model probability {h['confidence']:.2f})"),
+        ("Core (mL)", _fmt(v.get("core_ml"))),
+        ("Tmax > 6 s, core included (mL)", _fmt(v.get("penumbra_ml"))),
+        ("Mismatch ratio", _fmt(v.get("mismatch_ratio"))),
+        ("Mismatch volume (mL)", _fmt(v.get("mismatch_volume_ml"))),
+        ("Occlusion site", _fmt(v.get("occlusion_site"))),
+        ("ASPECTS", _fmt(v.get("aspects"))),
+        ("Confidence in the core volume (0-1)", _fmt((v.get("confidence") or {}).get("core"))),
+        ("Perfusion data quality (0-1)", _fmt((v.get("confidence") or {}).get("penumbra"))),
+        ("Warnings", "; ".join(v.get("warnings") or []) or "none"),
+    ]
+    return ["| Imaging finding | Value |", "|---|---|", *[f"| {a} | {b} |" for a, b in rows]]
 
-
-def _vision_errors_missed(case, model=SONNET):
-    """D3: decisions where rules(predicted) != truth, the answer != truth, and no claim of the decision is flagged."""
-    a = _answer(case, model)
-    if a is None:
-        return []
-    pred, truth = case["arms"]["predicted"]["rules"], case["arms"]["groundtruth"]["rules"]
-    out = []
-    for d in DECISIONS:
-        t = ha.WORD[truth[d]["value"]]
-        if t is None or ha.WORD[pred[d]["value"]] == t:
-            continue
-        if a["recommendation"][d]["recommend"] != t and not _caught(a, d):
-            out.append(d)
-    return out
-
-
-def pools(cases):
-    """{stratum: sorted aliases} (see the module docstring)."""
-    p = {k: [] for k in ("F", "S1", "S2", "S3", "D1", "D2", "V", "M")}
-    for alias, case in sorted(cases.items()):
-        kind, s = case["kind"], _answer(case, SONNET)
-        if kind == "fixture" and s:
-            p["F"].append(alias)
-        elif kind == "scenario":
-            if s:
-                if _disagrees(s):
-                    p["S3"].append(alias)
-                elif s["counts"]["flagged"] == 0:
-                    p["S1"].append(alias)
-                else:
-                    p["S2"].append(alias)
-            g = _answer(case, OTHER_MODEL)
-            if g and any(_caught(g, d) for d in _disagrees(g)):
-                p["M"].append(alias)
-        elif kind == "development" and s:
-            if _vision_errors_missed(case):
-                p["V"].append(alias)
-            else:
-                bleed = case["arms"]["predicted"]["vision"]["haemorrhage"]["present"]
-                p["D2" if bleed else "D1"].append(alias)
-    return p
-
-
-PLAN = (("F", 2, SONNET), ("S1", 1, SONNET), ("S2", 1, SONNET), ("S3", 1, SONNET), ("D1", 1, SONNET),
-        ("D2", 1, SONNET), ("V", 1, SONNET), ("M", 1, OTHER_MODEL))
-
-
-def select(cases, seed=SEED):
-    """The fixed selection: [{"n", "alias", "stratum", "model"}] in a seeded order, plus the pool sizes."""
-    rng = random.Random(seed)
-    p = pools(cases)
-    chosen, used = [], set()
-    for stratum, k, model in PLAN:
-        pool = [a for a in p[stratum] if a not in used]
-        if len(pool) < k:
-            raise ValueError(f"stratum {stratum} has {len(pool)} cases, needs {k}")
-        for alias in rng.sample(pool, k):
-            chosen.append({"alias": alias, "stratum": stratum, "model": model})
-            used.add(alias)
-    rng.shuffle(chosen)
-    for i, c in enumerate(chosen, 1):
-        c["n"] = i
-    return chosen, {k: len(v) for k, v in p.items()}
-
-
-# ---------------------------------------------------------------------------------------- Instrument 1
 
 def _tick(item_id):
     return f"**{item_id}** [ ] Agree [ ] Disagree [ ] Unsure / outside my practice. Comment:"
@@ -321,194 +204,6 @@ def instrument1(passages, cases):
     return "\n".join(L), rows
 
 
-# ---------------------------------------------------------------------------------------- Instrument 2
-
-def _quote(text):
-    return ["> " + line if line else ">" for line in text.strip().splitlines()]
-
-
-def _fmt(x, unit=""):
-    if x is None:
-        return "not available"
-    return f"{x:g}{unit}" if isinstance(x, (int, float)) else str(x)
-
-
-def _vision_table(v):
-    h = v["haemorrhage"]
-    rows = [
-        ("Haemorrhage on plain CT", f"{'yes' if h['present'] else 'no'} (model probability {h['confidence']:.2f})"),
-        ("Core (mL)", _fmt(v.get("core_ml"))),
-        ("Tmax > 6 s, core included (mL)", _fmt(v.get("penumbra_ml"))),
-        ("Mismatch ratio", _fmt(v.get("mismatch_ratio"))),
-        ("Mismatch volume (mL)", _fmt(v.get("mismatch_volume_ml"))),
-        ("Occlusion site", _fmt(v.get("occlusion_site"))),
-        ("ASPECTS", _fmt(v.get("aspects"))),
-        ("Confidence in the core volume (0-1)", _fmt((v.get("confidence") or {}).get("core"))),
-        ("Perfusion data quality (0-1)", _fmt((v.get("confidence") or {}).get("penumbra"))),
-        ("Warnings", "; ".join(v.get("warnings") or []) or "none"),
-    ]
-    return ["| Imaging finding | Value |", "|---|---|", *[f"| {a} | {b} |" for a, b in rows]]
-
-
-def _source(s):
-    if s["type"] == "vision":
-        return f"imaging: {s['field']}"
-    if s["type"] == "note":
-        return f"note: \"{s.get('quote', '')}\""
-    if s["type"] == "passage":
-        return f"rulebook: {s.get('id')}"
-    return s["type"]
-
-
-def _answer_lines(answer):
-    rec = answer["recommendation"]
-    L = ["**Recommendation**", ""]
-    for d in DECISIONS:
-        r = rec[d]
-        L.append(f"- **{d.capitalize()}: {'recommended' if r['recommend'] else 'not recommended'}.** "
-                 f"Rules cited: {', '.join(r.get('rule_ids') or []) or 'none'}.")
-        for b in r.get("blocking_factors") or []:
-            L.append(f"  - Reason against: {b}")
-    L += ["", "**Rationale**", ""]
-    for k, e in enumerate(rec.get("rationale") or [], 1):
-        src = "; ".join(_source(s) for s in e.get("sources") or []) or "no source given"
-        L.append(f"{k}. {e['claim']} *[{src}]*")
-    L += ["", "**Uncertainties named by the model**", ""]
-    L += [f"- {u}" for u in rec.get("uncertainties") or []] or ["- none"]
-    claims = answer["claims"]
-    flagged = [c for c in claims if c.get("flagged")]
-    L += ["", f"**Verifier:** {len(claims)} claims checked, {len(flagged)} flagged.", ""]
-    for c in flagged:
-        crit = {True: "yes", False: "no"}.get(c.get("critical"), "cannot tell")
-        L.append(f"- Flagged: \"{c['text']}\". Problem: {SUBTYPE_WORDS.get(c['subtype'], c['subtype'])}. "
-                 f"Would change a decision if believed: {crit}. Verifier's reason: {c.get('reason', '')}")
-    return L, sorted({i for d in DECISIONS for i in rec[d].get("rule_ids") or []}
-                     | {s.get("id") for e in rec.get("rationale") or [] for s in e.get("sources") or []
-                        if s["type"] == "passage" and s.get("id")})
-
-
-KIND_WORDS = {"fixture": "an invented test case with a hand-written note",
-              "scenario": "an invented test case with a generated note",
-              "development": "a real ISLES'24 case (de-identified, CC BY-NC-SA 4.0) with imaging read by our models and "
-                             "a note generated from its clinical record"}
-
-
-def _question_lines(qs, case_n):
-    L = []
-    for qid, kind, text in qs:
-        if kind.startswith("likert"):
-            scale = " ".join(f"[ ] {x}" for x in LIKERT) + (" [ ] N/A" if kind == "likert_na" else "")
-            L += [f"**{case_n}{qid}.** {text}", "", scale, ""]
-            if kind == "likert_open":
-                L += ["Comment:", ""]
-        else:
-            L += [f"**{case_n}{qid}.** {text}", "", "Answer:", ""]
-    return L
-
-
-def _reveal_lines(case, n):
-    return _reveal_body(case, n) + [""] + _question_lines((REVEAL_QUESTION,), f"{n}") + [""]
-
-
-def _reveal_body(case, n):
-    if case["kind"] == "development":
-        pred, gt = case["arms"]["predicted"], case["arms"]["groundtruth"]
-        diffs = ha.contract_differences(pred["vision"], gt["vision"])
-        L = [f"**Case {n}.** Our expected answer uses the reference follow-up imaging, not the models' reading: "
-             f"core {_fmt(gt['vision']['core_ml'])} mL against {_fmt(pred['vision']['core_ml'])} mL read by our model, "
-             f"and no bleed presumed, because every ISLES'24 patient went on to reperfusion treatment (the model said "
-             f"{'bleed' if pred['vision']['haemorrhage']['present'] else 'no bleed'}). Differences that matter for "
-             f"the rules: {', '.join(diffs) or 'none'}.", ""]
-        for d in DECISIONS:
-            L.append(f"- {d.capitalize()}: expected **{gt['rules'][d]['value']}** "
-                     f"({gt['rules'][d]['reason'].rstrip('.')}). "
-                     f"On the models' reading the rules give {pred['rules'][d]['value']}.")
-    else:
-        L = [f"**Case {n}.**", ""]
-        for d in DECISIONS:
-            r = case["index"]["rules"][d]
-            L.append(f"- {d.capitalize()}: expected **{r['value']}** ({r['reason'].rstrip('.')}).")
-    return L
-
-
-def instrument2(cases, chosen, passages):
-    """(markdown, rows) for the written interview."""
-    by_id = {p["id"]: p for p in passages}
-    rows, cited = [], set()
-    L = ["# Stroke Decision Copilot: written interview", "", f"*{DISCLAIMER}*", "",
-         "## Before you start", "",
-         f"You will see {len(chosen)} cases. For each one: the imaging findings our models produced, the triage note, "
-         "the language model's recommendation with its rationale, and what our verifier flagged. Please answer the "
-         "questions after each case before reading on. Our expected answers are at the end; please read them only "
-         "after all the cases. Answer on your own, without discussing it with the other reviewer. About 60-90 minutes.",
-         "",
-         f"Each case can also be opened on our demo page, {SPACE_URL}: go to the case explorer, type the case's code "
-         "into the search box, and choose the model named for the case. The demo shows the same saved answer.",
-         "",
-         "Volumes are in mL; \"Tmax > 6 s\" is the whole hypoperfused volume, core included. Rulebook passages are "
-         "cited by ID, and the passages cited in these cases are printed at the end.", "",
-         "## Consent", "", CONSENT, ""]
-    for c in chosen:
-        n = c["n"]
-        lines, ids = _case_lines(cases[c["alias"]], c)
-        cited |= set(ids)
-        L += lines + ["", "### Your view", ""] + _question_lines(CASE_QUESTIONS, f"{n}") + [""]
-        for qid, _, text in CASE_QUESTIONS:
-            rows.append({"case": n, "alias": c["alias"], "question_id": f"{n}{qid}", "question": text})
-    L += ["## General questions", ""] + _question_lines(GENERAL_QUESTIONS, "")
-    rows += [{"case": "", "alias": "", "question_id": qid, "question": text} for qid, _, text in GENERAL_QUESTIONS]
-    L += ["## Our expected answers (read after all the cases)", "",
-          "Our expected answers come from the rules you can review in the other document, applied in code. For real "
-          "cases they use the reference follow-up imaging. \"Undetermined\" means the rules cannot decide from the "
-          "inputs, and the case is left out of our accuracy figures.", ""]
-    for c in chosen:
-        L += _reveal_lines(cases[c["alias"]], c["n"])
-        rows.append({"case": c["n"], "alias": c["alias"], "question_id": f"{c['n']}R1",
-                     "question": REVEAL_QUESTION[2]})
-    L += _cited_lines(cited, by_id) + ["---", "", f"*{DISCLAIMER}*", ""]
-    return "\n".join(L), rows
-
-
-def _case_lines(case, c):
-    """(markdown lines, cited passage IDs) for one interview case: inputs, the answer and the verifier's flags."""
-    arm = _arm(case)
-    L = [f"## Case {c['n']} (code {c['alias']})", "",
-         f"This is {KIND_WORDS[case['kind']]}. Answer by {MODEL_NAMES[c['model']]}.", "",
-         *_vision_table(arm["vision"]), "", "**Triage note**", "", *_quote(arm["note"]), ""]
-    lines, ids = _answer_lines(_answer(case, c["model"]))
-    return L + lines, ids
-
-
-def _cited_lines(cited, by_id):
-    L = ["## Rulebook passages cited in these cases", ""]
-    for pid in sorted(cited):
-        p = by_id.get(pid)
-        L += [f"**{pid}** ({p['pointer']}, p. {p['page']}): {p['text']}" if p else
-              f"**{pid}**: not a passage in our rulebook (a citation error by the model).", ""]
-    return L
-
-
-def case_document(cases, chosen, passages):
-    """The interview's case pages for the Google Form route: inputs, answers and flags, with no questions and no
-    expected answers (the form shows those only after the cases)."""
-    by_id = {p["id"]: p for p in passages}
-    cited = set()
-    L = ["# Stroke Decision Copilot: interview cases", "", f"*{DISCLAIMER}*", "",
-         f"These are the {len(chosen)} cases for the interview form. Read each case here, then answer its section of the "
-         "form before going on to the next. For each case: the imaging findings our models produced, the triage note, "
-         "the language model's recommendation with its rationale, and what our verifier flagged.", "",
-         f"Each case can also be opened on our demo page, {SPACE_URL}: go to the case explorer, type the case's code "
-         "into the search box, and choose the model named for the case.", "",
-         "Volumes are in mL; \"Tmax > 6 s\" is the whole hypoperfused volume, core included. The rulebook passages cited "
-         "in these cases are printed at the end.", ""]
-    for c in chosen:
-        lines, ids = _case_lines(cases[c["alias"]], c)
-        cited |= set(ids)
-        L += lines + [""]
-    L += _cited_lines(cited, by_id) + ["---", "", f"*{DISCLAIMER}*", ""]
-    return "\n".join(L)
-
-
 # ------------------------------------------------------------------------------------- Google Forms
 
 CONSENT_FORM = CONSENT.split("\n\n")[0]
@@ -516,14 +211,8 @@ QUOTE_CHOICES = ("By name and role", "By role only", "Do not quote me; summarise
 CHOICES = {
     "P3": ("Under 5", "5-10", "11-20", "Over 20"),
     "P4": ("Never", "Occasionally", "Regularly"),
-    "Q7": ("Ignore it", "Use it only after checking every claim", "Use it after checking the flagged claims",
-           "Rely on it"),
 }
 RESPONSE_WORDS = ("Agree", "Disagree", "Unsure / outside my practice")
-
-
-def _plain(lines):
-    return "\n".join(x.replace("**", "").replace("> ", "").rstrip(">") for x in lines).strip()
 
 
 def _vision_plain(v):
@@ -544,9 +233,9 @@ def _rated(item_id, title, help_text=""):
             {"type": "paragraph", "title": f"{item_id} comment (optional)"}]
 
 
-def form_spec(passages, cases, chosen):
-    """Both forms as data: {"forms": [{title, description, confirmation, items}]}. Every item of the two response
-    sheets appears once, its title starting with its ID; nothing is required beyond consent (anything may be skipped).
+def form_spec(passages, cases):
+    """The form as data: {"forms": [{title, description, confirmation, items}]}. Every item of the response sheet
+    appears once, its title starting with its ID; nothing is required beyond consent (anything may be skipped).
     Item types: page, header, mc, checkbox, text, paragraph."""
     confirmation = f"Thank you. Your answers are saved. {DISCLAIMER}"
     f1 = _consent_items() + [{"type": "page", "title": "About you"}]
@@ -582,59 +271,19 @@ def form_spec(passages, cases, chosen):
     f1.append({"type": "page", "title": "Part D. Open questions"})
     f1 += [{"type": "paragraph", "title": f"D{k}. {q}"} for k, q in enumerate(OPEN_QUESTIONS_1, 1)]
 
-    f2 = _consent_items()
-    f2.append({"type": "page", "title": "Before you start",
-               "help": f"You will see {len(chosen)} cases, in the case document we sent with this form. Read each case "
-                       "there, then answer its section here before going on. Our expected answers come at the end of "
-                       "this form, after all the cases. Answer on your own, without discussing it with the other "
-                       f"reviewer. About 60-90 minutes. The cases can also be opened on {SPACE_URL}."})
-    for c in chosen:
-        n = c["n"]
-        f2.append({"type": "page", "title": f"Case {n} (code {c['alias']})",
-                   "help": f"Read Case {n} in the case document (answer by {MODEL_NAMES[c['model']]}), then answer."})
-        for qid, kind, text in CASE_QUESTIONS:
-            title = f"{n}{qid}. {text}"
-            if kind.startswith("likert"):
-                choices = list(LIKERT) + (["N/A, nothing was flagged"] if kind == "likert_na" else [])
-                f2.append({"type": "mc", "title": title, "choices": [x.capitalize() for x in choices]})
-            elif qid in CHOICES:
-                f2.append({"type": "mc", "title": f"{n}{qid}. If this answer reached you in practice, you would:",
-                           "choices": list(CHOICES[qid])})
-            else:
-                f2.append({"type": "paragraph", "title": title})
-    f2.append({"type": "page", "title": "General questions"})
-    for qid, kind, text in GENERAL_QUESTIONS:
-        if kind == "likert_open":
-            f2.append({"type": "mc", "title": f"{qid}. {text.split('.')[0]}.",
-                       "choices": [x.capitalize() for x in LIKERT]})
-            f2.append({"type": "paragraph", "title": f"{qid} comment: {text.split('. ', 1)[1]}"})
-        else:
-            f2.append({"type": "paragraph", "title": f"{qid}. {text}"})
-    f2.append({"type": "page", "title": "Our expected answers",
-               "help": "Our expected answers come from the rules you reviewed in the other form, applied in code. For "
-                       "real cases they use the reference follow-up imaging. \"Undetermined\" means the rules cannot "
-                       "decide from the inputs, and the case is left out of our accuracy figures."})
-    for c in chosen:
-        n = c["n"]
-        f2.append({"type": "header", "title": f"Case {n} (code {c['alias']})",
-                   "help": _plain(_reveal_body(cases[c["alias"]], n))})
-        f2 += _rated(f"{n}R1", f"{n}R1. Do you agree with our expected answer for case {n}?")
     return {"forms": [
         {"title": "Stroke Decision Copilot: rulebook and test-case review", "confirmation": confirmation,
          "description": f"{DISCLAIMER}\n\nThank you for reviewing our work. Every result we report is scored against "
                         "these rules, so we need your honest reading. Please answer on your own. About 45-60 minutes. "
-                        "You can come back and edit your answers.", "items": f1},
-        {"title": "Stroke Decision Copilot: written interview", "confirmation": confirmation,
-         "description": f"{DISCLAIMER}\n\nPlease have the case document open beside this form. About 60-90 minutes. "
-                        "You can come back and edit your answers.", "items": f2}]}
+                        "You can come back and edit your answers.", "items": f1}]}
 
 
 APPS_SCRIPT = """// Generated by strokecopilot.pipeline.clinician_pack from the fixed pack (docs/CLINICIAN_PACK.md). Do not edit by
 // hand: change the code and rebuild, so the forms always match the recorded items.
 //
-// Run buildForms() once at script.google.com (new project, paste this file, Run). It creates two Google Forms, each
-// with its own response Sheet, in your Drive, and logs their links (View > Logs). It sends nothing to anyone.
-// Afterwards, open each form, check it is published and that "Collect email addresses" is off, then send the
+// Run buildForms() once at script.google.com (new project, paste this file, Run). It creates the Google Form, with
+// its own response Sheet, in your Drive, and logs its links (View > Logs). It sends nothing to anyone.
+// Afterwards, open the form, check it is published and that "Collect email addresses" is off, then send the
 // respondent link yourself.
 
 const SPEC = %SPEC%;
@@ -677,18 +326,6 @@ def apps_script(spec):
     return APPS_SCRIPT.replace("%SPEC%", json.dumps(spec, ensure_ascii=False, indent=1))
 
 
-def to_docx(markdown_path, docx_path):
-    """Word copy of a Markdown file through pandoc, reproducible (SOURCE_DATE_EPOCH). False if pandoc is missing."""
-    import os
-    import shutil
-    import subprocess
-    if not shutil.which("pandoc"):
-        return False
-    subprocess.run(["pandoc", str(markdown_path), "-o", str(docx_path)], check=True,
-                   env={**os.environ, "SOURCE_DATE_EPOCH": "1795651200"})
-    return True
-
-
 # ------------------------------------------------------------------------------------------- Writing
 
 def _write_csv(path, rows, extra):
@@ -704,36 +341,26 @@ def _sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def write(bank_dir, out_dir, seed=SEED, passages_path=None):
-    """Build both instruments and write them with a manifest. Returns the manifest."""
+def write(bank_dir, out_dir, passages_path=None):
+    """Build the review and write it with a manifest. Returns the manifest."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     passages = load_passages(passages_path)
     cases = load_bank(bank_dir)
-    chosen, sizes = select(cases, seed)
     md1, rows1 = instrument1(passages, cases)
-    md2, rows2 = instrument2(cases, chosen, passages)
-    spec = form_spec(passages, cases, chosen)
+    spec = form_spec(passages, cases)
     files = {
         "instrument1_rulebook_review.md": md1,
-        "instrument2_interview.md": md2,
-        "interview_cases.md": case_document(cases, chosen, passages),
         "forms_spec.json": json.dumps(spec, ensure_ascii=False, indent=1),
         "build_forms.gs": apps_script(spec),
-        "selection.json": json.dumps({"seed": seed, "plan": [list(p) for p in PLAN], "pool_sizes": sizes,
-                                      "cases": chosen}, indent=2),
     }
     for name, text in files.items():
         (out / name).write_text(text)
     _write_csv(out / "instrument1_responses.csv", rows1, ("response", "comment"))
-    _write_csv(out / "instrument2_responses.csv", rows2, ("response", "comment"))
-    names = sorted(files) + ["instrument1_responses.csv", "instrument2_responses.csv"]
-    if to_docx(out / "interview_cases.md", out / "interview_cases.docx"):
-        names.append("interview_cases.docx")
-    manifest = {"seed": seed, "bank_index_sha256": _sha(Path(bank_dir) / "index.json"),
+    names = sorted(files) + ["instrument1_responses.csv"]
+    manifest = {"bank_index_sha256": _sha(Path(bank_dir) / "index.json"),
                 "passages_sha256": _sha(passages_path or CORPUS_DIR / "passages.jsonl"),
-                "items_instrument1": len(rows1), "cases": [(c["n"], c["alias"], c["stratum"], c["model"]) for c in chosen],
-                "pool_sizes": sizes, "files": {n: _sha(out / n) for n in names}}
+                "items_instrument1": len(rows1), "files": {n: _sha(out / n) for n in names}}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
     problems = leak_scan(out)
     if problems:
@@ -753,10 +380,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--bank", default="demo/space/build/bank")
     ap.add_argument("--out", default="runs/EXP-67_clinician_review/pack")
-    ap.add_argument("--seed", type=int, default=SEED)
     args = ap.parse_args(argv)
-    m = write(args.bank, args.out, args.seed)
-    print(json.dumps({k: m[k] for k in ("seed", "items_instrument1", "cases", "pool_sizes")}, indent=1))
+    m = write(args.bank, args.out)
+    print(json.dumps({k: m[k] for k in ("items_instrument1", "files")}, indent=1))
 
 
 if __name__ == "__main__":

@@ -38,12 +38,11 @@ This is a suggestion for the report sessions, not a fixed outline (`docs/REPORT_
 
 ## A. Clinician pack (EXP-67, DEC-34)
 
-Fixed and approved before sending (`docs/CLINICIAN_PACK.md`): a 76-item rulebook and test-case review (69 scored items)
-and a nine-case written interview whose cases were drawn by a seeded rule over fixed strata (right, flagged,
-wrong-and-caught, wrong-and-missed), delivered as generated Google Forms with a Word case document. Agreement between the
+Fixed and approved before sending (`docs/CLINICIAN_PACK.md`): a 76-item rulebook and test-case review (69 scored items),
+delivered as a generated Google Form. Agreement between the
 two clinicians will be reported as percent agreement, Cohen's κ and PABAK. **Not yet sent; no answers.**
 - **Sentence (once answered):** "Two clinicians reviewed the rulebook, five test cases and twelve conventions
-  independently, and gave written opinions on nine system answers chosen by a fixed rule."
+  independently."
 - **Limit, always:** expert opinion from two clinicians, never clinical validation.
 
 ## B. SHAP (DEC-35; `docs/PHASE5_SHAP_SURVEY.md` §5)
