@@ -3,7 +3,8 @@
 - Base: Gemma 3 4B instruction-tuned, in bf16 (no quantisation, so the model served afterwards is the one trained).
   LoRA on the language model's attention and MLP projections only, never the vision tower.
 - Data: EXP-43's train.jsonl / val.jsonl (train_data.py): each example is the evaluation request (system prompt v3
-  with the rulebook, the case's user message) and the gold reply.
+  with the rulebook, the case's user message) and the gold reply. EXP-92 (post-freeze, report only; Parsa, 22 Nov
+  2026) runs the same code and settings on the decision-balanced set EXP-91; check_dataset() tells the two apart.
 - Loss on the answer only. The chat template renders system + user + answer; the prompt part is the same render
   without the answer plus the generation prompt, and must be its prefix. The model returns logits for the last
   `answer_len + 1` positions only (`logits_to_keep`): Gemma's vocabulary is 262k tokens, so logits for the whole
@@ -16,6 +17,7 @@
   generated answer is valid JSON for the schema.
 """
 
+import hashlib
 import json
 import math
 import random
@@ -46,6 +48,23 @@ class FinetuneConfig:
     seed: int = 20261117
     gradient_checkpointing: bool = True
     notes: dict = field(default_factory=dict)
+
+
+def check_dataset(folder, experiment, test_set_sha256):
+    """A training set's meta.json, after checking the folder is the set asked for: built as `experiment` (EXP-43, or
+    EXP-91 for the decision-balanced set), against the evaluation scenarios with this hash, and, when meta.json lists
+    its files' hashes (EXP-91 does), with train.jsonl and val.jsonl unchanged since the build. Raises ValueError
+    otherwise, so a long run cannot start on the wrong or a damaged copy."""
+    folder = Path(folder)
+    meta = json.loads((folder / "meta.json").read_text())
+    if meta.get("experiment") != experiment:
+        raise ValueError(f"The training set in {folder} is {meta.get('experiment')}, not {experiment}.")
+    if meta.get("test_set_sha256") != test_set_sha256:
+        raise ValueError(f"The training set in {folder} was not built against the fixed evaluation set.")
+    for name, expected in (meta.get("files_sha256") or {}).items():
+        if hashlib.sha256((folder / name).read_bytes()).hexdigest() != expected:
+            raise ValueError(f"{name} in {folder} is not the file the build wrote (its sha256 differs).")
+    return meta
 
 
 def read_jsonl(path, limit=None):

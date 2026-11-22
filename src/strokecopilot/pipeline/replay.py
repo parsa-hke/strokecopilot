@@ -13,6 +13,10 @@ refuses the bundle if it finds one.
 `run` checks the bundle's sha256 against `BUNDLE_SHA256` below, rescores every cell offline (cached judge verdicts and
 retrievals only; a missing one is an error, never an API call), checks each rate against `expected.json`, and prints
 the table. The bundle is attached to the submission tag as a GitHub release asset (DEC-37).
+
+For a notebook with no Drive and no key (notebooks/62_replay_no_drive.ipynb): `fetch` returns a verified copy of the
+bundle (a local one, or the release asset downloaded), and `one_case` shows one case end to end from the extracted
+bundle: its inputs, the saved answer, and that answer scored offline (`decision_lines` and `claim_lines` print it).
 """
 
 import hashlib
@@ -26,6 +30,7 @@ from pathlib import Path
 BUNDLE_NAME = "replay_bundle.tar.gz"
 BUNDLE_SHA256 = "44c8d3abb4b6e93613a12de0ccf4cfca0945bdaf100a47b203926119add3b799"  # built 20 Nov 2026 (EXP-37, EXP-47 cells; reproducible)
 RELEASE_URL = "https://github.com/parsa-hke/strokecopilot/releases"
+RELEASE_TAG = "v1.0.1"  # the release that carries the bundle as an asset
 ROOTS = {"EXP-37": Path("runs/EXP-37_paid_runs"), "EXP-47": Path("runs/EXP-47_small_reasoner")}
 CELLS = {
     "EXP-37": {m: ("fixtures_rulebook", "scenarios_rulebook", "fixtures_norulebook", "scenarios_norulebook")
@@ -147,6 +152,86 @@ def run(bundle, workdir, sha256=BUNDLE_SHA256, log=print):
         log(f"{model:20s} fixtures + scenarios, with the rulebook: {100 * s['value']:.1f}% "
             f"[{100 * s['ci95'][0]:.1f}, {100 * s['ci95'][1]:.1f}] over {len(recs)} cases")
     return rows, mismatches
+
+
+def asset_url(tag=RELEASE_TAG):
+    return f"{RELEASE_URL}/download/{tag}/{BUNDLE_NAME}"
+
+
+def fetch(dest=BUNDLE_NAME, local=(), url=None, sha256=BUNDLE_SHA256, log=print):
+    """A verified copy of the bundle, as a Path: the first of `local` that exists, otherwise the release asset
+    downloaded to `dest` (the release is public, so no key). The sha256 is checked either way, and a download that
+    fails the check is deleted."""
+    from urllib.request import urlopen
+    found = next((Path(p) for p in local if Path(p).is_file()), None)
+    downloaded = found is None
+    if downloaded:
+        found = Path(dest)
+        with urlopen(url or asset_url(), timeout=120) as response, open(found, "wb") as f:
+            shutil.copyfileobj(response, f)
+    if sha256 is not None and _sha(found) != sha256:
+        if downloaded:
+            found.unlink()
+        raise ValueError("The bundle's sha256 is not the recorded one. Download it again from the release.")
+    log(f"{f'Downloaded {found.name}' if downloaded else f'Local copy {found}'}: {found.stat().st_size / 1e6:.1f} MB"
+        + ("" if sha256 is None else ", sha256 as recorded"))
+    return found
+
+
+def one_case(workdir, case, model="claude-sonnet-5-5", arm="fixtures_rulebook"):
+    """One case of an extracted bundle (`run` extracts it into `workdir`), end to end and offline: its inputs, the
+    model's saved answer, and that answer scored by the verifier from the cell's caches.
+
+    The case's saved call, answer and claims and the cell's config and caches are copied to
+    `workdir/one_case/<model>/<arm>/<case>`, and `end_to_end.rescore` scores that folder: the scoring `run` does, on
+    one case. A verdict or retrieval the caches lack is an error, never a model call. Returns the inputs ("vision",
+    "note", "expected"), the saved "answer" (None with "error" for a format failure), the "claims" and their "traces",
+    and the "flagged" claims, "decisions" and "omissions" of the case's metrics row."""
+    from strokecopilot.pipeline import end_to_end as e2e
+    src = Path(workdir) / model / arm
+    if not (src / "calls" / f"{case}.json").exists():
+        raise ValueError(f"No saved call for {case} in {model}/{arm}: extract the bundle with `run` first, and check the names.")
+    dst = Path(workdir) / "one_case" / model / arm / case
+    if dst.exists():
+        shutil.rmtree(dst)
+    dst.mkdir(parents=True)
+    for name in KEEP_FILES:
+        if (src / name).exists():
+            shutil.copyfile(src / name, dst / name)
+    for name in KEEP_DIRS:
+        (dst / name).mkdir()
+        if (src / name / f"{case}.json").exists():
+            shutil.copyfile(src / name / f"{case}.json", dst / name / f"{case}.json")
+    config = json.loads((dst / "config.json").read_text()) if (dst / "config.json").exists() else {}
+    inputs = e2e.load_cases(config.get("source") or "fixtures", [case])[0]
+    row = e2e.rescore(dst, cases=[inputs], log=lambda *a: None)["per_case"][0]
+    answer, scored = dst / "outputs" / f"{case}.json", dst / "traces_rescore" / f"{case}.json"
+    return {"id": case, "model": model, "arm": arm, "vision": inputs["vision"], "note": inputs["note"],
+            "expected": inputs["expected"], "answer": json.loads(answer.read_text()) if answer.exists() else None,
+            "error": row.get("error"), **(json.loads(scored.read_text()) if scored.exists() else {"claims": [], "traces": []}),
+            "flagged": row.get("flagged", []), "decisions": row.get("decisions", {}), "omissions": row.get("omissions", [])}
+
+
+def decision_lines(result):
+    """One line per decision of a `one_case` result: what the saved answer recommends, what the fixture expects (either:
+    the rules leave it open), and whether the answer is right."""
+    word = {True: "yes", False: "no", None: "either"}
+    return [f"{name}: answered {word[got]}, expected {word[want]}" + ("" if ok is None else ", right" if ok else ", WRONG")
+            for name, (got, want, ok) in result["decisions"].items()]
+
+
+def claim_lines(result, width=110):
+    """One line per claim of a `one_case` result: ok or FLAG, the claim's ID, its kind and its text (cut to `width`).
+    A flagged claim gets a second line with the hallucination sub-type, whether it is critical, and the reason."""
+    text = {c["id"]: c.get("text") or "" for c in result["claims"]}
+    pad = max((len(t["claim_id"]) for t in result["traces"]), default=0)
+    lines = []
+    for t in result["traces"]:
+        flagged = t["subtype"] is not None
+        lines.append(f"{'FLAG' if flagged else 'ok  '} {t['claim_id']:<{pad}}  {t['kind']:<10}  {text.get(t['claim_id'], '')[:width]}")
+        if flagged:
+            lines.append(f"     -> {t['subtype_name']}{' (critical)' if t.get('critical') else ''}: {t['reason']}")
+    return lines
 
 
 def main(argv=None):

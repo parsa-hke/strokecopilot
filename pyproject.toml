@@ -4,13 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "strokecopilot"
-version = "0.0.1"
-description = "Stroke Decision Copilot: perfusion/haemorrhage vision models, retrieval-grounded reasoner, claim verifier (MAAI 901/902, UOWD)."
+version = "1.0.2"
+description = "Stroke Decision Copilot: vision models for stroke CT (haemorrhage; core and penumbra), a language-model reasoner given a guideline rulebook written in our own words, and a claim-level verifier that measures hallucination (MAAI 901/902, UOWD)."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.5",
     "jsonschema>=4.18",
+    "numpy",  # the offline replay (pipeline.replay) needs it, so the README's quick start works on a plain install
 ]
 
 [project.optional-dependencies]

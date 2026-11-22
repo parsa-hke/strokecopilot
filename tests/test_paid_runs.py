@@ -36,6 +36,39 @@ def test_the_small_reasoner_answers_the_dec30_arms_only():
     assert pr.cells(pr.MODELS) == pr.cells()  # the paid runs' matrix is unchanged
 
 
+def test_the_balanced_small_reasoner_answers_the_same_arms_and_changes_no_other_list():
+    """EXP-93 (post-freeze, report only): the same 175 requests as each model of EXP-47, in its own cells."""
+    pytest.importorskip("openai")
+    model = "gemma-3-4b-tuned-balanced"
+    assert pr.BALANCED_MODELS == (model,)
+    assert pr.cells(pr.BALANCED_MODELS) == [(model, a) for a in ("fixtures_rulebook", "scenarios_rulebook", "real_predicted")]
+    assert pr.arms_for(model) == pr.arms_for("gemma-3-4b-tuned")
+    paths = pr.Paths(Path("x"), Path("x"), Path("x"), Path("runs/EXP-93_small_reasoner_balanced"))
+    same = lambda arm: [c["id"] for c in pr.arm_cases(model, arm, paths)] == [c["id"] for c in pr.arm_cases("gemma-3-4b-tuned", arm, paths)]
+    assert same("fixtures_rulebook") and same("scenarios_rulebook")
+    assert pr.cell_dir(paths, model, "scenarios_rulebook") == Path("runs/EXP-93_small_reasoner_balanced") / model / "scenarios_rulebook"
+    llm = pr.reasoner_llm(model, port=8000)
+    assert llm.model == model and llm.quantization == "bf16"
+    assert pr.answer_model(model) == model
+    assert model not in pr.SMALL_MODELS and model not in pr.MODELS
+    assert len(pr.cells()) == 4 * 7 + 2 and len(pr.cells(pr.SMALL_MODELS)) == 6  # the earlier matrices are unchanged
+
+
+def test_importing_balanced_answers_copies_only_that_models_cells(tmp_path):
+    """`scripts/paid_runs import --models gemma-3-4b-tuned-balanced`: Drive's EXP-93 folder into the Mac's."""
+    pytest.importorskip("openai")
+    from strokecopilot.pipeline import batched
+
+    model, src, dst = "gemma-3-4b-tuned-balanced", tmp_path / "drive", tmp_path / "mac"
+    for arm, n in (("fixtures_rulebook", 5), ("scenarios_rulebook", 150)):
+        (src / model / arm).mkdir(parents=True)
+        batched._save_answers(src / model / arm / batched.ANSWERS_FILE, model, {f"k{i}": {"reply": {}} for i in range(n)})
+    added = pr.import_answers(src, dst, pr.BALANCED_MODELS)
+    assert added == {(model, "fixtures_rulebook"): 5, (model, "scenarios_rulebook"): 150}
+    assert pr.import_answers(src, dst, pr.BALANCED_MODELS) == {(model, "fixtures_rulebook"): 0, (model, "scenarios_rulebook"): 0}
+    assert len(batched.load_answers(dst / model / "scenarios_rulebook" / batched.ANSWERS_FILE, model)) == 150
+
+
 def test_scenario_arms_have_150_and_75_cases():
     paths = pr.Paths(Path("x"), Path("x"), Path("x"), Path("x"))
     full = pr.arm_cases(pr.SONNET, "scenarios_rulebook", paths)

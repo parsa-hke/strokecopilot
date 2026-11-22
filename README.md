@@ -33,7 +33,7 @@ Development results are on 129 ISLES'24 cases (five folds, each case scored by t
 |---|---|
 | **Vision A** (nnU-Net 3d_fullres) | Dice 0.215 ± 0.046 against the rCBF < 30% threshold's 0.111 ± 0.031 (paired +0.104 [+0.078, +0.133]); absolute volume error 23.5 against 25.2 mL, not a clear difference. Held-out: Dice 0.18 (five-fold ensemble). |
 | **Vision B** (ResNet-50, RSNA) | Test split, opened once: scan AUC 0.9805 [0.974, 0.986], sensitivity 0.962, specificity 0.885 at the chosen threshold, ECE 0.015. On ISLES'24 it flags 68 of 129 presumed bleed-free scans, a domain shift traced to brain tissue, not the skull base (Grad-CAM and SHAP). |
-| **Hallucination rate** (with the rulebook; 5 fixtures, 150 scenarios, 20 real cases per model; verifier rates, upper bounds) | Sonnet 5.5 4.0%, Qwen3.5-27B 5.0%, Gemma 3 27B 17.1%, MedGemma 27B 17.7%, Gemma 3 4B 40.6%, Gemma 3 4B LoRA-tuned 13.3%. |
+| **Hallucination rate** (with the rulebook; 5 fixtures, 150 scenarios, 20 real cases per model; verifier rates: people found the verifier both over-flags and misses errors) | Sonnet 5.5 4.0%, Qwen3.5-27B 5.0%, Gemma 3 27B 17.1%, MedGemma 27B 17.7%, Gemma 3 4B 40.6%, Gemma 3 4B LoRA-tuned 13.3%. |
 | **Rulebook effect** | Giving the whole rulebook cuts false-content claims by 8 to 15 percentage points for every model. |
 | **Verifier validity** | Seeded errors: recall ≥ 0.80 on every sub-type, 1% false flags. 100 human-labelled claims: verifier–human agreement 0.61; humans confirmed 18 of its 54 flags; human–human κ 0.27. |
 | **End to end, held-out** (predicted vision) | Decisions right: Sonnet 22/23, Gemma 3 27B 22/23, MedGemma 21/21, Qwen 13/13 (9 format failures), tuned 4B 21/23, base 4B 3/23. Sonnet's one wrong decision came from a false bleed flag the verifier could not see. |
@@ -65,6 +65,8 @@ python -m strokecopilot.pipeline.replay run --bundle replay_bundle.tar.gz
 
 It checks the bundle's sha256, rescores every model and arm offline from the cached verdicts, checks each rate against the reported one, and prints the table.
 
+Or open [`notebooks/62_replay_no_drive.ipynb`](notebooks/62_replay_no_drive.ipynb): it downloads the bundle, runs the replay and shows one fixture end to end (its inputs, a model's saved answer, and the verifier's claims and flags), with no Google Drive and no API key. Its outputs are stored in the repository.
+
 **Check a vision output against the contract:**
 
 ```python
@@ -78,7 +80,7 @@ Nothing under `data/` or `runs/` is committed, and no data or model weights are 
 
 ## Notebooks
 
-Thin: each calls the package. Colab notebooks open with the badge; Kaggle notebooks are uploaded to Kaggle with the RSNA datasets attached.
+Thin: each calls the package. Colab notebooks open with the badge; Kaggle notebooks are uploaded to Kaggle with the RSNA datasets attached. The repository is public, so no notebook needs a GitHub token.
 
 | Notebook | What it does | Where |
 |---|---|---|
@@ -106,6 +108,7 @@ Thin: each calls the package. Colab notebooks open with the badge; Kaggle notebo
 | `50_end_to_end` | Fixture to reasoner to verifier, end to end | Colab |
 | `53_paid_runs_colab` | The Gemma 27B pair served with vLLM | Colab A100 |
 | `60_heldout_contracts` | The held-out contract path, checked on development cases first | Colab A100 |
+| `62_replay_no_drive` | No Drive, no key: rebuilds the hallucination table from the replay bundle and scores one fixture end to end, offline; committed with its outputs | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parsa-hke/strokecopilot/blob/main/notebooks/62_replay_no_drive.ipynb) |
 
 ## Repository layout
 

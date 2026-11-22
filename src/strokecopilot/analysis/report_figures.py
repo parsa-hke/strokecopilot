@@ -105,6 +105,32 @@ def curve_figure(curve, out, name="fig_visionA_training_curve"):
     return written
 
 
+# ------------------------------------------------------------------------------------------- C9 for a printed page
+
+
+def c9_print_figure(rows, out, name="fig_c9_print", width_in=6.3):
+    """The C9 hallucination figure redrawn for a printed page (MAAI902 report): the same three measures and numbers as
+    `pipeline.figures`' wide `fig_c9_hallucination_by_model`, stacked at the page's text width so the labels print at
+    8 to 10 pt instead of shrinking. rows: demo.charts' c9 rows (one per model, each rate with `value` and `ci95`)."""
+    from strokecopilot.pipeline.figures import INK, _dots, _plt, _save
+
+    plt = _plt()
+    fig, axes = plt.subplots(3, 1, figsize=(width_in, 6.4))
+    for ax, (key, title, xmax) in zip(axes, (("hallucination_rate", "All flagged claims", 0.5),
+                                             ("content_hallucination_rate", "False content only", 0.5),
+                                             ("critical_hallucination_rate", "Would change a decision", 0.1))):
+        _dots(ax, rows, key, xmax)
+        ax.set_title(title, fontsize=10, color=INK, loc="left")
+        ax.tick_params(labelsize=9)
+        for text in ax.texts:
+            text.set_fontsize(9)
+    fig.tight_layout(h_pad=1.2)
+    written = []
+    _save(fig, out, name, written)
+    plt.close(fig)
+    return written
+
+
 # ------------------------------------------------------------------------------------------- threshold trade-off
 
 def tradeoff(sweep, isles_scores, chosen=0.175):

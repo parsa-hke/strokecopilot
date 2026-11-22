@@ -17,7 +17,8 @@ Arms (DEC-24's matrix, per model):
 
 Models: Claude Sonnet 5.5 through the Batch API; Qwen3.5-27B through OpenRouter; Gemma 3 27B and MedGemma 27B text on
 the rented GPU through an SSH tunnel (open_models.py), later on Colab. DEC-30's small reasoner (SMALL_MODELS, Gemma 3 4B
-prompted and LoRA-tuned) answers only SMALL_ARMS, on Colab (notebook 55). The claim extractor (Sonnet) and the judge (Haiku) go through the
+prompted and LoRA-tuned) answers only SMALL_ARMS, on Colab (notebook 55), and so does the variant tuned on the
+decision-balanced set (BALANCED_MODELS; post-freeze, report only). The claim extractor (Sonnet) and the judge (Haiku) go through the
 Batch API for every model, with the settings every earlier run used.
 """
 
@@ -60,6 +61,9 @@ SONNET_REPEATS = {name: {"source": "real", "vision": "predicted", "rulebook": Tr
 # vision: 5 fixtures, 150 scenarios, 20 real cases. 175 requests per model.
 SMALL_MODELS = om.SMALL_MODELS
 SMALL_ARMS = ("fixtures_rulebook", "scenarios_rulebook", "real_predicted")
+# Post-freeze, report only (Parsa, 22 Nov 2026): the small reasoner tuned on the decision-balanced set answers the
+# same arms (EXP-93). It is not in SMALL_MODELS, so Phase 4's model list and the frozen runs do not change.
+BALANCED_MODELS = om.BALANCED_MODELS
 
 
 @dataclass(frozen=True)
@@ -71,7 +75,7 @@ class Paths:
 
 
 def arms_for(model):
-    if model in SMALL_MODELS:
+    if model in SMALL_MODELS or model in BALANCED_MODELS:
         return {arm: ARMS[arm] for arm in SMALL_ARMS}
     return {**ARMS, **(SONNET_REPEATS if model == SONNET else {})}
 

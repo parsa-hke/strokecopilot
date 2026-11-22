@@ -17,6 +17,12 @@ Paired comparisons (compare.paired: a paired case bootstrap on the cases both si
 group, and tuned minus each EXP-37 model on the scenario groups and on all. The rates are the verifier's, not yet
 checked against the human labels (EXP-41). The gold answers the tuned model learned from are templated, so its claims
 may be more formulaic and easier to verify: a lower hallucination rate is reported with that limit (DEC-30).
+
+A third small-model cell is optional (`balanced_root`; EXP-94, post-freeze and report only, Parsa 22 Nov 2026):
+gemma-3-4b-tuned-balanced, the same base model and fine-tune as the tuned model but trained on the decision-balanced
+set (EXP-91 instead of EXP-43), answering the same 175 cases (EXP-93). With it the report also gives its rates in
+every group, balanced minus tuned and balanced minus base as paired differences, and the yes-caught and no-kept counts
+of all three. Without it the report is the one EXP-48 wrote, unchanged.
 """
 
 import json
@@ -26,6 +32,8 @@ from strokecopilot.nlp.verifier import scenarios as sc
 from strokecopilot.pipeline import compare as cp
 
 BASE, TUNED = "gemma-3-4b", "gemma-3-4b-tuned"
+BALANCED = "gemma-3-4b-tuned-balanced"  # tuned on the decision-balanced set (EXP-91, EXP-92); cells from EXP-93
+DISPLAY = {**cp.DISPLAY, BALANCED: "Gemma 3 4B tuned, balanced set"}
 COMPARATORS = ("claude-sonnet-5-5", "qwen3.5-27b", "gemma-3-27b", "medgemma-27b-text")  # EXP-37
 GROUPS = ("held_out", "seen", "fixtures", "real", "all")
 GROUP_LABELS = {"held_out": "Scenarios, held-out routes", "seen": "Scenarios, seen routes", "fixtures": "Fixtures",
@@ -36,6 +44,7 @@ PAIRED_METRICS = ("hallucination_rate", "content_hallucination_rate", "critical_
                   "recommendation_correctness")
 VS_METRICS = ("hallucination_rate", "recommendation_correctness")
 TUNED_COLOUR, BASE_COLOUR = cp.SERIES["with"], cp.SERIES["without"]  # categorical slots 1 (blue) and 2 (orange)
+BALANCED_COLOUR = "#1baf7a"  # categorical slot 3 (figures.SLOTS)
 
 
 def scenario_routes(held_out=None):
@@ -85,11 +94,26 @@ def decision_counts(folders, keep=None):
     return out
 
 
-def report(small_root, paid_root, out_dir, comparators=COMPARATORS, held_out=None):
-    """Write report.json, report.md and small_reasoner.png to out_dir; returns the report."""
+def training_answers(meta_path):
+    """A training set's size and trained answers from its meta.json: {"experiment", "n", decision: {"true", "false"}}.
+    Only a "yes" verdict is trained as recommend = true (gold.py), so the count is the verdicts' "yes"."""
+    meta = json.loads(Path(meta_path).read_text())
+    out = {"experiment": meta.get("experiment"), "n": meta["n"], "balanced": bool(meta.get("balanced"))}
+    for d in ("thrombolysis", "thrombectomy"):
+        yes = meta[d].get("yes", 0)
+        out[d] = {"true": yes, "false": meta["n"] - yes}
+    return out
+
+
+def report(small_root, paid_root, out_dir, comparators=COMPARATORS, held_out=None, balanced_root=None,
+           training_meta=None):
+    """Write report.json, report.md and small_reasoner.png to out_dir; returns the report. `balanced_root` (EXP-93's
+    run folder) adds the model tuned on the decision-balanced set; `training_meta` ({model: meta.json path}) adds
+    each tuned model's training answers to that section."""
     routes = scenario_routes(held_out)
-    root_of = lambda m: small_root if m in (BASE, TUNED) else paid_root
-    models = [BASE, TUNED, *comparators]
+    small = (BASE, TUNED) if balanced_root is None else (BASE, TUNED, BALANCED)
+    root_of = lambda m: balanced_root if m == BALANCED else small_root if m in (BASE, TUNED) else paid_root
+    models = [*small, *comparators]
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     rep = {"small_root": str(small_root), "paid_root": str(paid_root), "models": models,
@@ -112,7 +136,15 @@ def report(small_root, paid_root, out_dir, comparators=COMPARATORS, held_out=Non
         rep["per_route"][route] = {"held_out": route in rep["held_out_routes"], "scenarios": len(ids),
                                    **{m: {k: cp._pooled(_cells(root_of(m), m, "seen"), k, keep)
                                           for k in ("recommendation_correctness", "hallucination_rate")}
-                                      for m in (BASE, TUNED)}}
+                                      for m in small}}
+    if balanced_root is not None:
+        rep["balanced_root"] = str(balanced_root)
+        rep["balanced_minus_tuned"] = {g: {k: pair(BALANCED, TUNED, g, k) for k in PAIRED_METRICS} for g in GROUPS}
+        rep["balanced_minus_base"] = {g: {k: pair(BALANCED, BASE, g, k) for k in PAIRED_METRICS} for g in GROUPS}
+        rep["balanced_minus"] = {c: {g: {k: pair(BALANCED, c, g, k) for k in VS_METRICS}
+                                     for g in ("held_out", "seen", "all")} for c in comparators}
+        if training_meta:
+            rep["training_answers"] = {m: training_answers(path) for m, path in training_meta.items()}
     (out / "report.json").write_text(json.dumps(rep, indent=1))
     (out / "report.md").write_text(_markdown(rep), encoding="utf-8")
     _plot(rep, out / "small_reasoner.png")
@@ -124,7 +156,7 @@ def _count(m):
 
 
 def _markdown(rep):
-    name = lambda m: cp.DISPLAY.get(m, m)
+    name = lambda m: DISPLAY.get(m, m)
     s = rep["summary"]
     L = ["# The fine-tuned small reasoner (DEC-30): Gemma 3 4B prompted and tuned", "",
          f"Held-out routes (never in training): {', '.join(rep['held_out_routes'])}. Scenarios on them: "
@@ -185,7 +217,73 @@ def _markdown(rep):
         L.append(f"| {route} | {'yes' if r['held_out'] else ''} | {r['scenarios']} | "
                  f"{_count(b['recommendation_correctness'])} | {_count(t['recommendation_correctness'])} | "
                  f"{cp._pct(b['hallucination_rate'], 0)} | {cp._pct(t['hallucination_rate'], 0)} |")
+    if "balanced_minus_tuned" in rep:
+        L += _balanced_markdown(rep)
     return "\n".join(L) + "\n"
+
+
+def _balanced_markdown(rep):
+    """Section 7 and its tables: the model tuned on the decision-balanced set beside the tuned and the base model."""
+    s, dec = rep["summary"], rep["decisions"]
+    vs_t, vs_b = rep["balanced_minus_tuned"], rep["balanced_minus_base"]
+    three = (BASE, TUNED, BALANCED)
+    L = ["", "## 7. Tuned on the decision-balanced set (post-freeze addition, report only)", "",
+         f"{DISPLAY[BALANCED]} is the same base model, LoRA settings, training loop and prompt as {DISPLAY[TUNED]}; "
+         "only the training set differs (EXP-91 in place of EXP-43: a new seed, the same held-out routes and caps, "
+         "more answers that recommend a treatment). It answers the same 175 cases. It was trained after the freeze "
+         "(DEC-31) and feeds nothing else. Sections 3 and 4 list it with the other models; sections 1, 2, 5 and 6 "
+         "are the tuned and base models as before."]
+    if rep.get("training_answers"):
+        L += ["", "### 7.1 Training answers", "",
+              "| Model | Training set | Examples | Thrombolysis: recommend true | Thrombectomy: recommend true |",
+              "|---|---|---|---|---|"]
+        for m, t in rep["training_answers"].items():
+            share = lambda d: f"{t[d]['true']} / {t['n']} ({100 * t[d]['true'] / t['n']:.1f}%)"
+            L.append(f"| {DISPLAY.get(m, m)} | {t['experiment'] or 'n/a'} | {t['n']} | {share('thrombolysis')} | "
+                     f"{share('thrombectomy')} |")
+    L += ["", "### 7.2 Rates by case group", "",
+          "| Group | Cases | Hallucination rate, base | Tuned | Balanced | Balanced minus tuned | Balanced minus base | "
+          "Decisions right, base | Tuned | Balanced | Balanced minus tuned | Balanced minus base |",
+          "|---|" + "---|" * 11]
+    for g in GROUPS:
+        h, r = "hallucination_rate", "recommendation_correctness"
+        L.append(f"| {GROUP_LABELS[g]} | {s[BALANCED][g][h]['cases']} | "
+                 + " | ".join(cp._pct(s[m][g][h]) for m in three) + f" | {cp._diff(vs_t[g][h])} | {cp._diff(vs_b[g][h])} | "
+                 + " | ".join(_count(s[m][g][r]) for m in three) + f" | {cp._diff(vs_t[g][r])} | {cp._diff(vs_b[g][r])} |")
+    L += ["", "### 7.3 Content and critical errors", "",
+          "| Group | Content rate (sub-types 1–5), base | Tuned | Balanced | Balanced minus tuned | Balanced minus base | "
+          "Critical rate, base | Tuned | Balanced | Balanced minus tuned | Balanced minus base |",
+          "|---|" + "---|" * 10]
+    for g in GROUPS:
+        c, k = "content_hallucination_rate", "critical_hallucination_rate"
+        L.append(f"| {GROUP_LABELS[g]} | " + " | ".join(cp._pct(s[m][g][c]) for m in three)
+                 + f" | {cp._diff(vs_t[g][c])} | {cp._diff(vs_b[g][c])} | " + " | ".join(cp._pct(s[m][g][k]) for m in three)
+                 + f" | {cp._diff(vs_t[g][k])} | {cp._diff(vs_b[g][k])} |")
+    L += ["", "### 7.4 Treatment recommended when the rulebook says yes, withheld when it says no", "",
+          "| Group | Model | Thrombolysis: yes caught | No kept | Thrombectomy: yes caught | No kept |",
+          "|---|---|---|---|---|---|"]
+    for g in GROUPS:
+        for m in three:
+            d = dec[m][g]
+            L.append(f"| {GROUP_LABELS[g]} | {DISPLAY[m]} | " + " | ".join(
+                f"{d[k]['yes_caught']} / {d[k]['yes']} | {d[k]['no_kept']} / {d[k]['no']}"
+                for k in ("thrombolysis", "thrombectomy")) + " |")
+    L += ["", "### 7.5 Against each EXP-37 model (paired, same cases)", "",
+          "| Against | Balanced: held-out | Balanced: seen | Balanced: all |", "|---|---|---|---|"]
+    for c, x in rep["balanced_minus"].items():
+        L.append(f"| {DISPLAY.get(c, c)} | "
+                 + " | ".join(cp._diff(x[g]["hallucination_rate"]) for g in ("held_out", "seen", "all")) + " |")
+    L += ["", "Hallucination rate minus the other model, percentage points.", "",
+          "### 7.6 Per key route (scenarios; small groups, counts only)", "",
+          "| Route | Held out | Scenarios | Decisions right, base | Tuned | Balanced | Hallucination rate, base | Tuned | Balanced |",
+          "|---|---|---|---|---|---|---|---|---|"]
+    for route, r in rep["per_route"].items():
+        if not r["scenarios"]:
+            continue
+        L.append(f"| {route} | {'yes' if r['held_out'] else ''} | {r['scenarios']} | "
+                 + " | ".join(_count(r[m]["recommendation_correctness"]) for m in three) + " | "
+                 + " | ".join(cp._pct(r[m]["hallucination_rate"], 0) for m in three) + " |")
+    return L
 
 
 def _plot(rep, path):
@@ -199,8 +297,11 @@ def _plot(rep, path):
         cp._style(ax)
         for i, g in enumerate(groups):
             y = len(groups) - 1 - i
-            for model, colour, offset, legend in ((TUNED, TUNED_COLOUR, 0.13, "Gemma 3 4B tuned"),
-                                                  (BASE, BASE_COLOUR, -0.13, "Gemma 3 4B prompted")):
+            series = ((TUNED, TUNED_COLOUR, 0.13, "Gemma 3 4B tuned"), (BASE, BASE_COLOUR, -0.13, "Gemma 3 4B prompted"))
+            if BALANCED in rep["summary"]:  # three rows per group: balanced, tuned, prompted
+                series = ((BALANCED, BALANCED_COLOUR, 0.22, "Tuned, balanced set"), (TUNED, TUNED_COLOUR, 0.0, "Tuned"),
+                          (BASE, BASE_COLOUR, -0.22, "Prompted"))
+            for model, colour, offset, legend in series:
                 m = rep["summary"][model][g][metric]
                 if m["value"] is None:
                     continue
@@ -220,7 +321,7 @@ def _plot(rep, path):
             ax.set_xlim(left=0)
     axes[1].set_yticklabels([])
     axes[0].set_title("Gemma 3 4B, prompted and tuned (DEC-30)", color=cp.INK, fontsize=12, loc="left", pad=28)
-    axes[0].legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, frameon=False, fontsize=10, labelcolor=cp.INK,
+    axes[0].legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3 if BALANCED in rep["summary"] else 2, frameon=False, fontsize=10, labelcolor=cp.INK,
                    handletextpad=0.3, columnspacing=1.5, borderaxespad=0.2)
     fig.tight_layout()
     fig.savefig(path, dpi=160, facecolor=cp.SURFACE)
@@ -234,8 +335,13 @@ def main(argv=None):
     parser.add_argument("--small", default="runs/EXP-47_small_reasoner")
     parser.add_argument("--paid", default="runs/EXP-37_paid_runs")
     parser.add_argument("--out", required=True, help="e.g. runs/EXP-48_small_reasoner_report")
+    parser.add_argument("--balanced", help="EXP-94: the run folder holding gemma-3-4b-tuned-balanced's cells, "
+                                           "e.g. runs/EXP-93_small_reasoner_balanced")
+    parser.add_argument("--tuned-train-meta", help="with --balanced: the tuned model's training set meta.json (EXP-43)")
+    parser.add_argument("--balanced-train-meta", help="with --balanced: the balanced set's meta.json (EXP-91)")
     args = parser.parse_args(argv)
-    rep = report(args.small, args.paid, args.out)
+    meta = {m: path for m, path in ((TUNED, args.tuned_train_meta), (BALANCED, args.balanced_train_meta)) if path}
+    rep = report(args.small, args.paid, args.out, balanced_root=args.balanced, training_meta=meta or None)
     print((Path(args.out) / "report.md").read_text())
     return rep
 

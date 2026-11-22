@@ -211,48 +211,148 @@ def signature(vision, facts):
     return dataclasses.astuple(rules.case_from(vision, facts))
 
 
+class _Caps:
+    """generate_training's skip rules, with their counters: a signature already taken, a decision path at its cap, or
+    every key route of the draw full. take() applies them to one draw and counts it when it is kept."""
+
+    def __init__(self, taken, per_path, per_undetermined, per_route):
+        self.taken, self.per_path, self.per_undetermined, self.per_route = taken, per_path, per_undetermined, per_route
+        self.per, self.route_count = {}, {}
+
+    def take(self, sig, verdicts):
+        if sig in self.taken:
+            return False
+        path = (verdicts["thrombolysis"]["reason"], verdicts["thrombectomy"]["reason"])
+        undetermined = rules.UNDETERMINED in (verdicts["thrombolysis"]["value"], verdicts["thrombectomy"]["value"])
+        if self.per.get(path, 0) >= (self.per_undetermined if undetermined else self.per_path):
+            return False
+        hit = routes_taken(verdicts)
+        if hit and all(self.route_count.get(r, 0) >= self.per_route for r in hit):
+            return False  # every route it takes is full; a draw that adds to a short route is kept
+        self.taken.add(sig)
+        self.per[path] = self.per.get(path, 0) + 1
+        for r in hit:
+            self.route_count[r] = self.route_count.get(r, 0) + 1
+        return True
+
+
+def routes_taken(verdicts):
+    """The key routes a pair of verdicts takes (either reason starts with the route), in KEY_ROUTES order."""
+    return [r for r in KEY_ROUTES if any(v["reason"].startswith(r) for v in verdicts.values())]
+
+
+def recommended(verdicts):
+    """{decision: bool}: the answer a gold reply is trained to give. Only a "yes" verdict is recommend = true;
+    "undetermined" is recommend = false, like "no" (gold.gold_answer)."""
+    return {d: v["value"] == rules.YES for d, v in verdicts.items()}
+
+
+def _training_draws(seed, grids, held_out, pool, validate=True):
+    """The stream of training draws for a seed, in order: (vision, note, facts, verdicts, tags) for every draw that
+    takes no held-out route. The same seed gives the same stream, so it can be read more than once. validate=False
+    leaves the contract check to the caller (the balanced set reads the stream four times and checks what it keeps)."""
+    rng = random.Random(seed)
+    for k in range(pool):
+        vision, spec, contra = _draw(rng, k + 1, grids)
+        if validate:
+            validate_vision_output(vision)
+        note, facts = render(spec, rng)
+        verdicts = {d: v.to_dict() for d, v in rules.decide(rules.case_from(vision, facts)).items()}
+        if any(v["reason"].startswith(r) for v in verdicts.values() for r in held_out):
+            continue
+        tags = {"contraindication": contra, "site": vision["occlusion_site"], "onset": spec["onset"],
+                "minutes": spec["minutes"], "aspects": vision["aspects"]}
+        yield vision, note, facts, verdicts, tags
+
+
+# The decision-balanced training set (EXP-91; Parsa, 22 Nov 2026). A new seed; the held-out routes stay DEC-30's
+# four, so a balanced set leaves `held_out` at held_out_routes() whatever its seed (held_out_routes(20261122) would
+# draw other routes, DAWN and DEFUSE-3 among them).
+BALANCED_SEED = 20261122
+# The passes of a balanced set, in order; each reads the whole stream. A pass keeps a draw when (it recommends both
+# treatments, it recommends at least one, it takes at most one key route) match the pass; None means either.
+_BALANCED_PASSES = ((True, True, True), (None, True, True), (None, True, None), (None, False, None))
+
+
 def generate_training(n, seed=TRAIN_SEED, grids=TRAIN_GRIDS, held_out=None, per_path=40, per_undetermined=20,
-                      per_route=120, pool=400_000, exclude=None):
+                      per_route=120, pool=400_000, exclude=None, balance=False):
     """n training scenarios ("train-0001", ...), deterministic for a seed. A draw is skipped when either decision's
     reason starts with a held-out route (default: held_out_routes(seed)), when its signature matches an evaluation
     scenario (`exclude`, default the 150 of generate()) or an earlier training one, when its decision path is at its
     cap, or when every key route it takes already has `per_route` scenarios. The route cap stops common routes (a
     relative contraindication) crowding out rare ones (DAWN, DEFUSE-3); it must not reject a draw that adds to a short
     route, because the routes of the two decisions come in pairs (a late thrombectomy "yes" mostly comes with a
-    thrombolysis contraindication, once "beyond 4.5 h and eligible" is held out). Raises if the pool runs out first."""
-    held_out = held_out_routes(seed) if held_out is None else list(held_out)
+    thrombolysis contraindication, once "beyond 4.5 h and eligible" is held out). Raises if the pool runs out first.
+
+    balance=True (EXP-91) gives a decision-balanced set, with DEC-30's held-out routes (held_out_routes()) unless
+    `held_out` says otherwise, whatever the seed: for each treatment, as many scenarios whose gold answer is
+    recommend = true (a "yes" verdict) as the same skip rules allow, up to n // 2, the rest recommend = false ("no" or
+    "undetermined": recommended()). The skip rules and the caps are the ones above, unchanged, with one more: a draw
+    is skipped when it recommends a treatment that already has n // 2. Without help the stream is mostly "no", so it
+    is read four times with the same counters: first the draws that recommend both treatments and take at most one
+    key route, then the other draws that recommend a treatment and take at most one key route, then every other draw
+    that recommends a treatment, and last the draws that recommend neither, until there are n. One-route draws go
+    first because the route cap skips a draw only when every route it takes is full: a two-route draw can still be
+    kept after one of its routes fills, a one-route draw cannot. The scenarios are numbered in the order kept, and
+    cap_violations() finds none when it replays the rules above over them in that order. Exact balance is not
+    promised: with DEC-30's held-out routes only two thrombolysis "yes" routes can be trained, and the caps hold them
+    well below n // 2 (EXP-91 records the counts reached)."""
+    held_out = held_out_routes(TRAIN_SEED if balance else seed) if held_out is None else list(held_out)
     taken = {signature(s.vision, s.facts) for s in (generate() if exclude is None else exclude)}
-    rng = random.Random(seed)
-    chosen, per, route_count = [], {}, {}
-    for k in range(pool):
-        vision, spec, contra = _draw(rng, k + 1, grids)
-        validate_vision_output(vision)
-        note, facts = render(spec, rng)
-        verdicts = {d: v.to_dict() for d, v in rules.decide(rules.case_from(vision, facts)).items()}
-        if any(v["reason"].startswith(r) for v in verdicts.values() for r in held_out):
-            continue
-        sig = signature(vision, facts)
-        if sig in taken:
-            continue
-        path = (verdicts["thrombolysis"]["reason"], verdicts["thrombectomy"]["reason"])
-        undetermined = rules.UNDETERMINED in (verdicts["thrombolysis"]["value"], verdicts["thrombectomy"]["value"])
-        if per.get(path, 0) >= (per_undetermined if undetermined else per_path):
-            continue
-        hit = [r for r in KEY_ROUTES if any(v["reason"].startswith(r) for v in verdicts.values())]
-        if hit and all(route_count.get(r, 0) >= per_route for r in hit):
-            continue  # every route it takes is full; a draw that adds to a short route is kept
-        taken.add(sig)
-        per[path] = per.get(path, 0) + 1
-        for r in hit:
-            route_count[r] = route_count.get(r, 0) + 1
-        tags = {"contraindication": contra, "site": vision["occlusion_site"], "onset": spec["onset"],
-                "minutes": spec["minutes"], "aspects": vision["aspects"]}
-        chosen.append(Scenario(id="", vision=vision, note=note, facts=facts, expected=verdicts, tags=tags))
-        if len(chosen) == n:
-            break
+    caps = _Caps(taken, per_path, per_undetermined, per_route)
+    chosen = []
+    if not balance:
+        for vision, note, facts, verdicts, tags in _training_draws(seed, grids, held_out, pool):
+            if not caps.take(signature(vision, facts), verdicts):
+                continue
+            chosen.append(Scenario(id="", vision=vision, note=note, facts=facts, expected=verdicts, tags=tags))
+            if len(chosen) == n:
+                break
+    else:
+        target, yes = n // 2, {"thrombolysis": 0, "thrombectomy": 0}
+        for want_both, want_any, one_route in _BALANCED_PASSES:
+            for vision, note, facts, verdicts, tags in _training_draws(seed, grids, held_out, pool, validate=False):
+                if len(chosen) == n or (want_any and all(count >= target for count in yes.values())):
+                    break
+                rec = recommended(verdicts)
+                if any(rec.values()) != want_any or (want_both and not all(rec.values())):
+                    continue
+                if any(rec[d] and yes[d] >= target for d in rec):
+                    continue
+                if one_route and len(routes_taken(verdicts)) > 1:
+                    continue
+                if not caps.take(signature(vision, facts), verdicts):
+                    continue
+                validate_vision_output(vision)
+                for d in rec:
+                    yes[d] += rec[d]
+                chosen.append(Scenario(id="", vision=vision, note=note, facts=facts, expected=verdicts, tags=tags))
     if len(chosen) < n:
-        raise ValueError(f"{len(chosen)} training scenarios after {pool} draws, {len(per)} decision paths; "
+        raise ValueError(f"{len(chosen)} training scenarios after {pool} draws, {len(caps.per)} decision paths; "
                          "raise the caps or the pool.")
     for i, c in enumerate(chosen, 1):
         c.id = c.vision["case_id"] = f"train-{i:04d}"
     return chosen
+
+
+def cap_violations(scenarios, per_path=40, per_undetermined=20, per_route=120):
+    """Replay generate_training's caps over a training set in its own order: the IDs of the scenarios the rules would
+    have skipped (a repeated signature, a decision path at its cap, every key route full). [] for any set the
+    generator wrote with these caps, balanced or not."""
+    caps = _Caps(set(), per_path, per_undetermined, per_route)
+    return [s.id for s in scenarios if not caps.take(signature(s.vision, s.facts), s.expected)]
+
+
+def decision_balance(scenarios):
+    """Counts for a training set's record: per treatment the verdicts and the trained answers (recommend true or
+    false), and the four (thrombolysis, thrombectomy) answer pairs."""
+    out = {}
+    for d in ("thrombolysis", "thrombectomy"):
+        values = [s.expected[d]["value"] for s in scenarios]
+        yes = values.count(rules.YES)
+        out[d] = {"yes": yes, "no": values.count(rules.NO), "undetermined": values.count(rules.UNDETERMINED),
+                  "recommend_true": yes, "recommend_false": len(values) - yes}
+    pairs = [tuple(recommended(s.expected)[d] for d in ("thrombolysis", "thrombectomy")) for s in scenarios]
+    out["pairs"] = {name: pairs.count(key) for name, key in (("both", (True, True)), ("thrombolysis_only", (True, False)),
+                                                               ("thrombectomy_only", (False, True)), ("neither", (False, False)))}
+    return out

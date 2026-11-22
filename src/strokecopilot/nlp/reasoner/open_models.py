@@ -9,7 +9,8 @@ Hosting under the amendment:
 - The fallback pair (Baichuan-M2-32B, Qwen2.5-32B-Instruct) keeps its official 4-bit checkpoints.
 
 MODELS holds Qwen3.5-27B, MedGemma 27B text and Gemma 3 27B, the fallback pair Baichuan-M2-32B and Qwen2.5-32B, and
-DEC-30's small reasoner, Gemma 3 4B prompted and LoRA-tuned (SMALL_MODELS).
+DEC-30's small reasoner, Gemma 3 4B prompted and LoRA-tuned (SMALL_MODELS). BALANCED_MODELS is a post-freeze
+addition, report only (Parsa, 22 Nov 2026): the same model tuned on the decision-balanced set (EXP-91, EXP-92).
 Every Hugging Face id here was checked against its model card on 15 Nov 2026. A field that could not be checked is
 None and named in the entry's `verify`, and serve_command() refuses that entry until someone fills it from the card.
 
@@ -120,10 +121,26 @@ MODELS = {
               "token. Files the merge did not write (for example the image preprocessor config) are copied from the "
               "base snapshot (fill_from_base), so the tokenizer and chat template are the base model's.",
         sources=("https://huggingface.co/google/gemma-3-4b-it",)),
+    # Post-freeze, report only (Parsa, 22 Nov 2026): the tuned small reasoner again, trained on the decision-balanced
+    # set EXP-91. Every serving field is gemma-3-4b-tuned's; only the weights (and so the local path) differ.
+    "gemma-3-4b-tuned-balanced": OpenModel(
+        name="gemma-3-4b-tuned-balanced", hf_id="google/gemma-3-4b-it", checkpoint="/content/models/EXP-92_merged",
+        quantization="bf16", max_model_len=16384, gated=False, merge_system=False, thinks_by_default=False,
+        thinking_off=None, reasoning_parser=None,
+        notes="gemma-3-4b with EXP-92's best LoRA adapter merged in: the same base, LoRA settings and training loop as "
+              "EXP-45, trained on the decision-balanced set EXP-91 instead of EXP-43. Served from a local copy of "
+              "runs/EXP-92_finetune_balanced/merged, filled from the base snapshot like gemma-3-4b-tuned. Not part of "
+              "SMALL_MODELS: Phase 4 and the frozen results use that pair unchanged.",
+        sources=("https://huggingface.co/google/gemma-3-4b-it",)),
 }
 
 
 SMALL_MODELS = ("gemma-3-4b", "gemma-3-4b-tuned")
+# Post-freeze, report only: served by notebook 55 as EXP-93, on DEC-30's arms. Kept apart from SMALL_MODELS, which
+# Phase 4's model list and the frozen runs are built from.
+BALANCED_MODELS = ("gemma-3-4b-tuned-balanced",)
+# The run folder whose merged/ directory holds each tuned model's weights (under <Drive>/StrokeCopilot/runs/).
+TUNED_RUNS = {"gemma-3-4b-tuned": "EXP-45_finetune", "gemma-3-4b-tuned-balanced": "EXP-92_finetune_balanced"}
 WEIGHT_FILES = (".safetensors", ".safetensors.index.json", ".bin", ".pt")
 
 

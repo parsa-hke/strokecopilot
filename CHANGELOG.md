@@ -1,5 +1,90 @@
 # CHANGELOG
 
+## 2026-11-22 — Claude Code session (MAAI902 report, second feedback round: EXP-88 to EXP-91, DEC-39, repository items)
+- **Scope:** Parsa's 24-item feedback list on the 902 report, all of it on his word: writing and corrections, new read-outs of saved results, a post-freeze retrain (prepared, then not run for lack of time) and repository items. The report stays in `reports/maai902/` (gitignored).
+- **Three read-outs of saved results** (`analysis/nlp_readouts.py`, 11 tests; report only under DEC-34; development cases and synthetic scenarios, no held-out case, no model call; run folders on the Mac and Drive, counts only). They were asked for after every result had been seen, so they are post hoc descriptions: no p-value is computed and DEC-36's list is untouched.
+  - **EXP-88, EXP-41's labels read again.**
+    - Human-consensus error rate weighted by the sampling strata to all 23,245 claims: **11.9%** (stratified bootstrap [5.1, 20.0]; Jeffreys [8.7, 25.7]). Per model: Sonnet 0.9%, Qwen 24.5%, Gemma 3 27B 21.5%, MedGemma 7.0% (the 19 Nov entry's 17.3% for MedGemma predates the consensus).
+    - **Gemma 3 27B minus Sonnet: +20.6 points, bootstrap [+6.8, +42.8], Jeffreys [−3.5, +44.7].** The bootstrap cannot move a stratum with 0 errors among its 8 or 9 sampled claims, so it is too narrow; with that uncertainty kept, the gap is not established on human labels. The model ranking rests on the verifier.
+    - Flags confirmed by people: content 14 of 33, citation 4 of 21; 3 of the 46 passed claims judged wrong.
+    - Cohen's κ by the verifier's verdict at sampling: citation-flagged 0.45 (34 claims, 4 disagreements), content-flagged 0.17 (33, 14), passed 0.00 (33, 10). The labels are binary, so a content-only κ cannot be computed. A labeller's note names a citation or source in 16 of the 28 disagreements, so "most disagreements were true-but-uncited claims" (19 Nov entry) was too strong.
+  - **EXP-89, report tables.**
+    - Share of all 175 cases with a valid answer and no false-content claim: Sonnet 72 (41.1% [34.3, 48.6]), Qwen 29 (16.6%), Gemma 3 27B 16 (9.1%), MedGemma 11 (6.3%), Gemma 3 4B 0, tuned 4B 65 (37.1%).
+    - Subgroups on the 150 scenarios: of 30 pairwise differences in hallucination rate the largest is 5.9 points [2.1, 9.7] (untuned 4B, wake-up against known onset); 2 intervals exclude zero, both that model's, uncorrected. "No reliable difference" (EXP-80's sentence) was too strong for that model.
+  - **EXP-90, Qwen's 50 format failures by cause:** the output schema echoed back 46, a list in place of an object 3, no answer 1. Not reasoning errors. The paid rerun was not done.
+- **Checked against the run files:**
+  - **Prompt versions on the fixtures: 9 of 9 judged decisions right, not 10/10** (EXP-38 and EXP-39 `metrics.json`; fx01's thrombectomy accepts either answer). The 16 Nov entry's tables say 10/10; that was a slip.
+  - **Judge prompt v3 on the seeded errors (EXP-23):** recall per sub-type identical to v2 (1.0, 1.0, 0.9, 1.0, 1.0, 0.8, 1.0), false flags 0.010.
+  - **Prompt size:** the v3 system prompt is 25,195 characters and 11,977 tokens as Anthropic bills it (about 2.1 characters per token; v1: 21,388 and 10,559); Qwen's tokenizer counts the same request as about 8,500. So "about 12,000 tokens" is Claude's count.
+- **Report changes** (4,098 words for sections 1 to 7; 17 pages; cap 4,100, noted on the cover beside the outline's 3,000 to 4,000):
+  - "upper bounds" replaced by "the verifier both over-flags and misses errors" (report and README);
+  - Tables 2 and 3 corrected as above; the fine-tuning sentence now says decisions improved overall (83/249 to 193/251) but thrombectomy is under-recommended (10 of 35);
+  - four tables for the numbers (rates; decisions with a failure-inclusive column; the human check; the two ablations) and one sentence of reading for each;
+  - decision accuracy, the unknown-occlusion convention as a limit (real-case thrombectomy truth is "no" on 20 of 20 held-out and 17 of 20 development cases, so real-case decision accuracy is uninformative), the second judge covering the judge only, three sentences on privacy;
+  - cut on Parsa's word: the "Further probes" paragraph and the retrieval re-test (EXP-68, 73, 79 and 71 are no longer in the report), plus the first-runs paragraph and a few sentences for room;
+  - internal labels out of prose and captions; Figure 3 redrawn for print (`analysis/report_figures.c9_print_figure`, 1 test).
+- **DEC-39 (Parsa, 22 Nov 2026), added to plan §2:** a decision-balanced retrain of the small reasoner, post-freeze, report only; no held-out case is run. It reverses the 19 Nov choice.
+  - **EXP-91, the balanced training set** (`generate_training(balance=True)`, `train_data.build_balanced`; on the Mac and Drive): 1,200 examples (1,080 and 120), seed 20261122, DEC-30's four routes held out, no example shared with EXP-43 or the evaluation set, every gold check passing.
+    - **Thrombectomy: 594 recommend true, 606 false** (EXP-43: 246 and 954).
+    - **Thrombolysis could not be balanced: 320 true, 880 false** (EXP-43: 280 and 920). With the held-out routes excluded only two thrombolysis "yes" routes can be trained, and the unchanged route and path caps stop them at 320.
+    - The default generator still rebuilds EXP-43 byte for byte.
+  - `small_reasoner_report` takes a third cell (`--balanced`); without it the output equals EXP-48's. Notebooks 54 and 55 gain a `BALANCED` switch, off by default.
+  - **Not run, by Parsa's decision later the same day (no time before submission):** EXP-92 (fine-tune, Colab A100, about 3.5 h after a dummy), EXP-93 (serving the 175 cases, then verifier scoring, estimated at $1.25 to $1.90) and EXP-94 (the report). The set and the code stay, off by default; EXP-48's result stands, and the report says a set balanced for thrombectomy has been built but not trained on.
+- **Repository:**
+  - no notebook asks for `GITHUB_TOKEN` any more (35 changed; installs stay pinned to a commit; `tests/test_notebooks.py`);
+  - `notebooks/62_replay_no_drive.ipynb`, stored with its outputs: the replay bundle and one fixture end to end, offline (`replay.fetch`, `replay.one_case`; `tests/test_replay.py`);
+  - `pyproject.toml`: the description no longer says "retrieval-grounded"; `numpy` is a base dependency, because the documented replay needs it;
+  - README: the new notebook and the reworded verifier line.
+- **Release (on Parsa's word):** version 1.0.2 in `pyproject.toml`, `__init__.py` and `CITATION.cff` (the package said 0.0.1 until now); tag `v1.0.2` on this commit, and its release carries the same replay bundle (unchanged, same sha256). `replay.RELEASE_TAG` stays `v1.0.1`: the bundle is identical there, and notebook 62's stored output names it. The report's Section 8 links to v1.0.2.
+- **pytest:** 950 passed.
+- **Open:**
+  - `docs/team/README.md` still tells teammates to create a GitHub token;
+  - from the first pass: the clinicians' answers, Parsa's check of the contribution table and AI-use statement.
+- **Plan §7:** the report line stays unticked.
+- **Notion sync:** Decisions: DEC-39 (new, Decided, Parsa, 22 Nov 2026). Experiments: EXP-88, EXP-89, EXP-90 (new, Done); EXP-91 (new, Done: the balanced set; EXP-92 to EXP-94 not run). Tasks: 902 report, second feedback round (In progress: release pending).
+
+## 2026-11-22 — Claude Code session (MAAI902 report: review, a 53-item list and six batches of fixes; no new experiment)
+- **Scope:** Phase 5, the 902 report only (drafted by Hana and Bin). It is edited in `reports/maai902/` (gitignored); Overleaf stays the source of truth and Parsa uploads the changed files. No code, schema, decision or run changed, no model was called for a result, and **nothing is committed or pushed**. The 901 report was read for consistency and not edited.
+- **Build and count:** pdflatex and biber through `latexmk`, shell escape off, no rc file (TeX Live 2026 in `/Library/TeX/texbin`; biber 2.21). Words by `texcount` with the 901 rule: the numbered sections before Links and References (1 to 7), text plus headings plus captions.
+  - **The draft did not compile cleanly:** one Unicode minus sign stopped pdflatex, and with errors skipped the PDF printed the Qwen-minus-Sonnet interval as [0.1, +2.1] where the source has [−0.1, +2.1]. Fixed first, on Parsa's word.
+  - Baseline: 4,246 words against 3,000 to 4,000; all 8 expected sections present; every citation resolved.
+- **Checks before the list:**
+  - **Leak scan:** clean. No case ID, RSNA ID, key, e-mail or local path in the source, the PDF text or the two figure files (pattern scan; `splits/folds.json` was never opened).
+  - **Numbers:** every printed number traced to its run or record. Two were first-scoring values (Sonnet's run-to-run spread 4.8/7.6/4.9% for the rescored 3.3/5.8/3.8%; Gemma 3 27B's vision effect 5.0 for 4.4 points [0.7, 8.3]); the prompt size 10,559 tokens was prompt v1's (v3 is 11,977 per call: EXP-37's Sonnet fixture cell reads 59,885 cached tokens over 5 calls); several facts were stale (v1.0.0, "the repository is private", future tense for the Space, the cover date).
+  - **References, checked online:** every entry in the draft is real and correctly cited, and the three claims quoted from papers hold. Meddeb et al. is now a journal article and VeriFact is in *NEJM AI* under another title.
+  - **Wording shared with the public repository** (runs of nine or more words, a local script): 4.5% of the text at the start, 1.6% at the end; what is left is the fixture text in the worked-example figure and the list of sub-type names.
+- **Applied, in the order Parsa chose** (a copy of the folder was kept before each batch; the Overleaf original is in `reports/maai902_original/`):
+  1. **Wrong and stale numbers** (items 2 to 10).
+  2. **Parsa's answers:** the retrieval re-test and token attribution (EXP-79, EXP-71), a results figure (`fig_c9_hallucination_by_model`), the t-tests (EXP-69, with "the list was fixed after the data had been seen"), the five objectives in the conclusion, two approved cuts, and drafts of a contribution table and an AI-use statement after the references.
+  3. **First cut plan** (23 cuts, measured with `texcount` before applying), plus three short additions Parsa asked for, to show the range of experiments and the design ideas: rule-engine Shapley values and the verifier surrogate (EXP-68, EXP-73), the subgroup result (EXP-80), and one sentence on the checks around the verifier.
+  4. **Citations and typos:** the guideline, DAWN, DEFUSE-3 and Flanders entries reused from the 901 report; published versions for Meddeb et al. and VeriFact; the ISLES'24 challenge paper cited; new entries for BGE, LoRA, Cohen's κ, SHAP, BM25, Holm, the Gemma 3 report and the Qwen3.5 model card; the HAI-DEF terms on `developers.google.com`; IEEE style and `csquotes` as in 901; "DEFUSE-3" throughout; ten sentences reworded away from the repository's wording.
+  5. **Zero-cost items:** the cover's "Project Report" line and word count; internal labels (DEC numbers, "Phase 4") out of the body; agreement as counts of the 100 claims; the reperfusion and haemorrhage wording in Ethics; a sentence on the test workflow in Links.
+  6. **Second plan** (17 cuts paying for the remaining 12 items): Table 4 widened to six models with critical rate, decisions right and format failures; "upper bounds" beside the headline rates; the in-sample notes on the seeded errors and on the 61-of-100 agreement; the no-rulebook arm's limit; Qwen's held-out rate and the format failures; a limits paragraph; in Ethics, the demo's safeguards, the two failures that matter clinically, and EXP-81 under self-judging.
+  - New sentences were written with the `my-academic-writing` skill (Parsa's instruction) and pass its checker. Hana's and Bin's text was cut or reworded only where Parsa agreed.
+- **Task J rows for 902:** all used now (EXP-68, 69, 71, 73, 74, 79, 80, 81 and the replay bundle) except the clinicians' answers (EXP-67).
+- **Final word count:** **4,095** for sections 1 to 7, printed on the cover with its rule; 4,270 with the text of the two statements. 16 pages.
+- **Decided by Parsa, 22 Nov 2026:**
+  - The 902 cap is **4,100 words**, approved by the professor. What the limit counts is still the 901 rule.
+  - New report text is written with the `my-academic-writing` skill.
+  - The clinician pack: answers are expected soon. The open questions on RSNA copies and the own-words rulebook have been raised.
+- **No new experiment and no EXP number.** The overlap check and the cut measurements are review tools in the session's scratch folder, not analyses; nothing was read from held-out cases, and no test was added (DEC-36 untouched).
+- **Found in the repository's documents, not changed** (for Parsa):
+  - `docs/DATA_USE.md` and plan §5.3 say the guideline PDFs are "never sent to an LLM", while the 4 Nov 2026 entry records that Claude read the guideline's extracted text to check the 43 AHA passages. The report now says "the models under study never see the source documents" and the AI-use statement says what was done.
+  - The plan, README and hand-over notes give the rulebook as "about 4,600 tokens" (DEC-19's estimate); the measured system prompt, instructions included, is 10,559 tokens with prompt v1 and 11,977 with v3. The rulebook alone was not re-measured.
+  - `docs/PHASE5_HANDOVER.md` still cites release v1.0.0; the reports link to v1.0.1.
+  - The 901 report cites the ISLES'24 dataset paper as the 2024 preprint; its journal version exists (*Radiology: Artificial Intelligence* 2026;8(3):e250603) and the 902 report cites that.
+- **Open:**
+  - the clinicians' answers; until then a red TODO prints in Ethics;
+  - Parsa's check of the contribution table's rows and of the AI-use statement (both marked as drafts in `main.tex`); their opening sentences match the 901 report's, so Turnitin may match the two reports there;
+  - Figure 1 labels the vision models "Haemorrhage classifier" and "Core / penumbra segmentation" where 901 says Vision B and Vision A; changing it needs the draw.io source;
+  - the cover says "Educator" where 901 says "Submitted to";
+  - not verified: a citable source for the Claude models; the issue number of Holm (1979) rests on a secondary source; the vLLM version used for the 27B pair is not recorded (the reference cites v0.34.0, EXP-47's);
+  - Parsa's feedback round on the full pass.
+- **To upload to Overleaf:** `main.tex`, `references.bib`, `sections/01-problem.tex` to `sections/08-links.tex`, and the new `figures/fig_c9_hallucination_by_model.png`.
+- **pytest:** 921 passed.
+- **Plan §7:** the report line stays unticked until Parsa says both reports are final; `docs/REPORT_OUTLINE.md` was never written, and the two reports stand in for it.
+- **Notion sync:** Tasks: 902 report review (In progress: first full pass applied, feedback round and clinicians' answers pending). Decisions: none new; a note that the 902 word cap is 4,100, if Parsa wants it recorded. Experiments: none.
+
 ## 2026-11-22 — Claude Code session (MAAI901 report, second feedback round: EXP-85, EXP-86, EXP-87; CI green; v1.0.1)
 - **Scope:** Phase 5, the 901 report and the repo items of Parsa's second feedback list. The report stays in `reports/` (gitignored).
 - **Pushed and checked:** `443d9a4` is on `origin/main`, and its GitHub Actions run passed (run 44945060386, the first run of `tests.yml`).

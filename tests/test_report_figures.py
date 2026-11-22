@@ -21,6 +21,16 @@ LOG = """\
 """
 
 
+def test_c9_print_figure_writes_the_three_panels_at_page_width(tmp_path):
+    pytest.importorskip("matplotlib")
+    rate = lambda v: {"value": v, "ci95": [v * 0.8, v * 1.2]}
+    rows = [{"model": m, "hallucination_rate": rate(v), "content_hallucination_rate": rate(v * 0.8),
+             "critical_hallucination_rate": rate(v * 0.2)}
+            for m, v in (("claude-sonnet-5-5", 0.04), ("gemma-3-4b", 0.40))]
+    assert rf.c9_print_figure(rows, tmp_path) == ["fig_c9_print"]
+    assert (tmp_path / "fig_c9_print.png").stat().st_size > 10_000 and (tmp_path / "fig_c9_print.svg").exists()
+
+
 def test_parser_reads_finished_epochs_and_drops_the_unfinished_one():
     assert rf.parse_training_log(LOG) == [(0, -0.0898, -0.1664, 0.3265), (1, -0.1343, -0.1542, 0.2883)]
 

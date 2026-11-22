@@ -171,6 +171,20 @@ def test_the_small_pair_is_served_identically_but_for_the_weights(tmp_path):
     assert om.serve_command("gemma-3-4b-tuned")  # local: no token
 
 
+def test_the_balanced_model_is_served_like_the_tuned_one_and_stays_out_of_the_frozen_pair():
+    """Post-freeze, report only (EXP-92, EXP-93): only the weights' path and the served name differ."""
+    assert om.SMALL_MODELS == ("gemma-3-4b", "gemma-3-4b-tuned")  # Phase 4's list is built from this pair
+    assert om.BALANCED_MODELS == ("gemma-3-4b-tuned-balanced",)
+    tuned, balanced = (om.serve_command(m, port=8000) for m in ("gemma-3-4b-tuned", "gemma-3-4b-tuned-balanced"))
+    assert balanced[2] == "/content/models/EXP-92_merged" != tuned[2]
+    strip = lambda argv: [x for x in argv[3:] if not x.startswith("gemma-3-4b")]
+    assert strip(balanced) == strip(tuned)
+    assert balanced[balanced.index("--served-model-name") + 1] == "gemma-3-4b-tuned-balanced"
+    fields = lambda m: {f: getattr(om.MODELS[m], f) for f in om.SERVE_FIELDS if f != "checkpoint"}
+    assert fields("gemma-3-4b-tuned-balanced") == fields("gemma-3-4b-tuned")
+    assert om.TUNED_RUNS == {"gemma-3-4b-tuned": "EXP-45_finetune", "gemma-3-4b-tuned-balanced": "EXP-92_finetune_balanced"}
+
+
 def test_fill_from_base_copies_what_the_merge_did_not_write(tmp_path):
     base, tuned = tmp_path / "base", tmp_path / "tuned"
     base.mkdir(), tuned.mkdir()
